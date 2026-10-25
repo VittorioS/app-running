@@ -1,1 +1,81 @@
 
+name: PassoLibero - Estrai sorgenti e genera APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Recupera repository
+        uses: actions/checkout@v4
+
+      - name: Estrai ZIP e pubblica i file del progetto
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$(find . -maxdepth 1 -type f -iname '*PassoLibero*.zip' -print -quit)"
+          if [[ -n "$archive" ]]; then
+            mkdir -p .ci-extracted
+            unzip -q "$archive" -d .ci-extracted
+            if [[ -f .ci-extracted/settings.gradle ]]; then
+              source_dir=.ci-extracted
+            elif [[ -f .ci-extracted/PassoLibero/settings.gradle ]]; then
+              source_dir=.ci-extracted/PassoLibero
+            else
+              echo 'ZIP senza progetto Android riconosciuto'
+              exit 1
+            fi
+            cp -a "$source_dir"/. .
+            rm -rf .ci-extracted build-test
+            # Il workflow interno allo ZIP non deve essere creato dal GITHUB_TOKEN.
+            rm -f .github/workflows/android-apk.yml
+            git rm -f -- "$archive"
+            git add -A
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            if ! git diff --cached --quiet; then
+              git commit -m 'Extract PassoLibero Android sources'
+              git push origin "HEAD:$GITHUB_REF_NAME"
+            fi
+          fi
+          test -f settings.gradle
+          test -f app/build.gradle
+
+      - name: Installa JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Installa Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Installa API Android 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Installa Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Esegui test algoritmici
+        run: sh tests/run-core-tests.sh
+
+      - name: Compila APK debug
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Pubblica APK da scaricare
+        uses: actions/upload-artifact@v4
+        with:
+          name: PassoLibero-Android15-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
