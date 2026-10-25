@@ -25,6 +25,7 @@ public final class TrackMap {
     private final List<GeoPoint> points = new ArrayList<>();
     private final List<GeoPoint> allPoints = new ArrayList<>();
     private boolean hasFix;
+    private boolean autoFollowCurrentPosition;
     private long lastPointTime;
     private GeoPoint previousPoint;
     private boolean firstPoint = true;
@@ -69,6 +70,19 @@ public final class TrackMap {
 
     public MapView view() { return view; }
 
+    /** Per le sessioni attive segue il GPS; lo storico resta liberamente esplorabile. */
+    public void setAutoFollowCurrentPosition(boolean enabled) {
+        autoFollowCurrentPosition = enabled;
+    }
+
+    private void followCurrentPosition() {
+        if (!autoFollowCurrentPosition || !hasFix || currentPosition.getPosition() == null) return;
+        // Zoom ravvicinato: circa il livello della strada, senza pulsanti di ricentramento.
+        if (Math.abs(view.getZoomLevelDouble() - 18.5) > 0.01)
+            view.getController().setZoom(18.5);
+        view.getController().setCenter(currentPosition.getPosition());
+    }
+
     public void clearForSession(long id) {
         if (sessionId == id) return;
         sessionId = id;
@@ -107,13 +121,14 @@ public final class TrackMap {
             currentPosition.setPosition(gp);
             if (!view.getOverlays().contains(currentPosition)) view.getOverlays().add(currentPosition);
             if (firstPoint) {
-                view.getController().setZoom(17.0);
+                view.getController().setZoom(autoFollowCurrentPosition ? 18.5 : 17.0);
                 view.getController().setCenter(gp);
                 firstPoint = false;
             }
         }
         if (!additional.isEmpty()) {
             path.setPoints(new ArrayList<>(points));
+            followCurrentPosition();
             view.invalidate();
         }
         return additional.size();
@@ -131,6 +146,7 @@ public final class TrackMap {
             view.getController().setCenter(gp);
             firstPoint = false;
         }
+        followCurrentPosition();
         view.invalidate();
     }
 
@@ -150,12 +166,6 @@ public final class TrackMap {
         }
         view.zoomToBoundingBox(new BoundingBox(north + 0.0001, east + 0.0001,
                 south - 0.0001, west - 0.0001), true, Ui.dp(view.getContext(), 25));
-    }
-
-    public void recenter() {
-        if (hasFix && sessionId > 0 && currentPosition.getPosition() != null) {
-            view.getController().animateTo(currentPosition.getPosition());
-        }
     }
 
     public void onResume() { view.onResume(); }

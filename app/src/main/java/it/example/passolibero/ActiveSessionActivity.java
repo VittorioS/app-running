@@ -24,6 +24,8 @@ import android.widget.Toast;
 public final class ActiveSessionActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
+    private TrackerDb db;
+    private TrackMap map;
     private TextView distance, paceNow, paceAvg, duration, movingTime, speed, steps,
             cadence, runTime, walkTime, stillTime, runDistance, walkDistance,
             movement, gps, checkpoint, remaining, goalLabel;
@@ -36,6 +38,7 @@ public final class ActiveSessionActivity extends Activity {
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
         prefs = AppPrefs.get(this);
+        db = new TrackerDb(this);
         buildUi();
     }
 
@@ -75,6 +78,19 @@ public final class ActiveSessionActivity extends Activity {
         paceAvg = stat(primary, "RITMO MEDIO (min/km)", "--:-- min/km");
         duration = stat(primary, "TEMPO TOTALE", "00:00");
         Ui.marginBottom(this, content, primary, 12);
+
+        // La sola mappa live dell'app: posizione corrente e punti GPS di questa sessione.
+        LinearLayout positionCard = Ui.card(this);
+        Ui.marginBottom(this, positionCard,
+                Ui.text(this, "LA TUA POSIZIONE · MAPPA", 14, true, Ui.INK), 8);
+        map = new TrackMap(this);
+        map.setAutoFollowCurrentPosition(true);
+        positionCard.addView(map.view(), new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 300)));
+        Ui.marginBottom(this, positionCard, Ui.text(this,
+                "© OpenStreetMap contributors · La mappa segue la posizione GPS attuale",
+                11, false, Ui.MUTED), 0);
+        Ui.marginBottom(this, content, positionCard, 12);
 
         LinearLayout metrics = Ui.card(this);
         Ui.marginBottom(this, metrics, Ui.text(this, "DATI DI MOVIMENTO", 14, true, Ui.INK), 12);
@@ -158,7 +174,7 @@ public final class ActiveSessionActivity extends Activity {
         Ui.marginBottom(this, train, run, 0);
         Ui.marginBottom(this, content, train, 12);
 
-        Button home = Ui.button(this, "←  Torna alla mappa", false);
+        Button home = Ui.button(this, "←  Torna alla Home", false);
         home.setOnClickListener(v -> finish());
         Ui.marginBottom(this, content, home, 10);
         Button stop = Ui.button(this, "■  Termina e salva la sessione", true);
@@ -185,6 +201,12 @@ public final class ActiveSessionActivity extends Activity {
             if (active) sessionSeen = true;
             if (sessionSeen && !active) { finish(); return; }
             RunState s = RunState.read(prefs);
+            if (active && s.id > 0) {
+                map.update(db, s.id);
+                map.updateLivePosition(s.lastLatitude, s.lastLongitude, s.lastLocationValid);
+            } else {
+                map.clearForSession(0);
+            }
             long elapsed = active ? Math.max(0, SystemClock.elapsedRealtime() - s.startedElapsedMs) : 0;
             distance.setText(RunMath.km(active ? s.distanceM : 0) + " km");
             paceNow.setText(RunStats.instantPace(active ? s.speedKmh : 0) + " min/km");
@@ -219,12 +241,19 @@ public final class ActiveSessionActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
+        map.onResume();
         handler.removeCallbacks(refreshTask);
         handler.post(refreshTask);
     }
     @Override protected void onPause() {
         resumed = false;
         handler.removeCallbacks(refreshTask);
+        map.onPause();
         super.onPause();
+    }
+    @Override protected void onDestroy() {
+        map.onDestroy();
+        db.close();
+        super.onDestroy();
     }
 }

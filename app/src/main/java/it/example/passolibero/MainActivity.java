@@ -20,21 +20,18 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/** Home: mappa OSM della sola sessione attuale; storico in schermata separata. */
+/** Home: riepilogo allenamento e impostazioni; la mappa è nella sessione corrente. */
 public final class MainActivity extends Activity {
     private static final int REQUEST_PERMISSIONS = 50;
     private SharedPreferences prefs;
-    private TrackMap map;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView distanceView, durationView, statusView, thresholdLabel;
     private Button startButton, activeButton, resumeButton;
     private boolean resumed;
-    private TrackerDb db;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
         prefs = AppPrefs.get(this);
-        db = new TrackerDb(this);
         buildUi();
     }
 
@@ -57,18 +54,7 @@ public final class MainActivity extends Activity {
 
         Ui.marginBottom(this, content, Ui.text(this, "PassoLibero", 28, true, Ui.INK), 4);
         Ui.marginBottom(this, content,
-                Ui.text(this, "Il tuo percorso, in tempo reale", 14, false, Ui.MUTED), 12);
-
-        // La mappa viene azzerata ogni volta che cambia l'ID della sessione.
-        map = new TrackMap(this);
-        content.addView(map.view(), new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 355)));
-        Ui.marginBottom(this, content, Ui.text(this,
-                "© OpenStreetMap contributors • Mappa online; percorso GPS salvato offline", 11, false, Ui.MUTED), 10);
-
-        Button recenter = Ui.button(this, "◎  Centra la mia posizione", false);
-        recenter.setOnClickListener(v -> map.recenter());
-        Ui.marginBottom(this, content, recenter, 10);
+                Ui.text(this, "Il tuo allenamento, sotto controllo", 14, false, Ui.MUTED), 12);
 
         LinearLayout summary = Ui.card(this);
         Ui.marginBottom(this, summary, Ui.text(this, "DISTANZA SESSIONE", 11, true, Ui.MUTED), 2);
@@ -176,16 +162,10 @@ public final class MainActivity extends Activity {
             if (!resumed) return;
             boolean active = prefs.getBoolean("active", false);
             RunState state = RunState.read(prefs);
-            if (active && state.id > 0) {
-                map.update(db, state.id);
-                map.updateLivePosition(state.lastLatitude, state.lastLongitude, state.lastLocationValid);
-            } else {
-                map.clearForSession(0); // Una sessione passata non compare mai nella Home.
-            }
             distanceView.setText((active ? RunMath.km(state.distanceM) : "0,00") + " km");
             durationView.setText(active ? RunMath.duration(Math.max(0, SystemClock.elapsedRealtime() - state.startedElapsedMs)) : "00:00");
             statusView.setText(active ? state.gpsStatus + " · " + formatMovement(state.movement)
-                    : "Nessuna sessione attiva. Avvia per disegnare il percorso.");
+                    : "Nessuna sessione attiva. Avvia per registrare un allenamento.");
             startButton.setVisibility(active ? android.view.View.GONE : android.view.View.VISIBLE);
             activeButton.setVisibility(active ? android.view.View.VISIBLE : android.view.View.GONE);
             boolean stale = active && System.currentTimeMillis() - prefs.getLong("heartbeat_wall", 0) > 15_000;
@@ -204,19 +184,12 @@ public final class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
-        map.onResume();
         handler.removeCallbacks(refreshTask);
         handler.post(refreshTask);
     }
     @Override protected void onPause() {
         resumed = false;
         handler.removeCallbacks(refreshTask);
-        map.onPause();
         super.onPause();
-    }
-    @Override protected void onDestroy() {
-        map.onDestroy();
-        db.close();
-        super.onDestroy();
     }
 }
