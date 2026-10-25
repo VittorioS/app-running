@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Color;
 
 import org.osmdroid.config.Configuration;
+import org.osmdroid.config.IConfigurationProvider;
 import org.osmdroid.tileprovider.tilesource.XYTileSource;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.util.BoundingBox;
@@ -31,7 +32,7 @@ public final class TrackMap {
     private long sessionId = -1;
 
     public TrackMap(Context context) {
-        Configuration config = Configuration.getInstance();
+        IConfigurationProvider config = Configuration.getInstance();
         // User Agent identificabile: obbligatorio per le tessere OSM ufficiali.
         config.setUserAgentValue("PassoLibero/2.0 (it.example.passolibero)");
         File base = context.getExternalFilesDir(null);
