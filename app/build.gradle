@@ -10,8 +10,8 @@ android {
         applicationId 'it.example.passolibero'
         minSdk 30
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '2.0.0'
     }
 
     compileOptions {
@@ -27,4 +27,7 @@ android {
         }
     }
 }
-// Nessuna dipendenza esterna: solo Android SDK e Java standard.
+dependencies {
+    // Libreria open source per OpenStreetMap. Nessuna API a pagamento.
+    implementation 'org.osmdroid:osmdroid-android:6.1.20'
+}
