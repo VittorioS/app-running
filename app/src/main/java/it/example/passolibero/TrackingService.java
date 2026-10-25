@@ -50,6 +50,8 @@ public final class TrackingService extends Service implements LocationListener, 
     private AdaptiveProfile profile;
     private RunState state;
     private Location lastAccepted;
+    // Il filtro anti-rumore non deve perdere i microspostamenti GPS.
+    private final DistanceAccumulator distanceAccumulator = new DistanceAccumulator();
     private double counterLast = Double.NaN;
     private long lastSavedDbElapsed, lastNotificationMs, lastPointWall;
     private MovementClassifier.Kind trainingLabel;
@@ -148,11 +150,14 @@ public final class TrackingService extends Service implements LocationListener, 
             state.startedWallMs = System.currentTimeMillis();
             state.startedElapsedMs = SystemClock.elapsedRealtime();
             state.checkpointInterval = AppPrefs.intervalM(prefs);
+            state.goalM = AppPrefs.goalM(prefs);
             state.id = db.newSession(state.startedWallMs);
         }
         state.lastTickElapsedMs = SystemClock.elapsedRealtime();
+        state.lastLocationValid = false; // Ripresa: nessun marker da una posizione vecchia.
         classifier.reset();
         lastAccepted = null; // Non collegare con una linea GPS il tratto perso durante un riavvio.
+        distanceAccumulator.reset();
         state.save(prefs, true);
         voice = new VoiceCoach(this);
 
@@ -180,6 +185,8 @@ public final class TrackingService extends Service implements LocationListener, 
             long now = SystemClock.elapsedRealtime();
             long dt = Math.max(0, Math.min(10_000, now - state.lastTickElapsedMs));
             state.lastTickElapsedMs = now;
+            state.goalM = AppPrefs.goalM(prefs);
+            state.cadenceSpm = cadenceSpm(now);
             if (lastAccepted != null && now - lastAccepted.getElapsedRealtimeNanos() / 1_000_000 > 15_000) {
                 state.gpsStatus = "GPS temporaneamente assente";
                 state.movement = "UNKNOWN";
@@ -229,14 +236,18 @@ public final class TrackingService extends Service implements LocationListener, 
                 double meters = RunMath.distanceMeters(lastAccepted.getLatitude(), lastAccepted.getLongitude(),
                         location.getLatitude(), location.getLongitude());
                 double maxPhysical = Math.max(10, dt * 10 + Math.max(acc, lastAccepted.getAccuracy()));
-                double minMovement = Math.max(2.5, Math.max(acc, lastAccepted.getAccuracy()) * 0.35);
                 if (meters > maxPhysical) {
                     state.gpsStatus = "Salto GPS ignorato";
+                    // Non lasciare un'ancora antica che blocca anche i fix successivi.
+                    lastAccepted = new Location(location);
+                    distanceAccumulator.reset();
                     return;
                 }
-                if (meters >= minMovement) delta = meters;
                 pointSpeed = meters / dt * 3.6;
-            } // gap >20 s: ripristina solo l'ancora, non ricostruire il tratto mancante.
+            } else {
+                // Dopo un lungo buco nel GPS non collegare due posizioni lontane.
+                distanceAccumulator.reset();
+            }
         }
         if (location.hasSpeed() && (!location.hasSpeedAccuracy() || location.getSpeedAccuracyMetersPerSecond() < 1.8f)) {
             pointSpeed = Math.max(0, location.getSpeed() * 3.6);
@@ -244,14 +255,19 @@ public final class TrackingService extends Service implements LocationListener, 
         if (!Double.isFinite(pointSpeed) || pointSpeed > 40) {
             state.gpsStatus = "Velocità non affidabile";
             lastAccepted = new Location(location);
+            distanceAccumulator.reset();
             return;
         }
         long ageStep = state.lastStepElapsedMs <= 0 ? Long.MAX_VALUE
                 : now - state.lastStepElapsedMs;
         trimSteps(now);
         int recentSteps = recentStepTimes.size();
-        // Evita distanza fittizia da deriva GPS mentre si è chiaramente fermi.
-        if (pointSpeed < 0.7 && ageStep > 8_000) delta = 0;
+        // Non azzerare i movimenti inferiori a 2,5 m a ogni fix: sommali
+        // finche' superano il rumore GPS. Se il GPS indica una sosta reale,
+        // aggiorna l'ancora senza sommare la deriva della posizione.
+        boolean stationary = pointSpeed < 0.7 && ageStep > 8_000;
+        delta = distanceAccumulator.accept(location.getLatitude(), location.getLongitude(),
+                acc, !stationary);
 
         double threshold = profile.threshold(AppPrefs.manualThreshold(prefs), AppPrefs.adaptiveEnabled(prefs));
         MovementClassifier.Kind movement = classifier.update(now, pointSpeed, true,
@@ -260,6 +276,9 @@ public final class TrackingService extends Service implements LocationListener, 
         state.movement = movement.name();
         state.gpsStatus = "GPS ±" + Math.round(acc) + " m";
         state.gpsAccuracy = acc;
+        state.lastLatitude = location.getLatitude();
+        state.lastLongitude = location.getLongitude();
+        state.lastLocationValid = true;
         state.distanceM += delta;
         if (movement == MovementClassifier.Kind.WALK) state.walkM += delta;
         else if (movement == MovementClassifier.Kind.RUN) state.runM += delta;
@@ -273,6 +292,7 @@ public final class TrackingService extends Service implements LocationListener, 
         lastAccepted = new Location(location);
 
         int cadence = cadenceSpm(now);
+        state.cadenceSpm = cadence;
         if (trainingLabel != null && now <= trainingUntilElapsed && acc <= 12) {
             profile.observe(trainingLabel == MovementClassifier.Kind.RUN, state.speedKmh);
             if ((profile.walkSamples + profile.runSamples) % 5 == 0) AppPrefs.saveProfile(prefs, profile);

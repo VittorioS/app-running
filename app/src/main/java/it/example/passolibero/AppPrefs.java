@@ -10,6 +10,7 @@ public final class AppPrefs {
     public static double manualThreshold(SharedPreferences p) { return p.getInt("threshold_tenths", 60) / 10.0; }
     public static int intervalM(SharedPreferences p) { return p.getInt("interval_m", 1000); }
     public static boolean adaptiveEnabled(SharedPreferences p) { return p.getBoolean("adaptive", true); }
+    public static int goalM(SharedPreferences p) { return p.getInt("goal_m", 0); }
     public static boolean voiceEnabled(SharedPreferences p) { return p.getBoolean("voice", true); }
 
     public static AdaptiveProfile loadProfile(SharedPreferences p) {
