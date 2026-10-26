@@ -1,4 +1,5 @@
 import it.example.passolibero.AdaptiveProfile;
+import it.example.passolibero.BatteryPolicy;
 import it.example.passolibero.DistanceAccumulator;
 import it.example.passolibero.MovementClassifier;
 import it.example.passolibero.RunMath;
@@ -84,6 +85,13 @@ public final class CoreAlgorithmTest {
         check(RunStats.goalRemaining(5100, 5000) == 0, "Obiettivo raggiunto");
         check(RouteSegmenter.isGap(1_000, 0, 0, 40_000, 0, 0), "Buchi GPS non collegati");
         check(!RouteSegmenter.isGap(1_000, 0, 0, 2_000, 0, 0.00001), "Percorso continuo");
-        System.out.println("PASS: 29 controlli incluse reattivita velocita e transizioni camminata/corsa.");
+        check(BatteryPolicy.shouldPublishState(-1, 1_000, false), "Primo stato");
+        check(!BatteryPolicy.shouldPublishState(1_000, 1_200, true), "Evita doppio salvataggio GPS");
+        check(BatteryPolicy.shouldPublishState(1_000, 1_900, true), "Aggiornamento GPS rapido");
+        check(!BatteryPolicy.shouldPublishState(1_000, 2_500, false), "Evita salvataggio timer duplicato");
+        check(BatteryPolicy.shouldPublishState(1_000, 3_000, false), "Salvataggio timer se GPS assente");
+        check(BatteryPolicy.shouldPublishState(50_000, 100, true), "Gestisce riavvio uptime");
+
+        System.out.println("PASS: test algoritmici e policy risparmio energetico superati.");
     }
 }

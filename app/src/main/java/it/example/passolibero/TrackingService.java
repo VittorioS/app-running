@@ -54,6 +54,7 @@ public final class TrackingService extends Service implements LocationListener, 
     private final DistanceAccumulator distanceAccumulator = new DistanceAccumulator();
     private double counterLast = Double.NaN;
     private long lastSavedDbElapsed, lastNotificationMs, lastPointWall;
+    private long lastUiSavedElapsed = -1;
     private MovementClassifier.Kind trainingLabel;
     private long trainingUntilElapsed;
     private boolean initialized;
@@ -159,7 +160,8 @@ public final class TrackingService extends Service implements LocationListener, 
         lastAccepted = null; // Non collegare con una linea GPS il tratto perso durante un riavvio.
         distanceAccumulator.reset();
         state.save(prefs, true);
-        voice = new VoiceCoach(this);
+        lastUiSavedElapsed = SystemClock.elapsedRealtime();
+        syncVoiceCoach();
 
         try {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
@@ -197,7 +199,8 @@ public final class TrackingService extends Service implements LocationListener, 
                 case "STILL": state.stillMs += dt; break;
                 default: break;
             }
-            persist(now, false);
+            syncVoiceCoach();
+            persist(now, false, false);
             if (now - lastNotificationMs >= 30_000 && acquiredForeground) {
                 lastNotificationMs = now;
                 getSystemService(NotificationManager.class).notify(NOTIFICATION_ID,
@@ -207,9 +210,25 @@ public final class TrackingService extends Service implements LocationListener, 
         }
     };
 
-    private void persist(long now, boolean forceDb) {
+    /** Initialize the speech engine only while checkpoint voice is enabled. */
+    private void syncVoiceCoach() {
+        boolean enabled = AppPrefs.voiceEnabled(prefs);
+        if (enabled && voice == null) {
+            voice = new VoiceCoach(this);
+        } else if (!enabled && voice != null) {
+            voice.close();
+            voice = null;
+        }
+    }
+
+    /** Coalesce duplicate UI snapshots, without changing GPS sampling or classification. */
+    private void persist(long now, boolean forceDb, boolean freshGps) {
         if (state == null) return;
-        state.save(prefs, true);
+        if (forceDb || BatteryPolicy.shouldPublishState(lastUiSavedElapsed, now, freshGps)) {
+            state.save(prefs, true);
+            lastUiSavedElapsed = now;
+        }
+        // Database crash-recovery snapshot cadence stays unchanged.
         if (forceDb || now - lastSavedDbElapsed >= 5_000) {
             db.snapshot(state, now - state.startedElapsedMs, false);
             lastSavedDbElapsed = now;
@@ -301,16 +320,21 @@ public final class TrackingService extends Service implements LocationListener, 
             double manual = AppPrefs.manualThreshold(prefs);
             // Solo esempi estremi confermati anche dai passi: non rinforzare errori al confine.
             if (AppPrefs.adaptiveEnabled(prefs) && acc <= 10 && recentSteps >= 10) {
+                boolean sampleAdded = false;
                 if (state.speedKmh <= manual - 1.5 && state.speedKmh >= 2.0 && cadence >= 65 && cadence <= 145) {
                     profile.observe(false, state.speedKmh);
+                    sampleAdded = true;
                 } else if (state.speedKmh >= manual + 2 && cadence >= 145 && cadence <= 220) {
                     profile.observe(true, state.speedKmh);
+                    sampleAdded = true;
                 }
-                if ((profile.walkSamples + profile.runSamples) % 15 == 0) AppPrefs.saveProfile(prefs, profile);
+                // Avoid rewriting the profile when no training sample was added.
+                if (sampleAdded && (profile.walkSamples + profile.runSamples) % 15 == 0)
+                    AppPrefs.saveProfile(prefs, profile);
             }
         }
         handleCheckpoint(now);
-        persist(now, false);
+        persist(now, false, true);
     }
 
     private void handleCheckpoint(long now) {
@@ -426,7 +450,7 @@ public final class TrackingService extends Service implements LocationListener, 
             work.removeCallbacks(tick);
             work.post(() -> {
                 stopSensors();
-                if (state != null) persist(SystemClock.elapsedRealtime(), true);
+                if (state != null) persist(SystemClock.elapsedRealtime(), true, false);
                 if (voice != null) voice.close();
                 db.close();
             });

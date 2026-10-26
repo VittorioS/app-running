@@ -26,6 +26,8 @@ public final class TrackMap {
     private final List<GeoPoint> allPoints = new ArrayList<>();
     private boolean hasFix;
     private boolean autoFollowCurrentPosition;
+    private boolean trackingMapVisible;
+    private GeoPoint lastCenteredPosition;
     private long lastPointTime;
     private GeoPoint previousPoint;
     private boolean firstPoint = true;
@@ -73,14 +75,39 @@ public final class TrackMap {
     /** Per le sessioni attive segue il GPS; lo storico resta liberamente esplorabile. */
     public void setAutoFollowCurrentPosition(boolean enabled) {
         autoFollowCurrentPosition = enabled;
+        trackingMapVisible = false;
+        syncMapNetworkAccess();
+    }
+
+    /** Pause tile fetching when the live map card is offscreen. */
+    public void setTrackingMapVisible(boolean visible) {
+        if (!autoFollowCurrentPosition || trackingMapVisible == visible) return;
+        trackingMapVisible = visible;
+        syncMapNetworkAccess();
+    }
+
+    private void syncMapNetworkAccess() {
+        if (!autoFollowCurrentPosition) return;
+        boolean useNetwork = trackingMapVisible && hasFix;
+        if (view.useDataConnection() != useNetwork) {
+            view.setUseDataConnection(useNetwork);
+            if (useNetwork) view.invalidate();
+        }
     }
 
     private void followCurrentPosition() {
-        if (!autoFollowCurrentPosition || !hasFix || currentPosition.getPosition() == null) return;
-        // Zoom ravvicinato: circa il livello della strada, senza pulsanti di ricentramento.
+        if (!autoFollowCurrentPosition || !trackingMapVisible || !hasFix
+                || currentPosition.getPosition() == null) return;
+        GeoPoint p = currentPosition.getPosition();
+        if (lastCenteredPosition != null &&
+                RunMath.distanceMeters(lastCenteredPosition.getLatitude(),
+                        lastCenteredPosition.getLongitude(),
+                        p.getLatitude(), p.getLongitude()) < 3.0) return;
+        // Keep close follow, but avoid repeated camera recentering from GPS jitter.
         if (Math.abs(view.getZoomLevelDouble() - 18.5) > 0.01)
             view.getController().setZoom(18.5);
-        view.getController().setCenter(currentPosition.getPosition());
+        view.getController().setCenter(p);
+        lastCenteredPosition = p;
     }
 
     public void clearForSession(long id) {
@@ -90,6 +117,8 @@ public final class TrackMap {
         points.clear();
         allPoints.clear();
         hasFix = false;
+        lastCenteredPosition = null;
+        syncMapNetworkAccess();
         view.getOverlays().removeAll(segments);
         segments.clear();
         path = newSegment();
@@ -114,8 +143,10 @@ public final class TrackMap {
                 path = newSegment();
             }
             points.add(gp);
+            path.addPoint(gp); // Append one point instead of recopying the entire route.
             allPoints.add(gp);
             hasFix = true;
+            syncMapNetworkAccess();
             previousPoint = gp;
             lastPointTime = p.time;
             currentPosition.setPosition(gp);
@@ -123,11 +154,11 @@ public final class TrackMap {
             if (firstPoint) {
                 view.getController().setZoom(autoFollowCurrentPosition ? 18.5 : 17.0);
                 view.getController().setCenter(gp);
+                lastCenteredPosition = gp;
                 firstPoint = false;
             }
         }
         if (!additional.isEmpty()) {
-            path.setPoints(new ArrayList<>(points));
             followCurrentPosition();
             view.invalidate();
         }
@@ -138,12 +169,18 @@ public final class TrackMap {
     public void updateLivePosition(double lat, double lon, boolean valid) {
         if (!valid || sessionId <= 0) return;
         GeoPoint gp = new GeoPoint(lat, lon);
+        GeoPoint prior = currentPosition.getPosition();
+        if (hasFix && prior != null &&
+                RunMath.distanceMeters(prior.getLatitude(), prior.getLongitude(), lat, lon) < 2.5)
+            return; // Do not redraw for repeated positions and tiny GPS noise.
         currentPosition.setPosition(gp);
         hasFix = true;
+        syncMapNetworkAccess();
         if (!view.getOverlays().contains(currentPosition)) view.getOverlays().add(currentPosition);
         if (firstPoint) {
             view.getController().setZoom(17.0);
             view.getController().setCenter(gp);
+            lastCenteredPosition = gp;
             firstPoint = false;
         }
         followCurrentPosition();

@@ -1,6 +1,7 @@
 package it.example.passolibero;
 
 import android.app.Activity;
+import android.graphics.Rect;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -31,6 +32,7 @@ public final class ActiveSessionActivity extends Activity {
             movement, gps, checkpoint, remaining, goalLabel;
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
+    private boolean mapRendered;
 
     private static final int[] CHECKPOINTS = {250, 500, 1000, 2000, 5000};
     private static final int[] GOALS = {0, 1000, 2000, 3000, 5000, 10000, 21097, -1};
@@ -201,11 +203,22 @@ public final class ActiveSessionActivity extends Activity {
             if (active) sessionSeen = true;
             if (sessionSeen && !active) { finish(); return; }
             RunState s = RunState.read(prefs);
-            if (active && s.id > 0) {
-                map.update(db, s.id);
-                map.updateLivePosition(s.lastLatitude, s.lastLongitude, s.lastLocationValid);
-            } else {
-                map.clearForSession(0);
+            Rect visiblePart = new Rect();
+            boolean mapVisible = map.view().getGlobalVisibleRect(visiblePart)
+                    && visiblePart.height() >= Ui.dp(ActiveSessionActivity.this, 48);
+            if (mapVisible != mapRendered) {
+                mapRendered = mapVisible;
+                map.setTrackingMapVisible(mapVisible);
+                if (mapVisible) map.onResume();
+                else map.onPause();
+            }
+            if (mapVisible) {
+                if (active && s.id > 0) {
+                    map.update(db, s.id);
+                    map.updateLivePosition(s.lastLatitude, s.lastLongitude, s.lastLocationValid);
+                } else {
+                    map.clearForSession(0);
+                }
             }
             long elapsed = active ? Math.max(0, SystemClock.elapsedRealtime() - s.startedElapsedMs) : 0;
             distance.setText(RunMath.km(active ? s.distanceM : 0) + " km");
@@ -241,14 +254,18 @@ public final class ActiveSessionActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
-        map.onResume();
+        // Render and fetch map tiles only if the card is actually visible.
         handler.removeCallbacks(refreshTask);
         handler.post(refreshTask);
     }
     @Override protected void onPause() {
         resumed = false;
         handler.removeCallbacks(refreshTask);
-        map.onPause();
+        map.setTrackingMapVisible(false);
+        if (mapRendered) {
+            map.onPause();
+            mapRendered = false;
+        }
         super.onPause();
     }
     @Override protected void onDestroy() {
