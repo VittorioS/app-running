@@ -26,6 +26,36 @@ public final class CoreAlgorithmTest {
         check(model.current() == MovementClassifier.Kind.WALK, "RUN->WALK without session stop");
         for (int t = 60; t < 65; t++) model.update(t*1000L, Double.NaN, false, 0, 100_000, 6);
         check(model.current() == MovementClassifier.Kind.WALK, "GPS gap does not invent motion");
+        // Un cambio reale di velocita' deve essere visibile gia' al prossimo fix.
+        MovementClassifier responsive = new MovementClassifier();
+        for (int t = 0; t <= 4000; t += 1000)
+            responsive.update(t, 10.0, true, 12, 0, 6.0);
+        check(responsive.current() == MovementClassifier.Kind.RUN, "Riconoscimento corsa senza 10 s di attesa");
+        responsive.update(5000, 4.0, true, 12, 0, 6.0);
+        check(responsive.smoothedSpeedKmh() < 5.5,
+                "10 -> 4 km/h visibile al primo fix (ottenuto: " + responsive.smoothedSpeedKmh() + ")");
+        check(responsive.current() == MovementClassifier.Kind.RUN,
+                "Cambio categoria non immediato al singolo campione");
+        responsive.update(6000, 4.0, true, 12, 0, 6.0);
+        responsive.update(7000, 4.0, true, 12, 0, 6.0);
+        check(responsive.current() == MovementClassifier.Kind.WALK,
+                "Corsa -> camminata confermata in circa 2 secondi");
+        responsive.update(8000, 10.0, true, 12, 0, 6.0);
+        check(responsive.smoothedSpeedKmh() > 8.0, "4 -> 10 km/h visibile al primo fix");
+        responsive.update(9000, 10.0, true, 12, 0, 6.0);
+        responsive.update(10000, 10.0, true, 12, 0, 6.0);
+        check(responsive.current() == MovementClassifier.Kind.RUN,
+                "Camminata -> corsa confermata in circa 2 secondi");
+        responsive.update(11000, 4.0, true, 12, 0, 6.0);
+        responsive.update(12000, 10.0, true, 12, 0, 6.0);
+        check(responsive.current() == MovementClassifier.Kind.RUN,
+                "Un fix anomalo non cambia la categoria");
+        MovementClassifier delayedGps = new MovementClassifier();
+        delayedGps.update(0, 10.0, true, 12, 0, 6.0);
+        delayedGps.update(5000, 4.0, true, 12, 0, 6.0);
+        check(delayedGps.smoothedSpeedKmh() < 4.1,
+                "Filtro adattivo quando Android ritarda il fix GPS");
+
         // Simula 100 m di cammino con letture GPS ogni ~1 metro (1 Hz).
         // Il precedente filtro scartava quasi tutti questi incrementi.
         DistanceAccumulator distance = new DistanceAccumulator();
@@ -54,6 +84,6 @@ public final class CoreAlgorithmTest {
         check(RunStats.goalRemaining(5100, 5000) == 0, "Obiettivo raggiunto");
         check(RouteSegmenter.isGap(1_000, 0, 0, 40_000, 0, 0), "Buchi GPS non collegati");
         check(!RouteSegmenter.isGap(1_000, 0, 0, 2_000, 0, 0.00001), "Percorso continuo");
-        System.out.println("PASS: 21 controlli incluse distanza, ritmo, checkpoint, obiettivi e gap GPS.");
+        System.out.println("PASS: 29 controlli incluse reattivita velocita e transizioni camminata/corsa.");
     }
 }
