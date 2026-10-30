@@ -76,6 +76,14 @@ public final class MainActivity extends Activity {
         resumeButton = Ui.button(this, "↻  Riprendi tracciamento interrotto", false);
         resumeButton.setOnClickListener(v -> startServiceAgain());
         Ui.marginBottom(this, content, resumeButton, 9);
+        if (BuildConfig.DEBUG) {
+            // La schermata esiste soltanto nel source set debug; nessun riferimento
+            // Java diretto, per poter compilare anche la variante release.
+            Button batteryDebug = Ui.button(this, "🔋 Diagnostica batteria (DEBUG)", false);
+            batteryDebug.setOnClickListener(v -> startActivity(new Intent().setClassName(
+                    this, getPackageName() + ".BatteryDiagnosticsActivity")));
+            Ui.marginBottom(this, content, batteryDebug, 9);
+        }
         Button history = Ui.button(this, "📚  Storico delle sessioni", false);
         history.setOnClickListener(v -> startActivity(new Intent(this, HistoryActivity.class)));
         Ui.marginBottom(this, content, history, 18);

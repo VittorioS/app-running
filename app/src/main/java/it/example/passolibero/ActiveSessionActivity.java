@@ -72,6 +72,15 @@ public final class ActiveSessionActivity extends Activity {
         gps = Ui.text(this, "In attesa del GPS", 13, false, Ui.MUTED);
         Ui.marginBottom(this, content, gps, 14);
 
+        if (BuildConfig.DEBUG) {
+            // La schermata esiste soltanto nel source set debug; nessun riferimento
+            // Java diretto, per poter compilare anche la variante release.
+            Button batteryDebug = Ui.button(this, "🔋 Diagnostica batteria (DEBUG)", false);
+            batteryDebug.setOnClickListener(v -> startActivity(new Intent().setClassName(
+                    this, getPackageName() + ".BatteryDiagnosticsActivity")));
+            Ui.marginBottom(this, content, batteryDebug, 12);
+        }
+
         LinearLayout primary = Ui.card(this);
         Ui.marginBottom(this, primary, Ui.text(this, "DISTANZA TOTALE", 12, true, Ui.MUTED), 3);
         distance = Ui.text(this, "0,00 km", 44, true, Ui.INK);
