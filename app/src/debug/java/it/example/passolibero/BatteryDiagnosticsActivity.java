@@ -385,7 +385,7 @@ final class BatteryRecorder {
         values.add(batteryLong(battery, BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER));
         values.add(Long.toString(cpuMs));
         values.add(cpuDelta);
-        values.add(Integer.toString(Debug.getPss()));
+        values.add(Long.toString(Debug.getPss()));
         values.add(rxDelta);
         values.add(txDelta);
 
