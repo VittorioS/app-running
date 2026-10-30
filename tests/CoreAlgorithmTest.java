@@ -3,6 +3,7 @@ import it.example.passolibero.BatteryPolicy;
 import it.example.passolibero.GpsQualityPolicy;
 import it.example.passolibero.DistanceAccumulator;
 import it.example.passolibero.MovementClassifier;
+import it.example.passolibero.MotionEvidencePolicy;
 import it.example.passolibero.RunMath;
 import it.example.passolibero.RunStats;
 import it.example.passolibero.RouteSegmenter;
@@ -74,6 +75,21 @@ public final class CoreAlgorithmTest {
             stopped += distance.accept(0, (i % 2) * 2 / 111_195.0, 5, false);
         }
         check(stopped == 0, "Nessun incremento GPS da fermo");
+        MotionEvidencePolicy motion = new MotionEvidencePolicy();
+        for (int i = 0; i < 60; i++) {
+            double noisyLon = (i % 2 == 0 ? 10 : -10) / 111_195.0;
+            check(!motion.update(i * 1000L, 0, noisyLon, 15,
+                    0, Long.MAX_VALUE, true, 0.2, 1.5),
+                    "Stazionario: jitter GPS non conta come movimento");
+        }
+        motion.reset();
+        for (int i = 0; i < 5; i++)
+            motion.update(i * 1000L, 0, i * 3 / 111_195.0, 8,
+                    0, Long.MAX_VALUE, false, 3.0, 0.3);
+        check(motion.moving(), "GPS affidabile conferma movimento senza passi");
+        motion.reset();
+        check(motion.update(0, 0, 0, 15, 3, 0, true,
+                Double.NaN, Double.NaN), "Passi confermano movimento");
         // Dopo un buco GPS non collegare posizioni distanti.
         distance.reset();
         check(distance.accept(0, 1, 5, true) == 0, "Nuova ancora dopo buco GPS");
