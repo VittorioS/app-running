@@ -52,6 +52,8 @@ public final class TrackingService extends Service implements LocationListener, 
     private Location lastAccepted;
     // Il filtro anti-rumore non deve perdere i microspostamenti GPS.
     private final DistanceAccumulator distanceAccumulator = new DistanceAccumulator();
+    private final MotionEvidencePolicy motionEvidence = new MotionEvidencePolicy();
+    private boolean stepSensorAvailable;
     private double counterLast = Double.NaN;
     private long lastSavedDbElapsed, lastNotificationMs, lastPointWall;
     private long lastUiSavedElapsed = -1;
@@ -163,6 +165,8 @@ public final class TrackingService extends Service implements LocationListener, 
         classifier.reset();
         lastAccepted = null; // Non collegare con una linea GPS il tratto perso durante un riavvio.
         distanceAccumulator.reset();
+        motionEvidence.reset();
+        stepSensorAvailable = false;
         state.save(prefs, true);
         lastUiSavedElapsed = SystemClock.elapsedRealtime();
         syncVoiceCoach();
@@ -178,7 +182,7 @@ public final class TrackingService extends Service implements LocationListener, 
         if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED) {
             stepSensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
             if (stepSensor == null) stepSensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-            if (stepSensor != null) sensors.registerListener(this, stepSensor,
+            if (stepSensor != null) stepSensorAvailable = sensors.registerListener(this, stepSensor,
                     SensorManager.SENSOR_DELAY_NORMAL, work);
         }
         if (BuildConfig.DEBUG) {
@@ -298,12 +302,22 @@ public final class TrackingService extends Service implements LocationListener, 
                 : now - state.lastStepElapsedMs;
         trimSteps(now);
         int recentSteps = recentStepTimes.size();
-        // Non azzerare i movimenti inferiori a 2,5 m a ogni fix: sommali
-        // finche' superano il rumore GPS. Se il GPS indica una sosta reale,
-        // aggiorna l'ancora senza sommare la deriva della posizione.
-        boolean stationary = pointSpeed < 0.7 && ageStep > 8_000;
+        int stepsLastFiveSeconds = 0;
+        for (long stepTime : recentStepTimes)
+            if (now - stepTime <= 5_000L) stepsLastFiveSeconds++;
+        double nativeSpeed = location.hasSpeed() ? location.getSpeed() : Double.NaN;
+        double speedUncertainty = location.hasSpeedAccuracy()
+                ? location.getSpeedAccuracyMetersPerSecond() : Double.NaN;
+        boolean wasMoving = motionEvidence.moving();
+        boolean moving = motionEvidence.update(now, location.getLatitude(), location.getLongitude(),
+                acc, stepsLastFiveSeconds, ageStep, stepSensorAvailable,
+                nativeSpeed, speedUncertainty);
+        // Una variazione di coordinate non dimostra che la persona si muove.
+        // Al riavvio del movimento scartiamo salti fra ancore rumorose.
+        if (moving && !wasMoving) distanceAccumulator.reset();
         delta = distanceAccumulator.accept(location.getLatitude(), location.getLongitude(),
-                acc, !stationary);
+                acc, moving);
+        if (!moving) pointSpeed = 0;
 
         double threshold = profile.threshold(AppPrefs.manualThreshold(prefs), AppPrefs.adaptiveEnabled(prefs));
         MovementClassifier.Kind movement = classifier.update(now, pointSpeed, true,
@@ -317,16 +331,19 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         state.gpsStatus = "GPS ±" + Math.round(acc) + " m";
         state.gpsAccuracy = acc;
-        state.lastLatitude = location.getLatitude();
-        state.lastLongitude = location.getLongitude();
-        state.lastLocationValid = true;
+        // Mantieni fermo il marker quando il GPS oscilla senza movimento credibile.
+        if (!state.lastLocationValid || (moving && delta > 0)) {
+            state.lastLatitude = location.getLatitude();
+            state.lastLongitude = location.getLongitude();
+            state.lastLocationValid = true;
+        }
         state.distanceM += delta;
         if (movement == MovementClassifier.Kind.WALK) state.walkM += delta;
         else if (movement == MovementClassifier.Kind.RUN) state.runM += delta;
 
         // Punti del percorso quando ci si sposta; a riposo al massimo ogni 15 s.
         if (delta > 0 || location.getTime() - lastPointWall >= 15_000) {
-            db.point(state.id, location.getTime(), location.getLatitude(), location.getLongitude(),
+            db.point(state.id, location.getTime(), state.lastLatitude, state.lastLongitude,
                     acc, state.speedKmh, delta, movement);
             lastPointWall = location.getTime();
         }
