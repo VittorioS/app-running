@@ -59,6 +59,9 @@ public final class TrackingService extends Service implements LocationListener, 
     private long trainingUntilElapsed;
     private boolean initialized;
     private boolean acquiredForeground;
+    private long poorSince = -1, recoverySince = -1;
+    private boolean gpsIncident, gpsAskedWhileStill;
+    private String motionBeforeGpsLoss = "UNKNOWN";
 
     @Override public void onCreate() {
         super.onCreate();
@@ -156,6 +159,7 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         state.lastTickElapsedMs = SystemClock.elapsedRealtime();
         state.lastLocationValid = false; // Ripresa: nessun marker da una posizione vecchia.
+        prefs.edit().putBoolean("gps_ack_needed", false).putBoolean("gps_incident", false).apply();
         classifier.reset();
         lastAccepted = null; // Non collegare con una linea GPS il tratto perso durante un riavvio.
         distanceAccumulator.reset();
@@ -177,6 +181,14 @@ public final class TrackingService extends Service implements LocationListener, 
             if (stepSensor != null) sensors.registerListener(this, stepSensor,
                     SensorManager.SENSOR_DELAY_NORMAL, work);
         }
+        if (BuildConfig.DEBUG) {
+            // Dedicated debug code is invoked by reflection; release never ships it.
+            try {
+                Class<?> c = Class.forName(getPackageName() + ".BatteryAutoCapture");
+                c.getMethod("onSessionStart", Context.class, long.class)
+                        .invoke(null, getApplicationContext(), state.id);
+            } catch (ReflectiveOperationException ex) { Log.w(TAG, "Debug recorder unavailable", ex); }
+        }
         work.post(tick);
     }
 
@@ -190,6 +202,7 @@ public final class TrackingService extends Service implements LocationListener, 
             state.goalM = AppPrefs.goalM(prefs);
             state.cadenceSpm = cadenceSpm(now);
             if (lastAccepted != null && now - lastAccepted.getElapsedRealtimeNanos() / 1_000_000 > 15_000) {
+                reportGpsQuality(false, now);
                 state.gpsStatus = "GPS temporaneamente assente";
                 state.movement = "UNKNOWN";
             }
@@ -199,6 +212,7 @@ public final class TrackingService extends Service implements LocationListener, 
                 case "STILL": state.stillMs += dt; break;
                 default: break;
             }
+            if (lastAccepted == null && now - state.startedElapsedMs > 15_000) reportGpsQuality(false, now);
             syncVoiceCoach();
             persist(now, false, false);
             if (now - lastNotificationMs >= 30_000 && acquiredForeground) {
@@ -212,7 +226,7 @@ public final class TrackingService extends Service implements LocationListener, 
 
     /** Initialize the speech engine only while checkpoint voice is enabled. */
     private void syncVoiceCoach() {
-        boolean enabled = AppPrefs.voiceEnabled(prefs);
+        boolean enabled = AppPrefs.voiceEnabled(prefs) || gpsIncident;
         if (enabled && voice == null) {
             voice = new VoiceCoach(this);
         } else if (!enabled && voice != null) {
@@ -241,10 +255,13 @@ public final class TrackingService extends Service implements LocationListener, 
         long now = SystemClock.elapsedRealtime();
         long ageMs = Math.abs(now - location.getElapsedRealtimeNanos() / 1_000_000);
         float acc = location.getAccuracy();
-        if (ageMs > 10_000 || acc > 25 || acc <= 0) {
+        if (!GpsQualityPolicy.isReliable(acc, ageMs)) {
+            reportGpsQuality(false, now);
             state.gpsStatus = "Segnale GPS impreciso";
+            persist(now, false, true);
             return;
         }
+        reportGpsQuality(true, now);
         double delta = 0;
         double pointSpeed = Double.NaN;
         double dt = 0;
@@ -293,6 +310,11 @@ public final class TrackingService extends Service implements LocationListener, 
                 recentSteps, ageStep, threshold);
         state.speedKmh = classifier.smoothedSpeedKmh();
         state.movement = movement.name();
+        if (!"UNKNOWN".equals(state.movement)) motionBeforeGpsLoss = state.movement;
+        if (gpsIncident && "STILL".equals(state.movement) && !gpsAskedWhileStill) {
+            gpsAskedWhileStill = true;
+            prefs.edit().putBoolean("gps_ack_needed", true).apply();
+        }
         state.gpsStatus = "GPS ±" + Math.round(acc) + " m";
         state.gpsAccuracy = acc;
         state.lastLatitude = location.getLatitude();
@@ -335,6 +357,38 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         handleCheckpoint(now);
         persist(now, false, true);
+    }
+
+    private void reportGpsQuality(boolean good, long now) {
+        if (state == null) return;
+        if (good) {
+            poorSince = -1;
+            if (gpsIncident) {
+                if (recoverySince < 0) recoverySince = now;
+                if (GpsQualityPolicy.confirmedRecovery(recoverySince, now)) {
+                    gpsIncident = false;
+                    gpsAskedWhileStill = false;
+                    recoverySince = -1;
+                    prefs.edit().putBoolean("gps_incident", false)
+                            .putBoolean("gps_ack_needed", false).apply();
+                }
+            }
+            return;
+        }
+        recoverySince = -1;
+        if (poorSince < 0) poorSince = now;
+        if (!gpsIncident && GpsQualityPolicy.confirmedPoor(poorSince, now)) {
+            gpsIncident = true;
+            gpsAskedWhileStill = false;
+            prefs.edit().putBoolean("gps_incident", true).apply();
+            // One voice warning at onset. The run itself is never blocked.
+            if (voice == null) voice = new VoiceCoach(this);
+            voice.speak("Segnale GPS impreciso");
+        }
+        if (gpsIncident && "STILL".equals(motionBeforeGpsLoss) && !gpsAskedWhileStill) {
+            gpsAskedWhileStill = true;
+            prefs.edit().putBoolean("gps_ack_needed", true).apply();
+        }
     }
 
     private void handleCheckpoint(long now) {
@@ -427,6 +481,14 @@ public final class TrackingService extends Service implements LocationListener, 
             if ("RUN".equals(state.movement)) { state.runMs += dt; state.movingMs += dt; }
             if ("STILL".equals(state.movement)) state.stillMs += dt;
         }
+        if (BuildConfig.DEBUG) {
+            try {
+                Class.forName(getPackageName() + ".BatteryAutoCapture")
+                        .getMethod("onSessionStop", Context.class, long.class)
+                        .invoke(null, getApplicationContext(), state.id);
+            } catch (ReflectiveOperationException ignored) { }
+        }
+        prefs.edit().putBoolean("gps_ack_needed", false).putBoolean("gps_incident", false).apply();
         db.snapshot(state, Math.max(0, now - state.startedElapsedMs), true);
         state.save(prefs, false);
         AppPrefs.saveProfile(prefs, profile);

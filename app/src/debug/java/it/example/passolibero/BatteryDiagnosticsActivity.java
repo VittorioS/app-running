@@ -27,6 +27,10 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.Switch;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -49,6 +53,7 @@ public final class BatteryDiagnosticsActivity extends Activity {
     private Spinner scenarios, durations;
     private TextView status;
     private Button start, stop, export;
+    private Switch autoToggle;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -81,6 +86,14 @@ public final class BatteryDiagnosticsActivity extends Activity {
         scenarios.setAdapter(new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_dropdown_item, SCENARIOS));
         Ui.marginBottom(this, card, scenarios, 12);
+        autoToggle = new Switch(this);
+        autoToggle.setText("Acquisizione automatica: dopo 1 min, per 10 min");
+        autoToggle.setChecked(AppPrefs.get(this).getBoolean("battery_auto_debug", false));
+        autoToggle.setOnCheckedChangeListener((v, enabled) -> {
+            AppPrefs.get(this).edit().putBoolean("battery_auto_debug", enabled).apply();
+            if (!enabled) BatteryAutoCapture.disable(this);
+        });
+        Ui.marginBottom(this, card, autoToggle, 14);
 
         Ui.marginBottom(this, card, Ui.text(this,
                 "Durata della registrazione", 14, true, Ui.INK), 7);
@@ -124,7 +137,7 @@ public final class BatteryDiagnosticsActivity extends Activity {
 
         export = Ui.button(this, "Salva un unico file CSV", false);
         export.setOnClickListener(v -> {
-            if (!BatteryRecorder.hasReport()) return;
+            if (!BatteryRecorder.hasReport(getApplicationContext())) return;
             Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             save.addCategory(Intent.CATEGORY_OPENABLE);
             save.setType("text/csv");
@@ -163,10 +176,10 @@ public final class BatteryDiagnosticsActivity extends Activity {
 
     private void refreshUi() {
         boolean recording = BatteryRecorder.isRunning();
-        status.setText(BatteryRecorder.status());
+        status.setText(BatteryRecorder.status(getApplicationContext()));
         start.setEnabled(!recording);
         stop.setEnabled(recording);
-        export.setEnabled(!recording && BatteryRecorder.hasReport());
+        export.setEnabled(!recording && BatteryRecorder.hasReport(getApplicationContext()));
         scenarios.setEnabled(!recording);
         durations.setEnabled(!recording);
     }
@@ -186,7 +199,7 @@ public final class BatteryDiagnosticsActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != SAVE_CSV || resultCode != RESULT_OK
                 || data == null || data.getData() == null) return;
-        String csv = BatteryRecorder.csv();
+        String csv = BatteryRecorder.csv(getApplicationContext());
         if (csv == null) return;
         try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
             if (out == null) throw new IOException("Memoria di destinazione non disponibile");
@@ -218,6 +231,7 @@ final class BatteryRecorder {
     private static HandlerThread thread;
     private static Handler worker;
     private static Context app;
+    private static final String CSV_FILENAME = "battery-debug-last.csv";
     private static boolean running;
     private static long startedElapsed, startedWall, lastSampleElapsed;
     private static long cpuPrevious, rxPrevious, txPrevious;
@@ -239,6 +253,7 @@ final class BatteryRecorder {
             txPrevious = -1;
             samples = 0;
             report = null;
+            app.deleteFile(CSV_FILENAME);
             rows = new StringBuilder(HEADER);
             running = true;
             thread = new HandlerThread("BatteryDebugSampler",
@@ -258,6 +273,13 @@ final class BatteryRecorder {
     private static void complete() {
         running = false;
         report = rows == null ? null : rows.toString();
+        if (app != null && report != null) {
+            try (FileOutputStream out = app.openFileOutput(CSV_FILENAME, Context.MODE_PRIVATE)) {
+                out.write(report.getBytes(StandardCharsets.UTF_8));
+            } catch (IOException ex) {
+                android.util.Log.w("BatteryDebug", "Unable to save CSV", ex);
+            }
+        }
         if (worker != null) worker.removeCallbacks(SAMPLE);
         if (thread != null) thread.quitSafely();
         worker = null;
@@ -267,21 +289,34 @@ final class BatteryRecorder {
     static boolean isRunning() {
         synchronized (LOCK) { return running; }
     }
-    static boolean hasReport() {
-        synchronized (LOCK) { return report != null; }
+    static boolean hasReport(Context context) {
+        synchronized (LOCK) {
+            return report != null || context.getFileStreamPath(CSV_FILENAME).isFile();
+        }
     }
-    static String csv() {
-        synchronized (LOCK) { return report; }
+    static String csv(Context context) {
+        synchronized (LOCK) {
+            if (report != null) return report;
+            File file = context.getFileStreamPath(CSV_FILENAME);
+            if (!file.isFile() || file.length() > 2_000_000) return null;
+            try (FileInputStream in = context.openFileInput(CSV_FILENAME)) {
+                byte[] bytes = new byte[(int) file.length()];
+                int count = 0, got;
+                while (count < bytes.length && (got = in.read(bytes, count, bytes.length - count)) > 0)
+                    count += got;
+                return new String(bytes, 0, count, StandardCharsets.UTF_8);
+            } catch (IOException ex) { return null; }
+        }
     }
-    static String status() {
+    static String status(Context context) {
         synchronized (LOCK) {
             if (running) {
                 long elapsed = SystemClock.elapsedRealtime() - startedElapsed;
                 return "Acquisizione " + Math.min(durationSeconds, elapsed / 1000)
                         + " / " + durationSeconds + " s · " + samples + " campioni";
             }
-            return report == null ? "Nessuna registrazione"
-                    : "Completata · " + samples + " campioni · CSV pronto";
+            return !hasReport(context) ? "Nessuna registrazione"
+                    : "Completato · CSV pronto per esportazione";
         }
     }
 

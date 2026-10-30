@@ -1,5 +1,6 @@
 import it.example.passolibero.AdaptiveProfile;
 import it.example.passolibero.BatteryPolicy;
+import it.example.passolibero.GpsQualityPolicy;
 import it.example.passolibero.DistanceAccumulator;
 import it.example.passolibero.MovementClassifier;
 import it.example.passolibero.RunMath;
@@ -91,6 +92,12 @@ public final class CoreAlgorithmTest {
         check(!BatteryPolicy.shouldPublishState(1_000, 2_500, false), "Evita salvataggio timer duplicato");
         check(BatteryPolicy.shouldPublishState(1_000, 3_000, false), "Salvataggio timer se GPS assente");
         check(BatteryPolicy.shouldPublishState(50_000, 100, true), "Gestisce riavvio uptime");
+        check(GpsQualityPolicy.isReliable(12f, 500), "GPS affidabile");
+        check(!GpsQualityPolicy.isReliable(26f, 500), "GPS impreciso");
+        check(!GpsQualityPolicy.isReliable(12f, 11000), "Fix GPS vecchio");
+        check(!GpsQualityPolicy.confirmedPoor(1000, 2000), "Nessun allarme prematuro");
+        check(GpsQualityPolicy.confirmedPoor(1000, 4000), "Allarme confermato");
+        check(GpsQualityPolicy.confirmedRecovery(1000, 11000), "Recupero confermato");
 
         System.out.println("PASS: test algoritmici e policy risparmio energetico superati.");
     }

@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
+import android.location.Location;
+import android.location.LocationListener;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -28,6 +30,9 @@ public final class MainActivity extends Activity {
     private TextView distanceView, durationView, statusView, thresholdLabel;
     private Button startButton, activeButton, resumeButton;
     private boolean resumed;
+    private boolean checkingStartGps;
+    private LocationListener startupLocationListener;
+    private Runnable startupTimeout;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
@@ -144,9 +149,66 @@ public final class MainActivity extends Activity {
 
     private void startTracking() {
         if (prefs.getBoolean("active", false)) { openSession(); return; }
+        if (checkingStartGps) return;
+        LocationManager manager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        checkingStartGps = true;
+        statusView.setText("Verifica precisione GPS (massimo 12 secondi)…");
+        startupLocationListener = location -> {
+            if (!checkingStartGps) return;
+            long age = (SystemClock.elapsedRealtimeNanos()
+                    - location.getElapsedRealtimeNanos()) / 1_000_000L;
+            if (location.hasAccuracy() && GpsQualityPolicy.isReliable(
+                    location.getAccuracy(), age)) {
+                stopStartupGpsCheck();
+                launchTracking();
+            }
+        };
+        try {
+            manager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
+                    1_000L, 0f, startupLocationListener, Looper.getMainLooper());
+        } catch (SecurityException | IllegalArgumentException ex) {
+            stopStartupGpsCheck();
+            showStartupGpsWarning();
+            return;
+        }
+        startupTimeout = () -> {
+            if (!checkingStartGps) return;
+            stopStartupGpsCheck();
+            showStartupGpsWarning();
+        };
+        handler.postDelayed(startupTimeout, 12_000L);
+    }
+
+    private void stopStartupGpsCheck() {
+        checkingStartGps = false;
+        if (startupTimeout != null) handler.removeCallbacks(startupTimeout);
+        startupTimeout = null;
+        if (startupLocationListener != null) {
+            try {
+                ((LocationManager) getSystemService(LOCATION_SERVICE))
+                        .removeUpdates(startupLocationListener);
+            } catch (SecurityException ignored) { }
+            startupLocationListener = null;
+        }
+    }
+
+    private void showStartupGpsWarning() {
+        if (isFinishing() || isDestroyed()) return;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Segnale GPS impreciso")
+                .setMessage("Non è stato ottenuto un GPS affidabile entro 12 secondi. "
+                        + "Il percorso e la velocità potrebbero essere imprecisi. "
+                        + "Vuoi iniziare comunque?")
+                .setPositiveButton("Continua comunque", (dialog, which) -> launchTracking())
+                .setNeutralButton("Riprova GPS", (dialog, which) -> startTracking())
+                .setNegativeButton("Annulla", null)
+                .setCancelable(false).show();
+    }
+
+    private void launchTracking() {
         try {
             startForegroundService(new Intent(this, TrackingService.class).setAction(TrackingService.START));
-            openSession();  // Il servizio inizializza i dati nei secondi immediatamente successivi.
+            openSession();
         } catch (RuntimeException ex) {
             Toast.makeText(this, "Avvio non riuscito: " + ex.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
         }
@@ -172,7 +234,7 @@ public final class MainActivity extends Activity {
             RunState state = RunState.read(prefs);
             distanceView.setText((active ? RunMath.km(state.distanceM) : "0,00") + " km");
             durationView.setText(active ? RunMath.duration(Math.max(0, SystemClock.elapsedRealtime() - state.startedElapsedMs)) : "00:00");
-            statusView.setText(active ? state.gpsStatus + " · " + formatMovement(state.movement)
+            if (!checkingStartGps) statusView.setText(active ? state.gpsStatus + " · " + formatMovement(state.movement)
                     : "Nessuna sessione attiva. Avvia per registrare un allenamento.");
             startButton.setVisibility(active ? android.view.View.GONE : android.view.View.VISIBLE);
             activeButton.setVisibility(active ? android.view.View.VISIBLE : android.view.View.GONE);
@@ -196,6 +258,7 @@ public final class MainActivity extends Activity {
         handler.post(refreshTask);
     }
     @Override protected void onPause() {
+        stopStartupGpsCheck();
         resumed = false;
         handler.removeCallbacks(refreshTask);
         super.onPause();

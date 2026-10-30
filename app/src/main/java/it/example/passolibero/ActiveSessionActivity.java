@@ -33,6 +33,7 @@ public final class ActiveSessionActivity extends Activity {
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
     private boolean mapRendered;
+    private boolean gpsDialogShown;
 
     private static final int[] CHECKPOINTS = {250, 500, 1000, 2000, 5000};
     private static final int[] GOALS = {0, 1000, 2000, 3000, 5000, 10000, 21097, -1};
@@ -199,6 +200,23 @@ public final class ActiveSessionActivity extends Activity {
         Ui.marginBottom(this, content, stop, 4);
     }
 
+    private void maybeShowGpsAlert(RunState s) {
+        if (gpsDialogShown || !prefs.getBoolean("gps_ack_needed", false)) return;
+        if (!"STILL".equals(s.movement)) return;
+        gpsDialogShown = true;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Segnale GPS impreciso")
+                .setMessage("Sei fermo e il segnale GPS non è affidabile. "
+                        + "Puoi confermare per continuare oppure attendere un segnale migliore. "
+                        + "Il tracciamento non viene interrotto.")
+                .setPositiveButton("Ho capito, continua", (d, w) ->
+                        prefs.edit().putBoolean("gps_ack_needed", false).apply())
+                .setNegativeButton("Attendi GPS", (d, w) ->
+                        prefs.edit().putBoolean("gps_ack_needed", false).apply())
+                .setOnDismissListener(d -> gpsDialogShown = false)
+                .show();
+    }
+
     private void label(String type) {
         if (!prefs.getBoolean("active", false)) return;
         startService(new Intent(this, TrackingService.class).setAction(type));
@@ -212,6 +230,7 @@ public final class ActiveSessionActivity extends Activity {
             if (active) sessionSeen = true;
             if (sessionSeen && !active) { finish(); return; }
             RunState s = RunState.read(prefs);
+            if (active) maybeShowGpsAlert(s);
             Rect visiblePart = new Rect();
             boolean mapVisible = map.view().getGlobalVisibleRect(visiblePart)
                     && visiblePart.height() >= Ui.dp(ActiveSessionActivity.this, 48);
