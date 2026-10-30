@@ -1,91 +1,55 @@
-# PassoLibero — tracker corsa Android nativo
+# PassoLibero 2.0 — Mappa live e statistiche complete
 
-Sorgenti di una **prima versione funzionante a livello di implementazione** (non ancora verificata su dispositivo reale), in Java + Android SDK, senza librerie runtime di terze parti. Progettata per Android 15 e compatibile a partire da **Android 11 (API 30)**.
+App Android nativa in Java (min SDK 30, target SDK 35). Tracciamento GPS e sensori passi durante sessioni avviate dall'utente; storico interamente sul dispositivo.
 
-## Funzionalità implementate
+## Schermate
 
-- **Avvio e fine manuali**: nessuna rilevazione automatica fuori dalle sessioni.
-- **Foreground Service** dichiarato `location` (e `health` quando è disponibile il permesso `ACTIVITY_RECOGNITION`) per il GPS durante schermo spento e telefono bloccato.
-- **Distanza GPS** calcolata con Haversine; rifiuto dei fix troppo imprecisi, dei salti fisicamente implausibili e dei microspostamenti. Il GPS può comunque sbagliare in galleria, sotto edifici o con segnale debole.
-- **Tempo** con `SystemClock.elapsedRealtime()`, velocità GPS filtrata e ritmo medio in min/km.
-- **Passi** da `TYPE_STEP_DETECTOR` oppure `TYPE_STEP_COUNTER`, se disponibile e autorizzato. Senza sensore/premesso, passi non disponibili (mostrati come 0).
-- **Stato del movimento**: `UNKNOWN`, `STILL`, `WALK`, `RUN`, senza interrompere la sessione.
-- **Soglia manuale** 3–12 km/h, default 6,0 km/h, isteresi ±0,5 km/h e conferma di 10 secondi.
-- **Micro-modello adattivo offline**: medie mobili di velocità camminata/corsa, con campioni automatici solo molto affidabili e possibilità di etichettare manualmente 30 secondi di camminata/corsa. Nessuna libreria ML e nessun file di modello esterno.
-- **Checkpoint vocali** ogni 250 m, 500 m, 1 km, 2 km o 5 km. Usano esclusivamente una voce italiana locale installata nel motore TTS del dispositivo.
-- **Riproduzione vocale** con audio focus transient/ducking per attenuare eventualmente la musica.
-- **Persistenza locale** in SQLite con punti geolocalizzati e sessioni consultabili. Non occorre un server, account o connessione Internet. L'app NON chiede `INTERNET`.
-- **Recupero** del servizio quando il sistema lo riavvia; se non si riavvia automaticamente, dalla schermata principale compare "Riprendi servizio interrotto". I punti persi non vengono inventati.
+- **Home:** mappa OpenStreetMap, posizione GPS corrente e SOLO percorso della sessione attiva, aggiornato ogni 1,5 s. Al termine viene svuotata. Pulsante per aprire la schermata dell'allenamento e accesso allo storico.
+- **Sessione corrente:** distanza in km, ritmo attuale e medio in **min/km**, velocità in km/h, durata totale, tempo in movimento/corsa/camminata/sosta, passi, cadenza (se sensore disponibile), km corsi e camminati, precisione GPS, checkpoint successivo e metri mancanti. Intervalli checkpoint modificabili: 250/500/1000/2000/5000 m. Obiettivo chilometrico selezionabile, anche personalizzato 0,1–200 km, con progresso.
+- **Storico:** elenco degli allenamenti salvati con data, durata, ritmo e passi. Tocca una sessione per visualizzarne la mappa e le statistiche dettagliate.
+- **Apprendimento locale:** pulsanti di campionamento camminata/corsa e soglia di velocità configurabile dalla Home.
 
-## Come aprirlo e installarlo
+## Privacy e funzionamento senza Internet
 
-1. Installa **Android Studio**, **Android SDK Platform 35** e **JDK 17** (normalmente incluso con Android Studio).
-2. Estrai l'archivio, in Android Studio scegli **File → Open** e seleziona la directory `PassoLibero`.
-3. Esegui il **Gradle Sync** con Android Gradle Plugin 8.7.3 e **Gradle 8.9**. La distribuzione di Gradle e il plugin Android sono strumenti di build, NON dipendenze incluse nell'APK. Se Android Studio non configura automaticamente Gradle, imposta la versione 8.9 nelle impostazioni Gradle dell'IDE.
-4. Seleziona un dispositivo fisico con Android 15 (preferibile all'emulatore per i sensori), quindi **Run 'app'**.
-5. Concedi la **posizione precisa** e, se disponibile, il riconoscimento attività. Le notifiche servono a rendere più visibile il servizio, ma la notifica di servizio viene gestita dal sistema anche se il permesso di notifica è negato.
-6. Per gli annunci vocali, nelle impostazioni TTS del telefono verifica che sia disponibile una **voce italiana utilizzabile offline**. Consenti che il volume sia udibile (media o guida vocale), anche con eventuali cuffie Bluetooth.
-7. Avvia una sessione e blocca lo schermo. **Solo "Termina e salva" conclude la sessione**. Se l'OS interrompe il servizio, i dati già persistiti restano nello storico.
+- GPS, conteggio distanza, cronometro, soglie, rilevazione passi, annunci TTS e registrazione dello storico **funzionano senza rete**.
+- Le mappe usano libreria **osmdroid (Apache 2.0) 6.1.20** e dati OpenStreetMap, senza API a pagamento. Per vedere nuove tessere cartografiche serve Internet; le tessere già in cache possono rimanere visibili offline. Non è presente alcuna funzione di scaricamento massivo/offline delle mappe ufficiali OSM (vietato dalla loro policy).
+- Il tracciato GPS completo rimane nel database SQLite sul telefono. **Il fornitore delle tessere OSM riceve richieste di rete relative alla zona visualizzata** quando la mappa carica online, ma l'app non carica un file con i punti della sessione e non usa un account cloud.
+- Le tessere vengono richieste solo per la vista attuale tramite HTTPS, con un User-Agent specifico `PassoLibero/2.0 (it.example.passolibero)`. Attribuzione OSM mostrata nelle schermate con mappa. Informazioni policy: https://operations.osmfoundation.org/policies/tiles/ .
+- Nessun servizio a pagamento, chiave API commerciale, pubblicità o analytics.
 
-**Build manuale:** questo pacchetto non include `gradle-wrapper.jar` né il binario Gradle, perché non sono stati scaricabili nell'ambiente di generazione. Android Studio può essere configurato con Gradle 8.9 già installato. Un file `gradle/wrapper/gradle-wrapper.properties` specifica la distribuzione corretta ma, da solo, **non abilita `./gradlew`**. Per la riga di comando puoi installare Gradle 8.9 e usare `gradle assembleDebug`, oppure generare il wrapper con `gradle wrapper`.
+## Aggiornamento rispetto alle versioni precedenti
 
-## Come usarla
+- **Correzione distanza GPS** `DistanceAccumulator`: accumula gli spostamenti minimi anziché scartarli a ogni fix GPS; filtra drift da fermo e salti impropri.
+- **Database migrato da versione 1 a 2 con ALTER TABLE** per aggiungere `goal_m` senza cancellare sessioni e punti precedenti.
+- **SessionDetailActivity** con mappa di una sessione storica e statistiche salvate.
+- **RouteSegmenter** impedisce linee fittizie sulla mappa dopo salti o lunghe perdite di segnale.
+- Se non hai autorizzato Attività fisica, GPS e durata funzionano; passi/cadenza richiedono il sensore compatibile e il permesso ACTIVITY_RECOGNITION.
 
-- Premi **Inizia sessione** quando sei all'aperto e il GPS è acceso.
-- Le statistiche si aggiornano automaticamente finché il Foreground Service è attivo.
-- Durante la sessione lo stato può cambiare `RUN → WALK → STILL → RUN` senza creare sessioni nuove o perdere i dati.
-- Le impostazioni del checkpoint e della soglia si possono modificare durante la corsa.
-- Attiva l'adattamento, poi durante un tratto stabile premi **Sto camminando**; fai lo stesso durante una corsa stabile con **Sto correndo**. Raccogliendo entrambi i tipi di campioni, la soglia personalizzata viene stimata dal punto medio delle velocità apprese e rimane vincolata a ±1,5 km/h rispetto alla soglia manuale.
-- Lo storico comprende anche sessioni interrotte prima del completamento.
-
-## Struttura
-
-- `MainActivity.java`: interfaccia di tracciamento e impostazioni.
-- `TrackingService.java`: LocationManager, SensorManager, ticker, coordinate, checkpoint e salvataggio.
-- `MovementClassifier.java`: filtro velocità, isteresi, stato camminata/corsa/fermo.
-- `AdaptiveProfile.java`: apprendimento incrementale del profilo, senza ML esterno.
-- `VoiceCoach.java`: TextToSpeech offline e gestione dell'audio focus.
-- `RunMath.java`: Haversine, ritmo, formattazione.
-- `TrackerDb.java`: SQLite locale, sessioni e punti GPS.
-- `RunState.java`, `AppPrefs.java`: snapshot persistenti e configurazione.
-- `HistoryActivity.java`: storico delle sessioni.
-- `tests/run-core-tests.sh`: test JVM dei calcoli e delle transizioni di movimento.
-
-## Verifica effettuata / limiti noti
-
-- ✅ I test JVM delle classi senza Android (Haversine, ritmo, stato di movimento, apprendimento) passano usando JDK 21.
-- ✅ XML del manifest e delle risorse validato sintatticamente.
-- ⚠️ Non è stata eseguita una compilazione Android o un test sul dispositivo: **Android SDK, Gradle e l'emulatore non erano disponibili nell'ambiente**. Il progetto potrebbe richiedere aggiustamenti dopo il primo Gradle Sync e test reali.
-- ⚠️ Android 15 e alcuni produttori possono fermare o rallentare i servizi anche con notifica e schermo bloccato. Il test di affidabilità va eseguito sul tuo telefono. Un riavvio del telefono o un arresto forzato creano un'interruzione non ricostruibile del tracciato.
-- ⚠️ La registrazione salvata resta in locale; nessun backup remoto automatico (disabilitato anche il backup Android). Se l'app viene disinstallata, i dati possono andare perduti.
-- ⚠️ Senza motore TTS con voce italiana offline, i checkpoint vengono registrati ma l'annuncio potrebbe non essere pronunciato; occorre installare la voce tramite le impostazioni di Android.
-- ⚠️ Le metriche dipendono dalla posizione del telefono, dal segnale GNSS e dai sensori disponibili. Non equiparare le misure a dispositivi professionali senza calibrazione.
-- ⚠️ Non sono ancora presenti mappa su UI, esportazione GPX/CSV, test strumentali o sincronizzazione con Samsung Health.
-
-## Test algoritmi senza Android
+## Test
 
 ```sh
-./tests/run-core-tests.sh
+sh tests/run-core-tests.sh
 ```
 
-## Permessi
+21 controlli JVM includono 100 m a piccoli incrementi GPS, anti-drift, classificazione RUN/WALK, ritmo in min/km, checkpoint, progressione obiettivo e interruzioni della traccia.
 
-- `ACCESS_FINE_LOCATION` e `ACCESS_COARSE_LOCATION`: posizioni GNSS.
-- `ACTIVITY_RECOGNITION`: passo/pedometria hardware quando il dispositivo la supporta.
-- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `FOREGROUND_SERVICE_HEALTH`: servizio attivo dichiarato secondo il tipo d'uso.
-- `POST_NOTIFICATIONS`: visibilità delle notifiche su Android 13+; la notifica di servizio non è sostituita dagli annunci vocali.
-- Nessun `ACCESS_BACKGROUND_LOCATION`, perché l'avvio è manuale con attività visibile e non è previsto il riconoscimento fuori sessione.
+## Compilazione Android / GitHub Actions
 
-**Nota privacy:** le tracce GPS sono personali e non cifrate a livello applicativo; sono protette dall'isolamento app di Android e dall'eventuale cifratura del dispositivo. Non condividere `sessions.db` pubblicamente.
+Configurazione Gradle: plugin Android `8.7.3`, Gradle `8.9`, Java `17`, compileSdk `35`.
 
-## Generare l'APK con GitHub Actions (senza Android Studio locale)
+La build richiede accesso a Google Maven/Maven Central (una volta) per Android Gradle Plugin e dipendenza open source osmdroid. La compilazione APK in questo ambiente non è stata verificata, perché l'Android SDK non è disponibile qui. Il workflow usa Java 17 e `android-actions/setup-android@v3` con solo `platform-tools` (non il vecchio pacchetto `tools`, che non esiste più).
 
-Questo progetto include il workflow `.github/workflows/android-apk.yml`. Il workflow installa gli strumenti di **compilazione** sul runner GitHub e crea un APK **debug firmato**, installabile su Android 15. Questi strumenti non vengono inclusi nell'app finale.
+## Pull request GitHub
 
-1. Crea un repository GitHub (preferibilmente **privato**).
-2. Carica nella **radice del repository** il contenuto della cartella `PassoLibero`, incluso `.github/workflows/android-apk.yml` (non mettere tutti i file dentro una sottocartella `PassoLibero`).
-3. Nel repository apri **Actions → Genera APK Android → Run workflow → Run workflow**. Il workflow parte anche automaticamente dopo i push verso `main` o `master`.
-4. Quando l'esecuzione risulta riuscita (verde), aprila e scarica l'artifact **PassoLibero-Android15-debug** dalla sezione *Artifacts*.
-5. Estrai l'archivio scaricato: contiene `app-debug.apk`. Trasferiscilo sul telefono, aprilo e autorizza, se richiesto, l'installazione da quella sorgente.
+La versione 2.0 è proposta tramite una normale pull request dal ramo `feature/passolibero-osm-v2` verso `main` nel repository `VittorioS/app-running`.
+I file sorgente Java, il manifesto, i test e il README sono versionati singolarmente nel repository: non è richiesto caricare ZIP. Il workflow GitHub Actions del repository viene eseguito anche sul ramo della PR, genera `:app:assembleDebug` e pubblica l'artefatto APK se la compilazione riesce.
 
-L'APK debug è **firmato automaticamente** da Android Gradle Plugin con una chiave di sviluppo, quindi è utilizzabile per i test personali. Non è una build release da pubblicare su Play Store. La firma generata su GitHub non è garantita identica a quella di una build locale successiva: per aggiornare l'app senza disinstallarla bisogna usare sempre la stessa chiave di firma. La compilazione del workflow **non è stata eseguita né verificata in questo ambiente**, perché non erano disponibili SDK e Gradle né la rete necessaria per installarli.
+**Attenzione alla firma:** un APK debug generato da un altro runner può usare una chiave diversa e rifiutare l'aggiornamento. Non disinstallare l'app esistente se vuoi conservarne le sessioni senza aver prima esportato i dati.
+
+## Verifiche pratiche consigliate
+
+1. Se Android consente un aggiornamento con firma compatibile, verificare che la migrazione del DB mantenga gli allenamenti precedenti; non disinstallare la versione vecchia se contiene dati da preservare.
+2. Avviare un allenamento all'aperto con GPS preciso; percorrere 100 m misurati e confrontare la distanza (~0,10 km, secondo accuratezza GPS reale).
+3. Controllare l'aggiornamento linea/marker in Home. Tornare alla schermata statistiche, cambiare checkpoint e obiettivo chilometrico.
+4. Terminare: il percorso deve sparire dalla Home ed essere consultabile soltanto nello Storico, senza segmenti fittizi sui tratti con GPS perso.
+5. Senza Internet: GPS, conteggio e percorso continuano; tiles OSM non già in cache potrebbero non apparire.
