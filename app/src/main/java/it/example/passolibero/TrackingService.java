@@ -57,6 +57,7 @@ public final class TrackingService extends Service implements LocationListener, 
     private final MotionEvidencePolicy motionEvidence = new MotionEvidencePolicy();
     private final MotionTimeline motionTimeline = new MotionTimeline();
     private MovementClassifier.Kind lastActivity = MovementClassifier.Kind.UNKNOWN;
+    private long lastActivityFixMs = -1;
     private boolean detectorSeen;
     private long lastCounterProgressMs = -1;
     private boolean stepSensorAvailable;
@@ -177,6 +178,7 @@ public final class TrackingService extends Service implements LocationListener, 
         detectorSeen = false;
         lastCounterProgressMs = -1;
         lastActivity = MovementClassifier.Kind.UNKNOWN;
+        lastActivityFixMs = -1;
         recentStepTimes.clear();
         stepSensorAvailable = false;
         state.save(prefs, true);
@@ -343,6 +345,7 @@ public final class TrackingService extends Service implements LocationListener, 
                     recentSteps, 0L, threshold);
             if (candidate == MovementClassifier.Kind.RUN || candidate == MovementClassifier.Kind.WALK)
                 lastActivity = candidate;
+                lastActivityFixMs = now;
         }
         state.speedKmh = Double.isFinite(pointSpeed) ? Math.max(0, pointSpeed)
                 : classifier.smoothedSpeedKmh();
@@ -417,7 +420,10 @@ public final class TrackingService extends Service implements LocationListener, 
 
     private void advanceTimeline(long now) {
         if (state == null) return;
-        motionTimeline.advance(now, evaluateMotion(now), lastActivity);
+        MovementClassifier.Kind freshActivity = lastActivityFixMs >= 0
+                && now - lastActivityFixMs <= 3_000
+                ? lastActivity : MovementClassifier.Kind.UNKNOWN;
+        motionTimeline.advance(now, evaluateMotion(now), freshActivity);
         applyTimeline();
     }
 
