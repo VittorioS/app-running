@@ -173,7 +173,14 @@ public final class TrackingService extends Service implements LocationListener, 
         lastAccepted = null; // Non collegare con una linea GPS il tratto perso durante un riavvio.
         distanceAccumulator.reset();
         motionEvidence.reset();
+        // Recover elapsed time not covered by the last durable snapshot as
+        // UNKNOWN. Never infer RUN, WALK or STILL across a service restart.
+        long accounted = state.runMs + state.walkMs + state.stillMs + state.unknownMs;
+        long elapsed = Math.max(0, state.lastTickElapsedMs - state.startedElapsedMs);
+        if (restore && elapsed > accounted) state.unknownMs += elapsed - accounted;
         motionTimeline.restore(state.runMs, state.walkMs, state.stillMs, state.unknownMs);
+        motionTimeline.advance(restore ? state.lastTickElapsedMs : state.startedElapsedMs,
+                MotionEvidencePolicy.Evidence.UNCERTAIN, MovementClassifier.Kind.UNKNOWN);
         inertialGait.reset();
         detectorSeen = false;
         lastCounterProgressMs = -1;
@@ -379,14 +386,16 @@ public final class TrackingService extends Service implements LocationListener, 
 
         int cadence = cadenceSpm(now);
         state.cadenceSpm = cadence;
-        if (trainingLabel != null && now <= trainingUntilElapsed && acc <= 12) {
+        if (trainingLabel != null && now <= trainingUntilElapsed && acc <= 12 && moving
+                && (movement == MovementClassifier.Kind.RUN || movement == MovementClassifier.Kind.WALK)) {
             profile.observe(trainingLabel == MovementClassifier.Kind.RUN, state.speedKmh);
             if ((profile.walkSamples + profile.runSamples) % 5 == 0) AppPrefs.saveProfile(prefs, profile);
         } else {
             trainingLabel = null;
             double manual = AppPrefs.manualThreshold(prefs);
             // Solo esempi estremi confermati anche dai passi: non rinforzare errori al confine.
-            if (AppPrefs.adaptiveEnabled(prefs) && acc <= 10 && recentSteps >= 10) {
+            if (AppPrefs.adaptiveEnabled(prefs) && moving && acc <= 10 && recentSteps >= 10
+                    && (movement == MovementClassifier.Kind.RUN || movement == MovementClassifier.Kind.WALK)) {
                 boolean sampleAdded = false;
                 if (state.speedKmh <= manual - 1.5 && state.speedKmh >= 2.0 && cadence >= 65 && cadence <= 145) {
                     profile.observe(false, state.speedKmh);
@@ -596,7 +605,12 @@ public final class TrackingService extends Service implements LocationListener, 
             work.removeCallbacks(tick);
             work.post(() -> {
                 stopSensors();
-                if (state != null) persist(SystemClock.elapsedRealtime(), true, false);
+                if (state != null) {
+                    advanceTimeline(SystemClock.elapsedRealtime());
+                    motionTimeline.finish();
+                    applyTimeline();
+                    persist(SystemClock.elapsedRealtime(), true, false);
+                }
                 if (voice != null) voice.close();
                 db.close();
             });
