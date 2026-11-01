@@ -70,7 +70,7 @@ public final class MotionEvidencePolicy {
         boolean gnssFresh = lastFixMs >= 0 && nowMs >= lastFixMs
                 && nowMs - lastFixMs <= GPS_FRESH_MS;
         boolean detectorWalking = stepDetectorAvailable && detectorStepsLastFiveSeconds >= 2
-                && lastDetectorStepAgeMs >= 0 && lastDetectorStepAgeMs <= 5_000;
+                && lastDetectorStepAgeMs >= 0 && lastDetectorStepAgeMs <= 2_000;
         if (detectorWalking || counterProgressRecent || inertialGait
                 || (gnssFresh && consecutiveFastFixes >= 2)
                 || (geometricMovingUntil >= nowMs && gnssFresh)) {
@@ -80,7 +80,7 @@ public final class MotionEvidencePolicy {
         if (gnssFresh && consecutiveSlowFixes >= 2) {
             if (stepDetectorAvailable && stepDetectorPreviouslyActive
                     && lastDetectorStepAgeMs >= 2_500
-                    && detectorStepsLastFiveSeconds == 0) {
+                    && lastDetectorStepAgeMs >= 2_500) {
                 return Evidence.STILL_STRONG;
             }
             if (!detectorWalking
