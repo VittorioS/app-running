@@ -50,12 +50,19 @@ public final class MotionEvidencePolicy {
             double meters = RunMath.distanceMeters(geometryLat, geometryLon, lat, lon);
             double uncertainty = Math.hypot(geometryAccuracy, horizontalAccuracyM);
             // Significant displacement proves movement; overlap does NOT prove stillness.
-            if (!lastGnssStill && meters > Math.max(6.0, uncertainty * 1.3))
+            if (!lastGnssStill && meters > Math.max(6.0, uncertainty * 1.3)) {
                 geometricMovingUntil = fixMs + 2_500L;
-            geometryFromMs = fixMs;
-            geometryLat = lat;
-            geometryLon = lon;
-            geometryAccuracy = horizontalAccuracyM;
+                geometryFromMs = fixMs;
+                geometryLat = lat;
+                geometryLon = lon;
+                geometryAccuracy = horizontalAccuracyM;
+            } else if (fixMs - geometryFromMs >= 20_000L) {
+                // Keep accumulating slow displacement across multiple windows.
+                geometryFromMs = fixMs;
+                geometryLat = lat;
+                geometryLon = lon;
+                geometryAccuracy = horizontalAccuracyM;
+            }
         }
     }
 
