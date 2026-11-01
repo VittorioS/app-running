@@ -1,93 +1,104 @@
 package it.example.passolibero;
 
 /**
- * Corrobora il movimento con passi, velocita' GNSS e spostamenti persistenti.
- * L'accuratezza GPS autorizza l'uso di un fix, NON dimostra il movimento.
- * Indipendente da Android per poter simulare deriva e avvio della corsa nei test.
+ * Interprets independent, timestamped evidence; absence of motion is NOT stillness.
+ * Pure Java so recorded GNSS/sensor traces can be replayed in unit tests.
  */
 public final class MotionEvidencePolicy {
-    private static final long GEOMETRY_WINDOW_MS = 8_000L;
-    private static final long GPS_SPEED_CONFIRM_MS = 2_000L;
-    private static final long MOTION_GRACE_MS = 6_000L;
-    private long windowStartedMs = -1L;
-    private double windowLat, windowLon, windowAccuracy;
-    private int consecutiveDisplacements;
-    private long geometricEvidenceUntilMs = -1L;
-    private long nativeSpeedSinceMs = -1L;
-    private long lastMotionEvidenceMs = -1L;
-    private boolean moving;
+    public enum Evidence { MOVING, STILL_STRONG, STILL_MODERATE, UNCERTAIN }
+    public static final long GPS_FRESH_MS = 2_500L;
+    public static final double STILL_UPPER_MPS = 0.35;
+    public static final double MOVING_LOWER_MPS = 0.70;
+    private static final long GEOMETRY_WINDOW_MS = 6_000L;
+    private long lastFixMs = -1L;
+    private long geometryFromMs = -1L;
+    private double geometryLat, geometryLon, geometryAccuracy;
+    private long geometricMovingUntil = -1L;
+    private int consecutiveSlowFixes, consecutiveFastFixes;
+    private boolean lastGnssStill, lastGnssMoving;
 
     /**
-     * @param recentSteps numero di passi negli ultimi ~5 secondi
-     * @param stepAgeMs eta' dell'ultimo passo, Long.MAX_VALUE se mai osservato
-     * @param stepSensorAvailable vero SOLO se il listener e' registrato
-     * @param nativeSpeedMps velocita' fornita da Location, NaN se assente
-     * @param speedUncertaintyMps incertezza della velocita', NaN se assente
+     * Only call for new, accepted, monotonic GNSS fixes, never once per timer tick.
+     * Horizontal accuracy gates a fix; it does not prove the user is moving.
      */
-    public boolean update(long nowMs, double lat, double lon, double accuracyM,
-                          int recentSteps, long stepAgeMs, boolean stepSensorAvailable,
-                          double nativeSpeedMps, double speedUncertaintyMps) {
-        if (!Double.isFinite(lat) || !Double.isFinite(lon)
-                || !Double.isFinite(accuracyM) || accuracyM <= 0) return moving;
-
-        boolean stepsConfirm = stepSensorAvailable && recentSteps >= 2 && stepAgeMs <= 6_000L;
-        boolean validNative = Double.isFinite(nativeSpeedMps)
+    public void observeGps(long fixMs, double lat, double lon, double horizontalAccuracyM,
+                           double nativeSpeedMps, double speedAccuracyMps) {
+        if (fixMs <= lastFixMs || !Double.isFinite(horizontalAccuracyM)
+                || horizontalAccuracyM <= 0 || horizontalAccuracyM > 25
+                || !Double.isFinite(lat) || !Double.isFinite(lon)) return;
+        if (lastFixMs < 0 || fixMs - lastFixMs > GPS_FRESH_MS * 2) {
+            consecutiveSlowFixes = 0;
+            consecutiveFastFixes = 0;
+            geometryFromMs = -1;
+            geometricMovingUntil = -1;
+        }
+        lastFixMs = fixMs;
+        boolean usableSpeed = Double.isFinite(nativeSpeedMps)
                 && nativeSpeedMps >= 0 && nativeSpeedMps <= 12
-                && Double.isFinite(speedUncertaintyMps) && speedUncertaintyMps >= 0;
-        // La sola velocita' riportata senza incertezza non basta per sbloccare il GPS.
-        boolean nativeMoving = validNative && nativeSpeedMps - speedUncertaintyMps >= 0.9;
-        boolean nativeStill = validNative && nativeSpeedMps + speedUncertaintyMps < 0.7;
-        if (nativeMoving) {
-            if (nativeSpeedSinceMs < 0) nativeSpeedSinceMs = nowMs;
-        } else {
-            nativeSpeedSinceMs = -1L;
-        }
-        boolean confirmedNative = nativeSpeedSinceMs >= 0
-                && nowMs - nativeSpeedSinceMs >= GPS_SPEED_CONFIRM_MS;
+                && Double.isFinite(speedAccuracyMps) && speedAccuracyMps >= 0;
+        lastGnssStill = usableSpeed && nativeSpeedMps + speedAccuracyMps < STILL_UPPER_MPS;
+        lastGnssMoving = usableSpeed && nativeSpeedMps - speedAccuracyMps > MOVING_LOWER_MPS;
+        consecutiveSlowFixes = lastGnssStill ? consecutiveSlowFixes + 1 : 0;
+        consecutiveFastFixes = lastGnssMoving ? consecutiveFastFixes + 1 : 0;
 
-        if (windowStartedMs < 0 || nowMs < windowStartedMs) {
-            setWindow(nowMs, lat, lon, accuracyM);
-        } else if (nowMs - windowStartedMs >= GEOMETRY_WINDOW_MS) {
-            double travelled = RunMath.distanceMeters(windowLat, windowLon, lat, lon);
-            double uncertainty = Math.max(windowAccuracy, accuracyM);
-            // Se mancano i passi, chiediamo un movimento maggiore del rumore dichiarato.
-            double minTravel = Math.max(12.0, uncertainty * (stepSensorAvailable ? 2.5 : 2.0));
-            boolean significant = !nativeStill && travelled > minTravel;
-            consecutiveDisplacements = significant ? consecutiveDisplacements + 1 : 0;
-            // In assenza di passi, due finestre coerenti prima di parlare di movimento.
-            if (consecutiveDisplacements >= (stepSensorAvailable ? 2 : 1)) {
-                geometricEvidenceUntilMs = nowMs + GEOMETRY_WINDOW_MS + 2_000L;
-            }
-            setWindow(nowMs, lat, lon, accuracyM);
+        if (geometryFromMs < 0) {
+            geometryFromMs = fixMs;
+            geometryLat = lat;
+            geometryLon = lon;
+            geometryAccuracy = horizontalAccuracyM;
+        } else if (fixMs - geometryFromMs >= GEOMETRY_WINDOW_MS) {
+            double meters = RunMath.distanceMeters(geometryLat, geometryLon, lat, lon);
+            double uncertainty = Math.hypot(geometryAccuracy, horizontalAccuracyM);
+            // Significant displacement proves movement; overlap does NOT prove stillness.
+            if (!lastGnssStill && meters > Math.max(6.0, uncertainty * 1.3))
+                geometricMovingUntil = fixMs + 2_500L;
+            geometryFromMs = fixMs;
+            geometryLat = lat;
+            geometryLon = lon;
+            geometryAccuracy = horizontalAccuracyM;
         }
-
-        boolean corroborated = stepsConfirm || confirmedNative
-                || (geometricEvidenceUntilMs >= nowMs);
-        if (corroborated) {
-            lastMotionEvidenceMs = nowMs;
-            moving = true;
-        } else if (moving && (lastMotionEvidenceMs < 0
-                || nowMs - lastMotionEvidenceMs >= MOTION_GRACE_MS)) {
-            moving = false;
-        }
-        return moving;
     }
 
-    public boolean moving() { return moving; }
+    /**
+     * STEP_COUNTER progress may indicate motion, but its absence never proves a stop.
+     * stepDetectorPreviouslyActive is true only after real detector events this session.
+     */
+    public Evidence evaluate(long nowMs, int detectorStepsLastFiveSeconds,
+                             long lastDetectorStepAgeMs, boolean stepDetectorAvailable,
+                             boolean stepDetectorPreviouslyActive, boolean counterProgressRecent,
+                             boolean inertialGait) {
+        boolean gnssFresh = lastFixMs >= 0 && nowMs >= lastFixMs
+                && nowMs - lastFixMs <= GPS_FRESH_MS;
+        boolean detectorWalking = stepDetectorAvailable && detectorStepsLastFiveSeconds >= 2
+                && lastDetectorStepAgeMs >= 0 && lastDetectorStepAgeMs <= 5_000;
+        if (detectorWalking || counterProgressRecent || inertialGait
+                || (gnssFresh && consecutiveFastFixes >= 2)
+                || (geometricMovingUntil >= nowMs && gnssFresh)) {
+            return Evidence.MOVING;
+        }
+        // A late/incomplete step is contradictory evidence for declaring a stop.
+        if (gnssFresh && consecutiveSlowFixes >= 2) {
+            if (stepDetectorAvailable && stepDetectorPreviouslyActive
+                    && lastDetectorStepAgeMs >= 2_500
+                    && detectorStepsLastFiveSeconds == 0) {
+                return Evidence.STILL_STRONG;
+            }
+            if (!detectorWalking
+                    && (!stepDetectorAvailable || !stepDetectorPreviouslyActive
+                        || lastDetectorStepAgeMs >= 2_500)) {
+                return Evidence.STILL_MODERATE;
+            }
+        }
+        return Evidence.UNCERTAIN;
+    }
 
     public void reset() {
-        windowStartedMs = -1L;
-        consecutiveDisplacements = 0;
-        geometricEvidenceUntilMs = -1L;
-        nativeSpeedSinceMs = -1L;
-        lastMotionEvidenceMs = -1L;
-        moving = false;
-    }
-
-    private void setWindow(long ms, double lat, double lon, double accuracyM) {
-        windowStartedMs = ms;
-        windowLat = lat;
-        windowLon = lon;
-        windowAccuracy = accuracyM;
+        lastFixMs = -1;
+        geometryFromMs = -1;
+        geometricMovingUntil = -1;
+        consecutiveSlowFixes = 0;
+        consecutiveFastFixes = 0;
+        lastGnssStill = false;
+        lastGnssMoving = false;
     }
 }
