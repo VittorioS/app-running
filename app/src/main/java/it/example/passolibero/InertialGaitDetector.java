@@ -40,8 +40,7 @@ public final class InertialGaitDetector {
 
     public boolean gaitAt(long nowMs) {
         return rhythmicPeaks >= 3 && lastPeakMs >= 0
-                && nowMs >= lastPeakMs && nowMs - lastPeakMs <= 1_400
-                ;
+                && nowMs >= lastPeakMs && nowMs - lastPeakMs <= 1_400;
     }
 
     public void reset() {
