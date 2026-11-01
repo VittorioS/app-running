@@ -44,6 +44,8 @@ public final class TrackingService extends Service implements LocationListener, 
     private LocationManager locationManager;
     private SensorManager sensors;
     private Sensor stepSensor;
+    private Sensor inertialSensor;
+    private final InertialGaitDetector inertialGait = new InertialGaitDetector();
     private VoiceCoach voice;
     private final MovementClassifier classifier = new MovementClassifier();
     private final ArrayDeque<Long> recentStepTimes = new ArrayDeque<>();
@@ -171,6 +173,7 @@ public final class TrackingService extends Service implements LocationListener, 
         distanceAccumulator.reset();
         motionEvidence.reset();
         motionTimeline.restore(state.runMs, state.walkMs, state.stillMs, state.unknownMs);
+        inertialGait.reset();
         detectorSeen = false;
         lastCounterProgressMs = -1;
         lastActivity = MovementClassifier.Kind.UNKNOWN;
@@ -194,6 +197,13 @@ public final class TrackingService extends Service implements LocationListener, 
             if (stepSensor != null) stepSensorAvailable = sensors.registerListener(this, stepSensor,
                     SensorManager.SENSOR_DELAY_NORMAL, work);
         }
+        // Only enable the higher-rate accelerometer when the real-time hardware
+        // step detector is unavailable. Step Counter batching is not real-time.
+        if (stepSensor == null || stepSensor.getType() != Sensor.TYPE_STEP_DETECTOR) {
+            inertialSensor = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            if (inertialSensor != null)
+                sensors.registerListener(this, inertialSensor, SensorManager.SENSOR_DELAY_GAME, work);
+        }
         if (BuildConfig.DEBUG) {
             // Dedicated debug code is invoked by reflection; release never ships it.
             try {
@@ -210,7 +220,6 @@ public final class TrackingService extends Service implements LocationListener, 
         @Override public void run() {
             if (state == null) return;
             long now = SystemClock.elapsedRealtime();
-            long dt = Math.max(0, Math.min(10_000, now - state.lastTickElapsedMs));
             state.lastTickElapsedMs = now;
             state.goalM = AppPrefs.goalM(prefs);
             state.cadenceSpm = cadenceSpm(now);
@@ -403,7 +412,7 @@ public final class TrackingService extends Service implements LocationListener, 
         boolean counterProgress = lastCounterProgressMs >= 0 && now >= lastCounterProgressMs
                 && now - lastCounterProgressMs <= 3_000;
         return motionEvidence.evaluate(now, detectorSteps, detectorAge,
-                detectorAvailable, detectorSeen, counterProgress, false);
+                detectorAvailable, detectorSeen, counterProgress, inertialGait.gaitAt(now));
     }
 
     private void advanceTimeline(long now) {
@@ -419,6 +428,7 @@ public final class TrackingService extends Service implements LocationListener, 
         state.unknownMs = motionTimeline.unknownMs();
         state.movingMs = state.runMs + state.walkMs;
         state.movement = motionTimeline.visible().name();
+        if (motionTimeline.visible() == MovementClassifier.Kind.STILL) state.speedKmh = 0;
     }
 
     private void reportGpsQuality(boolean good, long now) {
@@ -494,6 +504,10 @@ public final class TrackingService extends Service implements LocationListener, 
     @Override public void onSensorChanged(SensorEvent event) {
         if (state == null) return;
         long stamp = event.timestamp / 1_000_000;
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            inertialGait.observe(stamp, event.values[0], event.values[1], event.values[2]);
+            return;
+        }
         int newSteps = 0;
         if (event.sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
             newSteps = Math.max(1, Math.round(event.values[0]));
