@@ -9,7 +9,7 @@ package it.example.passolibero;
  * consegna alcune posizioni in ritardo.
  */
 public final class MovementClassifier {
-    public enum Kind { UNKNOWN, STILL, WALK, RUN }
+    public enum Kind { UNKNOWN, MOVING_UNKNOWN, STILL, WALK, RUN }
 
     // Circa 84% del nuovo campione con fix a 1 Hz; 10 -> 4 km/h si aggiorna
     // gia' al primo fix, mentre isteresi e conferma evitano oscillazioni.
