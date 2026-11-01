@@ -113,6 +113,13 @@ public final class CoreAlgorithmTest {
             gait.observe(i*20L,0,0,z);
         }
         check(gait.gaitAt(5200), "Cadenzamento inerziale riconoscibile in simulazione");
+        // Cadence must stay detected over long runs, not reset every ~2.5s.
+        for (int i=260; i<520; i++) {
+            double z=9.81+2.5*Math.sin((i-100)*20.0*2*Math.PI/650);
+            gait.observe(i*20L,0,0,z);
+        }
+        check(gait.gaitAt(10400), "Andatura regolare mantenuta nel tempo");
+        check(!gait.gaitAt(12300), "Niente andatura da eventi inerziali vecchi");
 
         MotionTimeline timeline = new MotionTimeline();
         timeline.advance(0, MotionEvidencePolicy.Evidence.UNCERTAIN, MovementClassifier.Kind.UNKNOWN);
