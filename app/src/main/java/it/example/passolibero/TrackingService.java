@@ -53,6 +53,10 @@ public final class TrackingService extends Service implements LocationListener, 
     // Il filtro anti-rumore non deve perdere i microspostamenti GPS.
     private final DistanceAccumulator distanceAccumulator = new DistanceAccumulator();
     private final MotionEvidencePolicy motionEvidence = new MotionEvidencePolicy();
+    private final MotionTimeline motionTimeline = new MotionTimeline();
+    private MovementClassifier.Kind lastActivity = MovementClassifier.Kind.UNKNOWN;
+    private boolean detectorSeen;
+    private long lastCounterProgressMs = -1;
     private boolean stepSensorAvailable;
     private double counterLast = Double.NaN;
     private long lastSavedDbElapsed, lastNotificationMs, lastPointWall;
@@ -166,6 +170,11 @@ public final class TrackingService extends Service implements LocationListener, 
         lastAccepted = null; // Non collegare con una linea GPS il tratto perso durante un riavvio.
         distanceAccumulator.reset();
         motionEvidence.reset();
+        motionTimeline.restore(state.runMs, state.walkMs, state.stillMs, state.unknownMs);
+        detectorSeen = false;
+        lastCounterProgressMs = -1;
+        lastActivity = MovementClassifier.Kind.UNKNOWN;
+        recentStepTimes.clear();
         stepSensorAvailable = false;
         state.save(prefs, true);
         lastUiSavedElapsed = SystemClock.elapsedRealtime();
@@ -208,14 +217,8 @@ public final class TrackingService extends Service implements LocationListener, 
             if (lastAccepted != null && now - lastAccepted.getElapsedRealtimeNanos() / 1_000_000 > 15_000) {
                 reportGpsQuality(false, now);
                 state.gpsStatus = "GPS temporaneamente assente";
-                state.movement = "UNKNOWN";
             }
-            switch (state.movement) {
-                case "RUN": state.runMs += dt; state.movingMs += dt; break;
-                case "WALK": state.walkMs += dt; state.movingMs += dt; break;
-                case "STILL": state.stillMs += dt; break;
-                default: break;
-            }
+            advanceTimeline(now);
             if (lastAccepted == null && now - state.startedElapsedMs > 15_000) reportGpsQuality(false, now);
             syncVoiceCoach();
             persist(now, false, false);
@@ -308,22 +311,34 @@ public final class TrackingService extends Service implements LocationListener, 
         double nativeSpeed = location.hasSpeed() ? location.getSpeed() : Double.NaN;
         double speedUncertainty = location.hasSpeedAccuracy()
                 ? location.getSpeedAccuracyMetersPerSecond() : Double.NaN;
-        boolean wasMoving = motionEvidence.moving();
-        boolean moving = motionEvidence.update(now, location.getLatitude(), location.getLongitude(),
-                acc, stepsLastFiveSeconds, ageStep, stepSensorAvailable,
-                nativeSpeed, speedUncertainty);
-        // Una variazione di coordinate non dimostra che la persona si muove.
-        // Al riavvio del movimento scartiamo salti fra ancore rumorose.
-        if (moving && !wasMoving) distanceAccumulator.reset();
+        long fixMs = location.getElapsedRealtimeNanos() / 1_000_000L;
+        motionEvidence.observeGps(fixMs, location.getLatitude(), location.getLongitude(),
+                acc, nativeSpeed, speedUncertainty);
+        MotionEvidencePolicy.Evidence evidence = evaluateMotion(now);
+        boolean moving = evidence == MotionEvidencePolicy.Evidence.MOVING;
+        // Uncertainty is not proof of stillness. Permit conservative distance
+        // accumulation for plausible slow movement; never force speed to zero.
+        boolean plausibleSlow = evidence == MotionEvidencePolicy.Evidence.UNCERTAIN
+                && Double.isFinite(pointSpeed) && pointSpeed >= 1.2 && pointSpeed < 20
+                && lastActivity != MovementClassifier.Kind.UNKNOWN;
+        boolean countDistance = moving || plausibleSlow;
+        if (motionTimeline.visible() == MovementClassifier.Kind.STILL && !moving)
+            countDistance = false;
         delta = distanceAccumulator.accept(location.getLatitude(), location.getLongitude(),
-                acc, moving);
-        if (!moving) pointSpeed = 0;
+                acc, countDistance);
 
         double threshold = profile.threshold(AppPrefs.manualThreshold(prefs), AppPrefs.adaptiveEnabled(prefs));
-        MovementClassifier.Kind movement = classifier.update(now, pointSpeed, true,
-                recentSteps, ageStep, threshold);
-        state.speedKmh = classifier.smoothedSpeedKmh();
-        state.movement = movement.name();
+        if (moving && Double.isFinite(pointSpeed)) {
+            // This classifier distinguishes WALK/RUN only; the timeline owns STILL.
+            MovementClassifier.Kind candidate = classifier.update(now, pointSpeed, true,
+                    recentSteps, 0L, threshold);
+            if (candidate == MovementClassifier.Kind.RUN || candidate == MovementClassifier.Kind.WALK)
+                lastActivity = candidate;
+        }
+        state.speedKmh = Double.isFinite(pointSpeed) ? Math.max(0, pointSpeed)
+                : classifier.smoothedSpeedKmh();
+        advanceTimeline(now);
+        MovementClassifier.Kind movement = motionTimeline.visible();
         if (!"UNKNOWN".equals(state.movement)) motionBeforeGpsLoss = state.movement;
         if (gpsIncident && "STILL".equals(state.movement) && !gpsAskedWhileStill) {
             gpsAskedWhileStill = true;
@@ -332,7 +347,7 @@ public final class TrackingService extends Service implements LocationListener, 
         state.gpsStatus = "GPS ±" + Math.round(acc) + " m";
         state.gpsAccuracy = acc;
         // Mantieni fermo il marker quando il GPS oscilla senza movimento credibile.
-        if (!state.lastLocationValid || (moving && delta > 0)) {
+        if (!state.lastLocationValid || delta > 0) {
             state.lastLatitude = location.getLatitude();
             state.lastLongitude = location.getLongitude();
             state.lastLocationValid = true;
@@ -374,6 +389,36 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         handleCheckpoint(now);
         persist(now, false, true);
+    }
+
+    private MotionEvidencePolicy.Evidence evaluateMotion(long now) {
+        trimSteps(now);
+        int detectorSteps = 0;
+        for (long step : recentStepTimes) if (step <= now && now - step <= 5_000L) detectorSteps++;
+        long detectorAge = detectorSeen && state.lastStepElapsedMs > 0
+                && stepSensor != null && stepSensor.getType() == Sensor.TYPE_STEP_DETECTOR
+                ? now - state.lastStepElapsedMs : Long.MAX_VALUE;
+        boolean detectorAvailable = stepSensorAvailable && stepSensor != null
+                && stepSensor.getType() == Sensor.TYPE_STEP_DETECTOR;
+        boolean counterProgress = lastCounterProgressMs >= 0 && now >= lastCounterProgressMs
+                && now - lastCounterProgressMs <= 3_000;
+        return motionEvidence.evaluate(now, detectorSteps, detectorAge,
+                detectorAvailable, detectorSeen, counterProgress, false);
+    }
+
+    private void advanceTimeline(long now) {
+        if (state == null) return;
+        motionTimeline.advance(now, evaluateMotion(now), lastActivity);
+        applyTimeline();
+    }
+
+    private void applyTimeline() {
+        state.runMs = motionTimeline.runMs();
+        state.walkMs = motionTimeline.walkMs();
+        state.stillMs = motionTimeline.stillMs();
+        state.unknownMs = motionTimeline.unknownMs();
+        state.movingMs = state.runMs + state.walkMs;
+        state.movement = motionTimeline.visible().name();
     }
 
     private void reportGpsQuality(boolean good, long now) {
@@ -452,13 +497,17 @@ public final class TrackingService extends Service implements LocationListener, 
         int newSteps = 0;
         if (event.sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
             newSteps = Math.max(1, Math.round(event.values[0]));
+            detectorSeen = true;
+            for (int i = 0; i < newSteps; i++) recentStepTimes.addLast(stamp);
         } else if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
             if (Double.isFinite(counterLast)) {
                 newSteps = (int) RunMath.clamp(event.values[0] - counterLast, 0, 50);
             }
             counterLast = event.values[0];
+            if (newSteps > 0) lastCounterProgressMs = stamp;
+            // Batches have only the timestamp of the latest step. Do not
+            // invent individual step timestamps or artificially high cadence.
         }
-        for (int i = 0; i < newSteps; i++) recentStepTimes.addLast(stamp);
         if (newSteps > 0) {
             state.steps += newSteps;
             state.lastStepElapsedMs = stamp;
@@ -492,12 +541,9 @@ public final class TrackingService extends Service implements LocationListener, 
             } else { stopSelf(); return; }
         }
         long now = SystemClock.elapsedRealtime();
-        if (state.lastTickElapsedMs > 0) {
-            long dt = Math.min(10_000, Math.max(0, now - state.lastTickElapsedMs));
-            if ("WALK".equals(state.movement)) { state.walkMs += dt; state.movingMs += dt; }
-            if ("RUN".equals(state.movement)) { state.runMs += dt; state.movingMs += dt; }
-            if ("STILL".equals(state.movement)) state.stillMs += dt;
-        }
+        advanceTimeline(now);
+        motionTimeline.finish();
+        applyTimeline();
         if (BuildConfig.DEBUG) {
             try {
                 Class.forName(getPackageName() + ".BatteryAutoCapture")
