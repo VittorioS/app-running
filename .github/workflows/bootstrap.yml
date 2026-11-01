@@ -91,6 +91,7 @@ jobs:
       - name: Esegui test algoritmici
         run: |
           sh tests/run-core-tests.sh
+          python3 tests/check-db-migration.py
 
       # 8. Compila l'applicazione Android
       - name: Compila APK debug

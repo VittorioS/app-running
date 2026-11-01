@@ -31,7 +31,17 @@ App Android nativa in Java (min SDK 30, target SDK 35). Tracciamento GPS e senso
 sh tests/run-core-tests.sh
 ```
 
-21 controlli JVM includono 100 m a piccoli incrementi GPS, anti-drift, classificazione RUN/WALK, ritmo in min/km, checkpoint, progressione obiettivo e interruzioni della traccia.
+I test JVM includono 100 m a piccoli incrementi GPS, anti-drift, classificazione RUN/WALK, ritmo in min/km, checkpoint, progressione obiettivo e interruzioni della traccia. `MotionRegressionTest` verifica inoltre scuotimenti irregolari, conflitti GPS/accelerometro, dati vecchi o fuori ordine, sosta/ripartenza, contapassi ritardato e conservazione dei tempi con callback irregolari.
+
+`python3 tests/check-db-migration.py` esegue su SQLite reale lo schema e le migrazioni dal sorgente: nuove installazioni e aggiornamenti dalle versioni 1, 2 e 3 alla 4, mantenendo sessioni e punti.
+
+## Rilevamento fermo e movimento
+
+- GPS recente, passi hardware e accelerometro forniscono prove separate. Il solo accelerometro richiede almeno quattro picchi con intervalli regolari e altri 2 secondi di evidenza continua. Se contraddice un GPS affidabile vicino a zero, lo stato resta incerto e la distanza GPS non viene accumulata da questa sola prova.
+- Velocità, andatura e campioni del profilo usano il timestamp reale del fix. Dati GPS oltre 2,5 secondi non aggiornano l'andatura né la distanza corrente. Una sosta confermata o la perdita prolungata di prove invalida la vecchia categoria corsa/camminata.
+- `MOVING_UNKNOWN` significa movimento certo con andatura ignota: il suo tempo è incluso nel totale in movimento ed è salvato separatamente da quello con movimento incerto. Il database passa alla versione 4 senza cancellare dati; gli intervalli storici già sconosciuti non vengono riclassificati retroattivamente.
+- Con Step Detector la conferma della sosta resta di 4/8 secondi. Con il solo Step Counter registrato diventa di almeno 12 secondi, per tollerare fino a 10 secondi di consegna ritardata. Un batch tardivo può invalidare una sosta ancora pendente se l'ultimo passo cade al suo interno; non ricostruisce i timestamp degli altri passi e non trasforma l'intero intervallo in camminata.
+- Se la registrazione del detector fallisce, vengono tentati il contatore e il fallback accelerometrico. Le soglie restano da calibrare su telefoni reali, nelle diverse posizioni del dispositivo e a schermo bloccato.
 
 ## Compilazione Android / GitHub Actions
 

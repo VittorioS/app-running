@@ -5,7 +5,7 @@ import android.content.SharedPreferences;
 /** Stato minimo persistito una volta al secondo e dopo ogni update significativo. */
 public final class RunState {
     public long id, startedWallMs, startedElapsedMs, lastTickElapsedMs;
-    public long movingMs, walkMs, runMs, stillMs, unknownMs;
+    public long movingMs, walkMs, runMs, stillMs, unknownMs, movingUnknownMs;
     public int steps, cadenceSpm, checkpointIndex, checkpointInterval, goalM;
     public double distanceM, walkM, runM, speedKmh, gpsAccuracy;
     public double lastLatitude, lastLongitude;
@@ -25,6 +25,7 @@ public final class RunState {
         s.runMs = p.getLong("run_ms", 0);
         s.stillMs = p.getLong("still_ms", 0);
         s.unknownMs = p.getLong("unknown_ms", 0);
+        s.movingUnknownMs = p.getLong("moving_unknown_ms", 0);
         s.movingMs = p.getLong("moving_ms", 0);
         s.steps = p.getInt("steps", 0);
         s.cadenceSpm = p.getInt("cadence_spm", 0);
@@ -50,6 +51,7 @@ public final class RunState {
                 .putLong("run_distance_bits", Double.doubleToLongBits(runM))
                 .putLong("walk_ms", walkMs).putLong("run_ms", runMs)
                 .putLong("still_ms", stillMs).putLong("unknown_ms", unknownMs)
+                .putLong("moving_unknown_ms", movingUnknownMs)
                 .putLong("moving_ms", movingMs)
                 .putInt("steps", steps).putInt("cadence_spm", cadenceSpm)
                 .putInt("active_goal_m", goalM)

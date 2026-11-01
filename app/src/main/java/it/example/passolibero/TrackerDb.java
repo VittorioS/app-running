@@ -11,7 +11,7 @@ import java.util.List;
 
 /** Storico offline. Migrazione conservativa: mantiene tutte le sessioni preesistenti. */
 public final class TrackerDb extends SQLiteOpenHelper {
-    public TrackerDb(Context context) { super(context, "sessions.db", null, 3); }
+    public TrackerDb(Context context) { super(context, "sessions.db", null, 4); }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE sessions ("
@@ -19,6 +19,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
                 + "distance_m REAL NOT NULL DEFAULT 0, elapsed_ms INTEGER NOT NULL DEFAULT 0, "
                 + "moving_ms INTEGER NOT NULL DEFAULT 0, steps INTEGER NOT NULL DEFAULT 0, "
                 + "walk_ms INTEGER NOT NULL DEFAULT 0, run_ms INTEGER NOT NULL DEFAULT 0, still_ms INTEGER NOT NULL DEFAULT 0, unknown_ms INTEGER NOT NULL DEFAULT 0, "
+                + "moving_unknown_ms INTEGER NOT NULL DEFAULT 0, "
                 + "walk_m REAL NOT NULL DEFAULT 0, run_m REAL NOT NULL DEFAULT 0, "
                 + "goal_m INTEGER NOT NULL DEFAULT 0, "
                 + "status TEXT NOT NULL DEFAULT 'IN_PROGRESS')");
@@ -32,6 +33,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
     @Override public void onUpgrade(SQLiteDatabase db, int oldV, int newV) {
         if (oldV < 2) db.execSQL("ALTER TABLE sessions ADD COLUMN goal_m INTEGER NOT NULL DEFAULT 0");
         if (oldV < 3) db.execSQL("ALTER TABLE sessions ADD COLUMN unknown_ms INTEGER NOT NULL DEFAULT 0");
+        if (oldV < 4) db.execSQL("ALTER TABLE sessions ADD COLUMN moving_unknown_ms INTEGER NOT NULL DEFAULT 0");
     }
 
     public long newSession(long wall) {
@@ -50,6 +52,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
         v.put("run_ms", s.runMs);
         v.put("still_ms", s.stillMs);
         v.put("unknown_ms", s.unknownMs);
+        v.put("moving_unknown_ms", s.movingUnknownMs);
         v.put("walk_m", s.walkM);
         v.put("run_m", s.runM);
         v.put("goal_m", s.goalM);
@@ -75,7 +78,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
     }
 
     public static final class Entry {
-        public long id, startedAt, elapsedMs, movingMs, runMs, walkMs, stillMs, unknownMs;
+        public long id, startedAt, elapsedMs, movingMs, runMs, walkMs, stillMs, unknownMs, movingUnknownMs;
         public int steps, goalM;
         public double distance, runM, walkM;
         public String status;
@@ -97,12 +100,13 @@ public final class TrackerDb extends SQLiteOpenHelper {
         e.stillMs = c.getLong(11);
         e.goalM = c.getInt(12);
         e.unknownMs = c.getLong(13);
+        e.movingUnknownMs = c.getLong(14);
         return e;
     }
 
     private static final String[] ENTRY_COLUMNS = {
             "id", "started_at", "elapsed_ms", "distance_m", "steps", "run_m", "walk_m", "status",
-            "moving_ms", "walk_ms", "run_ms", "still_ms", "goal_m", "unknown_ms"
+            "moving_ms", "walk_ms", "run_ms", "still_ms", "goal_m", "unknown_ms", "moving_unknown_ms"
     };
 
     public List<Entry> recent(int count) {

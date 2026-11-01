@@ -141,7 +141,7 @@ public final class CoreAlgorithmTest {
                 MotionEvidencePolicy.Evidence.MOVING, MovementClassifier.Kind.WALK);
         check(timeline.visible()==MovementClassifier.Kind.WALK,"Ripartenza camminata");
         timeline.finish();
-        check(timeline.runMs()+timeline.walkMs()+timeline.stillMs()+timeline.unknownMs()
+        check(timeline.movingMs()+timeline.stillMs()+timeline.unknownMs()
                 ==18000,"Ogni secondo attribuito una sola volta");
         MotionTimeline blackout = new MotionTimeline();
         blackout.advance(0,MotionEvidencePolicy.Evidence.UNCERTAIN,MovementClassifier.Kind.UNKNOWN);

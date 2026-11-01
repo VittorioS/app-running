@@ -16,6 +16,7 @@ public final class MotionEvidencePolicy {
     private long geometricMovingUntil = -1L;
     private int consecutiveSlowFixes, consecutiveFastFixes;
     private boolean lastGnssStill, lastGnssMoving;
+    private long inertialSinceMs = -1, lastInertialEvaluationMs = -1;
 
     /**
      * Only call for new, accepted, monotonic GNSS fixes, never once per timer tick.
@@ -78,10 +79,22 @@ public final class MotionEvidencePolicy {
                 && nowMs - lastFixMs <= GPS_FRESH_MS;
         boolean detectorWalking = stepDetectorAvailable && detectorStepsLastFiveSeconds >= 2
                 && lastDetectorStepAgeMs >= 0 && lastDetectorStepAgeMs <= 2_000;
-        if (detectorWalking || counterProgressRecent || inertialGait
+        if (!inertialGait || (lastInertialEvaluationMs >= 0
+                && nowMs - lastInertialEvaluationMs > GPS_FRESH_MS)) inertialSinceMs = -1;
+        if (inertialGait && inertialSinceMs < 0) inertialSinceMs = nowMs;
+        lastInertialEvaluationMs = nowMs;
+        if (detectorWalking || counterProgressRecent
                 || (gnssFresh && consecutiveFastFixes >= 2)
                 || (geometricMovingUntil >= nowMs && gnssFresh)) {
             return Evidence.MOVING;
+        }
+        if (inertialGait) {
+            // Raw acceleration is weaker than real step events. A reliable slow
+            // GNSS signal conflicts with it: neither declare a stop nor integrate
+            // GPS drift as distance while the phone may simply be handled.
+            if (gnssFresh && consecutiveSlowFixes >= 2) return Evidence.UNCERTAIN;
+            if (nowMs - inertialSinceMs >= 2_000) return Evidence.MOVING;
+            return Evidence.UNCERTAIN;
         }
         // A late/incomplete step is contradictory evidence for declaring a stop.
         if (gnssFresh && consecutiveSlowFixes >= 2) {
@@ -106,5 +119,7 @@ public final class MotionEvidencePolicy {
         consecutiveFastFixes = 0;
         lastGnssStill = false;
         lastGnssMoving = false;
+        inertialSinceMs = -1;
+        lastInertialEvaluationMs = -1;
     }
 }

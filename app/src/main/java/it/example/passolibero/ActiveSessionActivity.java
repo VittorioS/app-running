@@ -28,7 +28,7 @@ public final class ActiveSessionActivity extends Activity {
     private TrackerDb db;
     private TrackMap map;
     private TextView distance, paceNow, paceAvg, duration, movingTime, speed, steps,
-            cadence, runTime, walkTime, stillTime, unknownTime, runDistance, walkDistance,
+            cadence, runTime, walkTime, stillTime, unknownTime, movingUnknownTime, runDistance, walkDistance,
             movement, gps, checkpoint, remaining, goalLabel;
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
@@ -113,7 +113,8 @@ public final class ActiveSessionActivity extends Activity {
         runTime = stat(metrics, "TEMPO DI CORSA", "00:00");
         walkTime = stat(metrics, "TEMPO DI CAMMINATA", "00:00");
         stillTime = stat(metrics, "TEMPO DA FERMO", "00:00");
-        unknownTime = stat(metrics, "TEMPO NON CLASSIFICATO", "00:00");
+        movingUnknownTime = stat(metrics, "MOVIMENTO CON ANDATURA IGNOTA", "00:00");
+        unknownTime = stat(metrics, "TEMPO CON MOVIMENTO INCERTO", "00:00");
         runDistance = stat(metrics, "DISTANZA CORSA", "0,00 km");
         walkDistance = stat(metrics, "DISTANZA CAMMINATA", "0,00 km");
         Ui.marginBottom(this, content, metrics, 12);
@@ -260,6 +261,7 @@ public final class ActiveSessionActivity extends Activity {
             walkTime.setText(RunMath.duration(active ? s.walkMs : 0));
             stillTime.setText(RunMath.duration(active ? s.stillMs : 0));
             unknownTime.setText(RunMath.duration(active ? s.unknownMs : 0));
+            movingUnknownTime.setText(RunMath.duration(active ? s.movingUnknownMs : 0));
             steps.setText(Integer.toString(active ? s.steps : 0));
             cadence.setText(active && s.cadenceSpm > 0 ? s.cadenceSpm + " passi/min" : "-- passi/min");
             runDistance.setText(RunMath.km(active ? s.runM : 0) + " km");
