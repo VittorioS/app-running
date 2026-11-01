@@ -104,7 +104,8 @@ public final class MotionTimeline {
 
     /** Resolve incomplete intervals without pretending unknown periods were stops. */
     public void finish() {
-        credit(committed, stopPendingMs);
+        // A session ending during an unconfirmed stop has no evidence of resumption.
+        unknownMs += stopPendingMs;
         stopPendingMs = 0;
         stopSince = -1;
         unknownMs += unresolvedMs;
