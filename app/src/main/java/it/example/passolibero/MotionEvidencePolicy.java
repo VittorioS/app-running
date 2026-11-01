@@ -79,7 +79,6 @@ public final class MotionEvidencePolicy {
         // A late/incomplete step is contradictory evidence for declaring a stop.
         if (gnssFresh && consecutiveSlowFixes >= 2) {
             if (stepDetectorAvailable && stepDetectorPreviouslyActive
-                    && lastDetectorStepAgeMs >= 2_500
                     && lastDetectorStepAgeMs >= 2_500) {
                 return Evidence.STILL_STRONG;
             }
