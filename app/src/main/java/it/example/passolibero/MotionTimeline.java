@@ -24,6 +24,13 @@ public final class MotionTimeline {
         long dt = nowMs - lastMs;
         lastMs = nowMs;
         if (evidence == MotionEvidencePolicy.Evidence.MOVING) {
+            // Unobserved startup/downtime must not become RUN retrospectively.
+            if (uncertainSince >= 0
+                    && committed != MovementClassifier.Kind.RUN
+                    && committed != MovementClassifier.Kind.WALK) {
+                unknownMs += unresolvedMs;
+                unresolvedMs = 0;
+            }
             uncertainSince = -1;
             if (stopSince >= 0) {
                 // Unconfirmed microstops belong to the preceding activity.
@@ -31,7 +38,10 @@ public final class MotionTimeline {
                 stopPendingMs = 0;
                 stopSince = -1;
             }
-            if (committed == MovementClassifier.Kind.STILL
+            if (committed == MovementClassifier.Kind.MOVING_UNKNOWN
+                    && activity == MovementClassifier.Kind.UNKNOWN) {
+                credit(committed, dt);
+            } else if (committed == MovementClassifier.Kind.STILL
                     || committed == MovementClassifier.Kind.UNKNOWN
                     || committed == MovementClassifier.Kind.MOVING_UNKNOWN) {
                 if (movingSince < 0 || pendingActivity != activity) {
@@ -56,6 +66,10 @@ public final class MotionTimeline {
                 if (activity == MovementClassifier.Kind.RUN || activity == MovementClassifier.Kind.WALK) {
                     committed = activity;
                     displayed = activity;
+                } else {
+                    // Confirmed movement continues without a reliable gait estimate.
+                    committed = MovementClassifier.Kind.MOVING_UNKNOWN;
+                    displayed = committed;
                 }
                 credit(committed, dt);
             }
