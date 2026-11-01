@@ -32,17 +32,18 @@ public final class MotionTimeline {
                 stopSince = -1;
             }
             if (committed == MovementClassifier.Kind.STILL
-                    || committed == MovementClassifier.Kind.UNKNOWN) {
+                    || committed == MovementClassifier.Kind.UNKNOWN
+                    || committed == MovementClassifier.Kind.MOVING_UNKNOWN) {
                 if (movingSince < 0 || pendingActivity != activity) {
                     movingSince = nowMs - dt;
                     pendingActivity = activity;
                 }
                 unresolvedMs += dt;
-                if (nowMs - movingSince >= START_CONFIRM_MS
-                        && (activity == MovementClassifier.Kind.RUN
-                         || activity == MovementClassifier.Kind.WALK)) {
-                    committed = activity;
-                    displayed = activity;
+                if (nowMs - movingSince >= START_CONFIRM_MS) {
+                    committed = (activity == MovementClassifier.Kind.RUN
+                            || activity == MovementClassifier.Kind.WALK)
+                            ? activity : MovementClassifier.Kind.MOVING_UNKNOWN;
+                    displayed = committed;
                     credit(committed, unresolvedMs);
                     unresolvedMs = 0;
                     movingSince = -1;
@@ -86,7 +87,7 @@ public final class MotionTimeline {
         }
         // Uncertain evidence never starts or confirms a stop.
         if (stopSince >= 0) {
-            credit(committed, stopPendingMs);
+            unknownMs += stopPendingMs;
             stopPendingMs = 0;
             stopSince = -1;
         }
