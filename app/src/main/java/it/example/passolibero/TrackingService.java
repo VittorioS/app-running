@@ -338,7 +338,8 @@ public final class TrackingService extends Service implements LocationListener, 
         // accumulation for plausible slow movement; never force speed to zero.
         boolean plausibleSlow = evidence == MotionEvidencePolicy.Evidence.UNCERTAIN
                 && Double.isFinite(pointSpeed) && pointSpeed >= 1.2 && pointSpeed < 20
-                && lastActivity != MovementClassifier.Kind.UNKNOWN;
+                && Double.isFinite(nativeSpeed) && nativeSpeed >= 0.4
+                && Double.isFinite(speedUncertainty) && speedUncertainty <= 0.6;
         boolean countDistance = moving || plausibleSlow;
         if (motionTimeline.visible() == MovementClassifier.Kind.STILL && !moving)
             countDistance = false;
