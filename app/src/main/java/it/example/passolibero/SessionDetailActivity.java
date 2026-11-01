@@ -63,6 +63,7 @@ public final class SessionDetailActivity extends Activity {
         add(card, "TEMPO DI CORSA", RunMath.duration(session.runMs));
         add(card, "TEMPO DI CAMMINATA", RunMath.duration(session.walkMs));
         add(card, "TEMPO DA FERMO", RunMath.duration(session.stillMs));
+        add(card, "TEMPO NON CLASSIFICATO", RunMath.duration(session.unknownMs));
         add(card, "DISTANZA CORSA", RunMath.km(session.runM) + " km");
         add(card, "DISTANZA CAMMINATA", RunMath.km(session.walkM) + " km");
         add(card, "PASSI TOTALI", Integer.toString(session.steps));
