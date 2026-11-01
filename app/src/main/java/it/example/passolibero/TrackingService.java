@@ -343,9 +343,10 @@ public final class TrackingService extends Service implements LocationListener, 
             // This classifier distinguishes WALK/RUN only; the timeline owns STILL.
             MovementClassifier.Kind candidate = classifier.update(now, pointSpeed, true,
                     recentSteps, 0L, threshold);
-            if (candidate == MovementClassifier.Kind.RUN || candidate == MovementClassifier.Kind.WALK)
+            if (candidate == MovementClassifier.Kind.RUN || candidate == MovementClassifier.Kind.WALK) {
                 lastActivity = candidate;
                 lastActivityFixMs = now;
+            }
         }
         state.speedKmh = Double.isFinite(pointSpeed) ? Math.max(0, pointSpeed)
                 : classifier.smoothedSpeedKmh();
