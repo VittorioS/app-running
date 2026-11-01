@@ -48,6 +48,9 @@ public final class MotionTimeline {
                     movingSince = -1;
                 }
             } else {
+                // Short uncertainty that recovers remains the preceding activity.
+                credit(committed, unresolvedMs);
+                unresolvedMs = 0;
                 movingSince = -1;
                 if (activity == MovementClassifier.Kind.RUN || activity == MovementClassifier.Kind.WALK) {
                     committed = activity;
@@ -73,7 +76,8 @@ public final class MotionTimeline {
             if (nowMs - stopSince >= required) {
                 committed = MovementClassifier.Kind.STILL;
                 displayed = MovementClassifier.Kind.STILL;
-                stillMs += stopPendingMs + unresolvedMs;
+                stillMs += stopPendingMs;
+                unknownMs += unresolvedMs;
                 stopPendingMs = 0;
                 unresolvedMs = 0;
                 stopSince = -1;
