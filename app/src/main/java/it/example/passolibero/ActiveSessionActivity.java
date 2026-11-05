@@ -30,6 +30,7 @@ public final class ActiveSessionActivity extends Activity {
     private TextView distance, paceNow, paceAvg, duration, speed, averageSpeed, steps,
             cadence, tabTitle, tabHint, unclassifiedHint, movement, gps, checkpoint, remaining, goalLabel;
     private Button[] tabButtons;
+    private Button trainingButton;
     private SessionTabStats.Tab currentTab = SessionTabStats.Tab.TOTAL;
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
@@ -132,6 +133,17 @@ public final class ActiveSessionActivity extends Activity {
         Ui.marginBottom(this, statsCard, tabHint, 8);
         unclassifiedHint = Ui.text(this, "", 12, false, Ui.MUTED);
         Ui.marginBottom(this, statsCard, unclassifiedHint, 0);
+        // Un solo pulsante contestuale: l'azione dipende dalla tab selezionata.
+        // Nessun pulsante di addestramento nella tab Totali.
+        trainingButton = Ui.button(this, "Insegna all'app: sto correndo", false);
+        trainingButton.setOnClickListener(v -> {
+            if (currentTab == SessionTabStats.Tab.RUN) {
+                label(TrackingService.LABEL_RUN);
+            } else if (currentTab == SessionTabStats.Tab.WALK) {
+                label(TrackingService.LABEL_WALK);
+            }
+        });
+        Ui.marginBottom(this, statsCard, trainingButton, 0);
         Ui.marginBottom(this, content, statsCard, 12);
 
         // La sola mappa live dell'app: posizione corrente e punti GPS di questa sessione.
@@ -206,16 +218,6 @@ public final class ActiveSessionActivity extends Activity {
         Ui.marginBottom(this, progressCard, applyGoal, 3);
         Ui.marginBottom(this, content, progressCard, 12);
 
-        LinearLayout train = Ui.card(this);
-        Ui.marginBottom(this, train, Ui.text(this, "Insegna all'app il movimento attuale", 14, true, Ui.INK), 10);
-        Button walk = Ui.button(this, "Sto camminando", false);
-        walk.setOnClickListener(v -> label(TrackingService.LABEL_WALK));
-        Ui.marginBottom(this, train, walk, 6);
-        Button run = Ui.button(this, "Sto correndo", false);
-        run.setOnClickListener(v -> label(TrackingService.LABEL_RUN));
-        Ui.marginBottom(this, train, run, 0);
-        Ui.marginBottom(this, content, train, 12);
-
         Button home = Ui.button(this, "←  Torna alla Home", false);
         home.setOnClickListener(v -> finish());
         Ui.marginBottom(this, content, home, 10);
@@ -246,6 +248,13 @@ public final class ActiveSessionActivity extends Activity {
 
     private void renderTab(RunState s, boolean active) {
         SessionTabStats.Tab tab = currentTab;
+        trainingButton.setVisibility(tab == SessionTabStats.Tab.TOTAL ? View.GONE : View.VISIBLE);
+        trainingButton.setEnabled(active);
+        if (tab == SessionTabStats.Tab.RUN) {
+            trainingButton.setText("Insegna all'app: sto correndo");
+        } else if (tab == SessionTabStats.Tab.WALK) {
+            trainingButton.setText("Insegna all'app: sto camminando");
+        }
         double meters = active ? SessionTabStats.meters(tab, s.runM, s.walkM) : 0;
         long milliseconds = active ? SessionTabStats.milliseconds(tab, s.runMs, s.walkMs) : 0;
         int classifiedSteps = active ? SessionTabStats.steps(tab, s.runSteps, s.walkSteps) : 0;
