@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/passolibero-osm-v2
+      - feature/v2-session-stats-tabs
   workflow_dispatch:
 
 permissions:
