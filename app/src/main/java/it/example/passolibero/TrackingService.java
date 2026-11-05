@@ -547,6 +547,10 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         if (newSteps > 0) {
             state.steps += newSteps;
+            // Attribuzione per la UI, senza alterare la classificazione del movimento.
+            // I passi arrivati mentre lo stato e' incerto restano solo nel totale.
+            if ("RUN".equals(state.movement)) state.runSteps += newSteps;
+            else if ("WALK".equals(state.movement)) state.walkSteps += newSteps;
             state.lastStepElapsedMs = stamp;
             trimSteps(stamp);
         }

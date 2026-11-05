@@ -6,7 +6,7 @@ import android.content.SharedPreferences;
 public final class RunState {
     public long id, startedWallMs, startedElapsedMs, lastTickElapsedMs;
     public long movingMs, walkMs, runMs, stillMs, unknownMs, movingUnknownMs;
-    public int steps, cadenceSpm, checkpointIndex, checkpointInterval, goalM;
+    public int steps, runSteps, walkSteps, cadenceSpm, checkpointIndex, checkpointInterval, goalM;
     public double distanceM, walkM, runM, speedKmh, gpsAccuracy;
     public double lastLatitude, lastLongitude;
     public boolean lastLocationValid;
@@ -28,6 +28,8 @@ public final class RunState {
         s.movingUnknownMs = p.getLong("moving_unknown_ms", 0);
         s.movingMs = p.getLong("moving_ms", 0);
         s.steps = p.getInt("steps", 0);
+        s.runSteps = p.getInt("run_steps", 0);
+        s.walkSteps = p.getInt("walk_steps", 0);
         s.cadenceSpm = p.getInt("cadence_spm", 0);
         s.goalM = p.getInt("active_goal_m", 0);
         s.lastLocationValid = p.getBoolean("last_location_valid", false);
@@ -53,7 +55,8 @@ public final class RunState {
                 .putLong("still_ms", stillMs).putLong("unknown_ms", unknownMs)
                 .putLong("moving_unknown_ms", movingUnknownMs)
                 .putLong("moving_ms", movingMs)
-                .putInt("steps", steps).putInt("cadence_spm", cadenceSpm)
+                .putInt("steps", steps)
+                .putInt("run_steps", runSteps).putInt("walk_steps", walkSteps).putInt("cadence_spm", cadenceSpm)
                 .putInt("active_goal_m", goalM)
                 .putBoolean("last_location_valid", active && lastLocationValid)
                 .putLong("last_latitude_bits", Double.doubleToLongBits(lastLatitude))
