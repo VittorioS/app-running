@@ -44,18 +44,30 @@ public final class TrackingService extends Service implements LocationListener, 
     private LocationManager locationManager;
     private SensorManager sensors;
     private Sensor stepSensor;
+    private Sensor inertialSensor;
+    private final InertialGaitDetector inertialGait = new InertialGaitDetector();
     private VoiceCoach voice;
-    private final MovementClassifier classifier = new MovementClassifier();
+    private final ActivityEvidence activityEvidence = new ActivityEvidence();
     private final ArrayDeque<Long> recentStepTimes = new ArrayDeque<>();
     private AdaptiveProfile profile;
     private RunState state;
     private Location lastAccepted;
-    private double counterLast = Double.NaN;
+    // Il filtro anti-rumore non deve perdere i microspostamenti GPS.
+    private final DistanceAccumulator distanceAccumulator = new DistanceAccumulator();
+    private final MotionEvidencePolicy motionEvidence = new MotionEvidencePolicy();
+    private final MotionTimeline motionTimeline = new MotionTimeline();
+    private boolean detectorSeen;
+    private final StepCounterEvidence counterEvidence = new StepCounterEvidence();
+    private boolean stepSensorAvailable;
     private long lastSavedDbElapsed, lastNotificationMs, lastPointWall;
+    private long lastUiSavedElapsed = -1;
     private MovementClassifier.Kind trainingLabel;
     private long trainingUntilElapsed;
     private boolean initialized;
     private boolean acquiredForeground;
+    private long poorSince = -1, recoverySince = -1;
+    private boolean gpsIncident, gpsAskedWhileStill;
+    private String motionBeforeGpsLoss = "UNKNOWN";
 
     @Override public void onCreate() {
         super.onCreate();
@@ -148,13 +160,32 @@ public final class TrackingService extends Service implements LocationListener, 
             state.startedWallMs = System.currentTimeMillis();
             state.startedElapsedMs = SystemClock.elapsedRealtime();
             state.checkpointInterval = AppPrefs.intervalM(prefs);
+            state.goalM = AppPrefs.goalM(prefs);
             state.id = db.newSession(state.startedWallMs);
         }
         state.lastTickElapsedMs = SystemClock.elapsedRealtime();
-        classifier.reset();
+        state.lastLocationValid = false; // Ripresa: nessun marker da una posizione vecchia.
+        prefs.edit().putBoolean("gps_ack_needed", false).putBoolean("gps_incident", false).apply();
+        activityEvidence.reset();
         lastAccepted = null; // Non collegare con una linea GPS il tratto perso durante un riavvio.
+        distanceAccumulator.reset();
+        motionEvidence.reset();
+        // Recover elapsed time not covered by the last durable snapshot as
+        // UNKNOWN. Never infer RUN, WALK or STILL across a service restart.
+        long accounted = state.runMs + state.walkMs + state.movingUnknownMs + state.stillMs + state.unknownMs;
+        long elapsed = Math.max(0, state.lastTickElapsedMs - state.startedElapsedMs);
+        if (restore && elapsed > accounted) state.unknownMs += elapsed - accounted;
+        motionTimeline.restore(state.runMs, state.walkMs, state.stillMs, state.unknownMs, state.movingUnknownMs);
+        motionTimeline.advance(restore ? state.lastTickElapsedMs : state.startedElapsedMs,
+                MotionEvidencePolicy.Evidence.UNCERTAIN, MovementClassifier.Kind.UNKNOWN);
+        inertialGait.reset();
+        detectorSeen = false;
+        counterEvidence.reset();
+        recentStepTimes.clear();
+        stepSensorAvailable = false;
         state.save(prefs, true);
-        voice = new VoiceCoach(this);
+        lastUiSavedElapsed = SystemClock.elapsedRealtime();
+        syncVoiceCoach();
 
         try {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
@@ -166,9 +197,28 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED) {
             stepSensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
-            if (stepSensor == null) stepSensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-            if (stepSensor != null) sensors.registerListener(this, stepSensor,
+            if (stepSensor != null) stepSensorAvailable = sensors.registerListener(this, stepSensor,
                     SensorManager.SENSOR_DELAY_NORMAL, work);
+            if (!stepSensorAvailable) {
+                stepSensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
+                if (stepSensor != null) stepSensorAvailable = sensors.registerListener(this, stepSensor,
+                        SensorManager.SENSOR_DELAY_NORMAL, work);
+            }
+        }
+        // Only enable the higher-rate accelerometer when the real-time hardware
+        // step detector is unavailable. Step Counter batching is not real-time.
+        if (!stepSensorAvailable || stepSensor == null || stepSensor.getType() != Sensor.TYPE_STEP_DETECTOR) {
+            inertialSensor = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            if (inertialSensor != null)
+                sensors.registerListener(this, inertialSensor, SensorManager.SENSOR_DELAY_GAME, work);
+        }
+        if (BuildConfig.DEBUG) {
+            // Dedicated debug code is invoked by reflection; release never ships it.
+            try {
+                Class<?> c = Class.forName(getPackageName() + ".BatteryAutoCapture");
+                c.getMethod("onSessionStart", Context.class, long.class)
+                        .invoke(null, getApplicationContext(), state.id);
+            } catch (ReflectiveOperationException ex) { Log.w(TAG, "Debug recorder unavailable", ex); }
         }
         work.post(tick);
     }
@@ -178,19 +228,17 @@ public final class TrackingService extends Service implements LocationListener, 
         @Override public void run() {
             if (state == null) return;
             long now = SystemClock.elapsedRealtime();
-            long dt = Math.max(0, Math.min(10_000, now - state.lastTickElapsedMs));
             state.lastTickElapsedMs = now;
+            state.goalM = AppPrefs.goalM(prefs);
+            state.cadenceSpm = cadenceSpm(now);
             if (lastAccepted != null && now - lastAccepted.getElapsedRealtimeNanos() / 1_000_000 > 15_000) {
+                reportGpsQuality(false, now);
                 state.gpsStatus = "GPS temporaneamente assente";
-                state.movement = "UNKNOWN";
             }
-            switch (state.movement) {
-                case "RUN": state.runMs += dt; state.movingMs += dt; break;
-                case "WALK": state.walkMs += dt; state.movingMs += dt; break;
-                case "STILL": state.stillMs += dt; break;
-                default: break;
-            }
-            persist(now, false);
+            advanceTimeline(now);
+            if (lastAccepted == null && now - state.startedElapsedMs > 15_000) reportGpsQuality(false, now);
+            syncVoiceCoach();
+            persist(now, false, false);
             if (now - lastNotificationMs >= 30_000 && acquiredForeground) {
                 lastNotificationMs = now;
                 getSystemService(NotificationManager.class).notify(NOTIFICATION_ID,
@@ -200,9 +248,25 @@ public final class TrackingService extends Service implements LocationListener, 
         }
     };
 
-    private void persist(long now, boolean forceDb) {
+    /** Initialize the speech engine only while checkpoint voice is enabled. */
+    private void syncVoiceCoach() {
+        boolean enabled = AppPrefs.voiceEnabled(prefs) || gpsIncident;
+        if (enabled && voice == null) {
+            voice = new VoiceCoach(this);
+        } else if (!enabled && voice != null) {
+            voice.close();
+            voice = null;
+        }
+    }
+
+    /** Coalesce duplicate UI snapshots, without changing GPS sampling or classification. */
+    private void persist(long now, boolean forceDb, boolean freshGps) {
         if (state == null) return;
-        state.save(prefs, true);
+        if (forceDb || BatteryPolicy.shouldPublishState(lastUiSavedElapsed, now, freshGps)) {
+            state.save(prefs, true);
+            lastUiSavedElapsed = now;
+        }
+        // Database crash-recovery snapshot cadence stays unchanged.
         if (forceDb || now - lastSavedDbElapsed >= 5_000) {
             db.snapshot(state, now - state.startedElapsedMs, false);
             lastSavedDbElapsed = now;
@@ -215,10 +279,13 @@ public final class TrackingService extends Service implements LocationListener, 
         long now = SystemClock.elapsedRealtime();
         long ageMs = Math.abs(now - location.getElapsedRealtimeNanos() / 1_000_000);
         float acc = location.getAccuracy();
-        if (ageMs > 10_000 || acc > 25 || acc <= 0) {
+        if (!GpsQualityPolicy.isReliable(acc, ageMs)) {
+            reportGpsQuality(false, now);
             state.gpsStatus = "Segnale GPS impreciso";
+            persist(now, false, true);
             return;
         }
+        reportGpsQuality(true, now);
         double delta = 0;
         double pointSpeed = Double.NaN;
         double dt = 0;
@@ -229,14 +296,18 @@ public final class TrackingService extends Service implements LocationListener, 
                 double meters = RunMath.distanceMeters(lastAccepted.getLatitude(), lastAccepted.getLongitude(),
                         location.getLatitude(), location.getLongitude());
                 double maxPhysical = Math.max(10, dt * 10 + Math.max(acc, lastAccepted.getAccuracy()));
-                double minMovement = Math.max(2.5, Math.max(acc, lastAccepted.getAccuracy()) * 0.35);
                 if (meters > maxPhysical) {
                     state.gpsStatus = "Salto GPS ignorato";
+                    // Non lasciare un'ancora antica che blocca anche i fix successivi.
+                    lastAccepted = new Location(location);
+                    distanceAccumulator.reset();
                     return;
                 }
-                if (meters >= minMovement) delta = meters;
                 pointSpeed = meters / dt * 3.6;
-            } // gap >20 s: ripristina solo l'ancora, non ricostruire il tratto mancante.
+            } else {
+                // Dopo un lungo buco nel GPS non collegare due posizioni lontane.
+                distanceAccumulator.reset();
+            }
         }
         if (location.hasSpeed() && (!location.hasSpeedAccuracy() || location.getSpeedAccuracyMetersPerSecond() < 1.8f)) {
             pointSpeed = Math.max(0, location.getSpeed() * 3.6);
@@ -244,53 +315,175 @@ public final class TrackingService extends Service implements LocationListener, 
         if (!Double.isFinite(pointSpeed) || pointSpeed > 40) {
             state.gpsStatus = "Velocità non affidabile";
             lastAccepted = new Location(location);
+            distanceAccumulator.reset();
             return;
         }
         long ageStep = state.lastStepElapsedMs <= 0 ? Long.MAX_VALUE
                 : now - state.lastStepElapsedMs;
         trimSteps(now);
         int recentSteps = recentStepTimes.size();
-        // Evita distanza fittizia da deriva GPS mentre si è chiaramente fermi.
-        if (pointSpeed < 0.7 && ageStep > 8_000) delta = 0;
+        int stepsLastFiveSeconds = 0;
+        for (long stepTime : recentStepTimes)
+            if (now - stepTime <= 5_000L) stepsLastFiveSeconds++;
+        double nativeSpeed = location.hasSpeed() ? location.getSpeed() : Double.NaN;
+        double speedUncertainty = location.hasSpeedAccuracy()
+                ? location.getSpeedAccuracyMetersPerSecond() : Double.NaN;
+        long fixMs = location.getElapsedRealtimeNanos() / 1_000_000L;
+        boolean freshActivityFix = MovementClassifier.isFreshMeasurement(now, fixMs);
+        motionEvidence.observeGps(fixMs, location.getLatitude(), location.getLongitude(),
+                acc, nativeSpeed, speedUncertainty);
+        MotionEvidencePolicy.Evidence evidence = evaluateMotion(now);
+        boolean moving = evidence == MotionEvidencePolicy.Evidence.MOVING;
+        // Uncertainty is not proof of stillness. Permit conservative distance
+        // accumulation for plausible slow movement; never force speed to zero.
+        boolean plausibleSlow = evidence == MotionEvidencePolicy.Evidence.UNCERTAIN
+                && Double.isFinite(pointSpeed) && pointSpeed >= 1.2 && pointSpeed < 20
+                && Double.isFinite(nativeSpeed) && nativeSpeed >= 0.4
+                && Double.isFinite(speedUncertainty) && speedUncertainty <= 0.6;
+        boolean countDistance = moving || plausibleSlow;
+        if (motionTimeline.visible() == MovementClassifier.Kind.STILL && !moving)
+            countDistance = false;
+        if (freshActivityFix) {
+            delta = distanceAccumulator.accept(location.getLatitude(), location.getLongitude(),
+                    acc, countDistance);
+        } else {
+            distanceAccumulator.reset();
+        }
 
         double threshold = profile.threshold(AppPrefs.manualThreshold(prefs), AppPrefs.adaptiveEnabled(prefs));
-        MovementClassifier.Kind movement = classifier.update(now, pointSpeed, true,
-                recentSteps, ageStep, threshold);
-        state.speedKmh = classifier.smoothedSpeedKmh();
-        state.movement = movement.name();
-        state.gpsStatus = "GPS ±" + Math.round(acc) + " m";
+        if (moving && Double.isFinite(pointSpeed) && freshActivityFix) {
+            // This classifier distinguishes WALK/RUN only; the timeline owns STILL.
+            activityEvidence.observe(now, fixMs, pointSpeed, recentSteps, threshold);
+        }
+        if (freshActivityFix) state.speedKmh = Math.max(0, pointSpeed);
+        advanceTimeline(now);
+        MovementClassifier.Kind movement = motionTimeline.visible();
+        if (!"UNKNOWN".equals(state.movement)) motionBeforeGpsLoss = state.movement;
+        if (gpsIncident && "STILL".equals(state.movement) && !gpsAskedWhileStill) {
+            gpsAskedWhileStill = true;
+            prefs.edit().putBoolean("gps_ack_needed", true).apply();
+        }
+        state.gpsStatus = freshActivityFix ? "GPS ±" + Math.round(acc) + " m" : "Posizione GPS in ritardo";
         state.gpsAccuracy = acc;
+        // Mantieni fermo il marker quando il GPS oscilla senza movimento credibile.
+        if (!state.lastLocationValid || delta > 0) {
+            state.lastLatitude = location.getLatitude();
+            state.lastLongitude = location.getLongitude();
+            state.lastLocationValid = true;
+        }
         state.distanceM += delta;
         if (movement == MovementClassifier.Kind.WALK) state.walkM += delta;
         else if (movement == MovementClassifier.Kind.RUN) state.runM += delta;
 
         // Punti del percorso quando ci si sposta; a riposo al massimo ogni 15 s.
         if (delta > 0 || location.getTime() - lastPointWall >= 15_000) {
-            db.point(state.id, location.getTime(), location.getLatitude(), location.getLongitude(),
+            db.point(state.id, location.getTime(), state.lastLatitude, state.lastLongitude,
                     acc, state.speedKmh, delta, movement);
             lastPointWall = location.getTime();
         }
         lastAccepted = new Location(location);
 
         int cadence = cadenceSpm(now);
-        if (trainingLabel != null && now <= trainingUntilElapsed && acc <= 12) {
+        state.cadenceSpm = cadence;
+        if (trainingLabel != null && now <= trainingUntilElapsed && acc <= 12 && moving && freshActivityFix
+                && (movement == MovementClassifier.Kind.RUN || movement == MovementClassifier.Kind.WALK)) {
             profile.observe(trainingLabel == MovementClassifier.Kind.RUN, state.speedKmh);
             if ((profile.walkSamples + profile.runSamples) % 5 == 0) AppPrefs.saveProfile(prefs, profile);
         } else {
             trainingLabel = null;
             double manual = AppPrefs.manualThreshold(prefs);
             // Solo esempi estremi confermati anche dai passi: non rinforzare errori al confine.
-            if (AppPrefs.adaptiveEnabled(prefs) && acc <= 10 && recentSteps >= 10) {
+            if (AppPrefs.adaptiveEnabled(prefs) && moving && freshActivityFix && acc <= 10 && recentSteps >= 10
+                    && (movement == MovementClassifier.Kind.RUN || movement == MovementClassifier.Kind.WALK)) {
+                boolean sampleAdded = false;
                 if (state.speedKmh <= manual - 1.5 && state.speedKmh >= 2.0 && cadence >= 65 && cadence <= 145) {
                     profile.observe(false, state.speedKmh);
+                    sampleAdded = true;
                 } else if (state.speedKmh >= manual + 2 && cadence >= 145 && cadence <= 220) {
                     profile.observe(true, state.speedKmh);
+                    sampleAdded = true;
                 }
-                if ((profile.walkSamples + profile.runSamples) % 15 == 0) AppPrefs.saveProfile(prefs, profile);
+                // Avoid rewriting the profile when no training sample was added.
+                if (sampleAdded && (profile.walkSamples + profile.runSamples) % 15 == 0)
+                    AppPrefs.saveProfile(prefs, profile);
             }
         }
         handleCheckpoint(now);
-        persist(now, false);
+        persist(now, false, true);
+    }
+
+    private MotionEvidencePolicy.Evidence evaluateMotion(long now) {
+        trimSteps(now);
+        int detectorSteps = 0;
+        for (long step : recentStepTimes) if (step <= now && now - step <= 5_000L) detectorSteps++;
+        long detectorAge = detectorSeen && state.lastStepElapsedMs > 0
+                && stepSensor != null && stepSensor.getType() == Sensor.TYPE_STEP_DETECTOR
+                ? now - state.lastStepElapsedMs : Long.MAX_VALUE;
+        boolean detectorAvailable = stepSensorAvailable && stepSensor != null
+                && stepSensor.getType() == Sensor.TYPE_STEP_DETECTOR;
+        boolean counterProgress = counterEvidence.progressRecent(now);
+        return motionEvidence.evaluate(now, detectorSteps, detectorAge,
+                detectorAvailable, detectorSeen, counterProgress, inertialGait.gaitAt(now));
+    }
+
+    private void advanceTimeline(long now) {
+        if (state == null) return;
+        MovementClassifier.Kind freshActivity = activityEvidence.current(now);
+        MovementClassifier.Kind previous = motionTimeline.visible();
+        boolean cumulativeSteps = stepSensorAvailable && stepSensor != null
+                && stepSensor.getType() == Sensor.TYPE_STEP_COUNTER;
+        motionTimeline.advance(now, evaluateMotion(now), freshActivity,
+                cumulativeSteps ? StepCounterEvidence.STOP_CONFIRM_MS : 0);
+        MovementClassifier.Kind current = motionTimeline.visible();
+        if (previous != current && (current == MovementClassifier.Kind.STILL
+                || current == MovementClassifier.Kind.UNKNOWN)) {
+            // A confirmed stop or loss of evidence invalidates the old gait.
+            activityEvidence.onMotionState(current);
+        }
+        applyTimeline();
+    }
+
+    private void applyTimeline() {
+        state.runMs = motionTimeline.runMs();
+        state.walkMs = motionTimeline.walkMs();
+        state.stillMs = motionTimeline.stillMs();
+        state.unknownMs = motionTimeline.unknownMs();
+        state.movingUnknownMs = motionTimeline.movingUnknownMs();
+        state.movingMs = motionTimeline.movingMs();
+        state.movement = motionTimeline.visible().name();
+        if (motionTimeline.visible() == MovementClassifier.Kind.STILL) state.speedKmh = 0;
+    }
+
+    private void reportGpsQuality(boolean good, long now) {
+        if (state == null) return;
+        if (good) {
+            poorSince = -1;
+            if (gpsIncident) {
+                if (recoverySince < 0) recoverySince = now;
+                if (GpsQualityPolicy.confirmedRecovery(recoverySince, now)) {
+                    gpsIncident = false;
+                    gpsAskedWhileStill = false;
+                    recoverySince = -1;
+                    prefs.edit().putBoolean("gps_incident", false)
+                            .putBoolean("gps_ack_needed", false).apply();
+                }
+            }
+            return;
+        }
+        recoverySince = -1;
+        if (poorSince < 0) poorSince = now;
+        if (!gpsIncident && GpsQualityPolicy.confirmedPoor(poorSince, now)) {
+            gpsIncident = true;
+            gpsAskedWhileStill = false;
+            prefs.edit().putBoolean("gps_incident", true).apply();
+            // One voice warning at onset. The run itself is never blocked.
+            if (voice == null) voice = new VoiceCoach(this);
+            voice.speak("Segnale GPS impreciso");
+        }
+        if (gpsIncident && "STILL".equals(motionBeforeGpsLoss) && !gpsAskedWhileStill) {
+            gpsAskedWhileStill = true;
+            prefs.edit().putBoolean("gps_ack_needed", true).apply();
+        }
     }
 
     private void handleCheckpoint(long now) {
@@ -334,16 +527,24 @@ public final class TrackingService extends Service implements LocationListener, 
     @Override public void onSensorChanged(SensorEvent event) {
         if (state == null) return;
         long stamp = event.timestamp / 1_000_000;
+        long receivedMs = SystemClock.elapsedRealtime();
+        if (stamp < 0 || stamp > receivedMs) return;
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            inertialGait.observe(stamp, event.values[0], event.values[1], event.values[2]);
+            return;
+        }
         int newSteps = 0;
         if (event.sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
             newSteps = Math.max(1, Math.round(event.values[0]));
+            detectorSeen = true;
+            for (int i = 0; i < newSteps; i++) recentStepTimes.addLast(stamp);
         } else if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
-            if (Double.isFinite(counterLast)) {
-                newSteps = (int) RunMath.clamp(event.values[0] - counterLast, 0, 50);
-            }
-            counterLast = event.values[0];
+            newSteps = counterEvidence.observe(stamp, event.values[0], receivedMs);
+            if (newSteps > 0 && counterEvidence.canAmendPendingStop(receivedMs))
+                motionTimeline.observeDelayedStep(counterEvidence.lastStepMs());
+            // Batches have only the timestamp of the latest step. Do not
+            // invent individual step timestamps or artificially high cadence.
         }
-        for (int i = 0; i < newSteps; i++) recentStepTimes.addLast(stamp);
         if (newSteps > 0) {
             state.steps += newSteps;
             state.lastStepElapsedMs = stamp;
@@ -377,12 +578,17 @@ public final class TrackingService extends Service implements LocationListener, 
             } else { stopSelf(); return; }
         }
         long now = SystemClock.elapsedRealtime();
-        if (state.lastTickElapsedMs > 0) {
-            long dt = Math.min(10_000, Math.max(0, now - state.lastTickElapsedMs));
-            if ("WALK".equals(state.movement)) { state.walkMs += dt; state.movingMs += dt; }
-            if ("RUN".equals(state.movement)) { state.runMs += dt; state.movingMs += dt; }
-            if ("STILL".equals(state.movement)) state.stillMs += dt;
+        advanceTimeline(now);
+        motionTimeline.finish();
+        applyTimeline();
+        if (BuildConfig.DEBUG) {
+            try {
+                Class.forName(getPackageName() + ".BatteryAutoCapture")
+                        .getMethod("onSessionStop", Context.class, long.class)
+                        .invoke(null, getApplicationContext(), state.id);
+            } catch (ReflectiveOperationException ignored) { }
         }
+        prefs.edit().putBoolean("gps_ack_needed", false).putBoolean("gps_incident", false).apply();
         db.snapshot(state, Math.max(0, now - state.startedElapsedMs), true);
         state.save(prefs, false);
         AppPrefs.saveProfile(prefs, profile);
@@ -406,7 +612,12 @@ public final class TrackingService extends Service implements LocationListener, 
             work.removeCallbacks(tick);
             work.post(() -> {
                 stopSensors();
-                if (state != null) persist(SystemClock.elapsedRealtime(), true);
+                if (state != null) {
+                    advanceTimeline(SystemClock.elapsedRealtime());
+                    motionTimeline.finish();
+                    applyTimeline();
+                    persist(SystemClock.elapsedRealtime(), true, false);
+                }
                 if (voice != null) voice.close();
                 db.close();
             });

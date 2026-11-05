@@ -19,6 +19,7 @@ public final class VoiceCoach {
     private TextToSpeech tts;
     private volatile boolean ready;
     private int utteranceNumber;
+    private volatile String pendingWarning;
 
     public VoiceCoach(Context context) {
         audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
@@ -34,14 +35,20 @@ public final class VoiceCoach {
             if (languageStatus == TextToSpeech.LANG_MISSING_DATA ||
                     languageStatus == TextToSpeech.LANG_NOT_SUPPORTED) return;
             Set<android.speech.tts.Voice> voices = tts.getVoices();
+            boolean foundOfflineVoice = false;
             if (voices != null) {
                 for (android.speech.tts.Voice voice : voices) {
                     if ("it".equals(voice.getLocale().getLanguage()) &&
                             !voice.isNetworkConnectionRequired()) {
-                        if (tts.setVoice(voice) == TextToSpeech.SUCCESS) { ready = true; break; }
+                        if (tts.setVoice(voice) == TextToSpeech.SUCCESS) { foundOfflineVoice = true; break; }
                     }
                 }
             }
+            // setLanguage works without an explicitly enumerable offline voice on some devices.
+            ready = true;
+            String warning = pendingWarning;
+            pendingWarning = null;
+            if (warning != null) speak(warning);
         });
         tts.setAudioAttributes(attributes);
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
@@ -52,7 +59,10 @@ public final class VoiceCoach {
     }
 
     public void speak(String phrase) {
-        if (!ready || tts == null) return;
+        if (!ready || tts == null) {
+            if ("Segnale GPS impreciso".equals(phrase)) pendingWarning = phrase;
+            return;
+        }
         int result = audio.requestAudioFocus(focusRequest);
         if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return;
         Bundle params = new Bundle();
@@ -64,6 +74,7 @@ public final class VoiceCoach {
     public boolean isReady() { return ready; }
     public void close() {
         ready = false;
+        pendingWarning = null;
         if (tts != null) { tts.stop(); tts.shutdown(); tts = null; }
         releaseAudio();
     }
