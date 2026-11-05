@@ -2,6 +2,8 @@ package it.example.passolibero;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.content.Intent;
+import android.widget.Button;
 import android.view.WindowInsets;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -14,12 +16,13 @@ import java.util.Date;
 public final class SessionDetailActivity extends Activity {
     private TrackMap map;
     private TrackerDb db;
+    private long sessionId;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        long id = getIntent().getLongExtra("session_id", -1);
+        sessionId = getIntent().getLongExtra("session_id", -1);
         db = new TrackerDb(this);
-        TrackerDb.Entry session = db.session(id);
+        TrackerDb.Entry session = db.session(sessionId);
         if (session == null) { finish(); return; }
 
         LinearLayout root = Ui.vertical(this);
@@ -47,9 +50,9 @@ public final class SessionDetailActivity extends Activity {
         Ui.marginBottom(this, content, Ui.text(this,
                 "© OpenStreetMap contributors · Percorso registrato offline", 11, false, Ui.MUTED), 10);
         // Disegna solo i punti collegati all'ID selezionato (mai le altre sessioni).
-        map.clearForSession(id);
+        map.clearForSession(sessionId);
         for (int batch = 0; batch < 100; batch++) {
-            if (map.update(db, id) < 500) break;
+            if (map.update(db, sessionId) < 500) break;
         }
         map.view().post(() -> map.zoomToRoute());
 
@@ -71,6 +74,20 @@ public final class SessionDetailActivity extends Activity {
         if (session.goalM > 0) add(card, "OBIETTIVO", RunStats.meters(session.goalM));
         add(card, "STATO", "COMPLETED".equals(session.status) ? "Completata" : "Interrotta o ancora attiva");
         Ui.marginBottom(this, content, card, 12);
+
+        Button exportJson = Ui.button(this, "↓ Esporta sessione in JSON", false);
+        exportJson.setOnClickListener(v -> SessionJsonExporter.requestSave(this, sessionId));
+        Ui.marginBottom(this, content, exportJson, 6);
+        Ui.marginBottom(this, content, Ui.text(this,
+                "Il JSON include anche il tracciato GPS con coordinate precise.",
+                12, false, Ui.MUTED), 10);
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == SessionJsonExporter.REQUEST_CODE) {
+            SessionJsonExporter.onSaveResult(this, sessionId, resultCode, data);
+        }
     }
 
     private void add(LinearLayout card, String label, String value) {
