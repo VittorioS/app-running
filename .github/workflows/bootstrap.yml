@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: debug-signing-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Compila PassoLibero
@@ -97,25 +101,11 @@ jobs:
       - name: Prepara firma debug stabile
         shell: bash
         env:
-          SIGNING_DATA: ${{ secrets.PASSOLIBERO_DEBUG_KEYSTORE_BASE64 }}
-        run: |
-          set -euo pipefail
-          if [[ -n "$SIGNING_DATA" ]]; then
-            printf '%s' "$SIGNING_DATA" | base64 --decode > "$RUNNER_TEMP/passolibero-debug.p12"
-            chmod 600 "$RUNNER_TEMP/passolibero-debug.p12"
-            echo "PASSOLIBERO_DEBUG_KEYSTORE=$RUNNER_TEMP/passolibero-debug.p12" >> "$GITHUB_ENV"
-            echo "PASSOLIBERO_SIGNED=true" >> "$GITHUB_ENV"
-          else
-            echo "PASSOLIBERO_SIGNED=false" >> "$GITHUB_ENV"
-            echo "::warning::Firma permanente non ancora configurata: APK non pubblicato."
-          fi
+          PASSOLIBERO_SIGNING_PASSPHRASE: ${{ secrets.PASSOLIBERO_SIGNING_PASSPHRASE }}
+        run: bash ci/prepare-debug-signing.sh
 
       # 8. Compila l'applicazione Android
       - name: Compila APK debug
-        env:
-          PASSOLIBERO_DEBUG_STORE_PASSWORD: ${{ secrets.PASSOLIBERO_DEBUG_STORE_PASSWORD }}
-          PASSOLIBERO_DEBUG_KEY_ALIAS: ${{ secrets.PASSOLIBERO_DEBUG_KEY_ALIAS }}
-          PASSOLIBERO_DEBUG_KEY_PASSWORD: ${{ secrets.PASSOLIBERO_DEBUG_KEY_PASSWORD }}
         run: |
           gradle --no-daemon --stacktrace :app:assembleDebug
 
@@ -124,6 +114,16 @@ jobs:
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/apk/debug/app-debug.apk
+          if [[ "${PASSOLIBERO_SIGNED:-false}" == "true" ]]; then
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/apk-cert.txt"
+            actual="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/apk-cert.txt" | head -1)"
+            expected="$(cat .github/signing/debug-cert.sha256)"
+            if [[ -z "$actual" || "$actual" != "$expected" ]]; then
+              echo "::error::Firma dell'APK diversa dal certificato debug persistente!"
+              exit 1
+            fi
+            echo "Certificato debug verificato: $actual"
+          fi
 
       # 10. Pubblica l'APK per il download
       - name: Pubblica APK
