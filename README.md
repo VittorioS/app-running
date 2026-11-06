@@ -96,3 +96,33 @@ e installa il nuovo APK. Le build debug successive si possono
 installare direttamente sopra la precedente senza cancellare dati.
 Non alterare la passphrase né eliminare il file cifrato: ciò
 renderebbe impossibile riutilizzare quella chiave.
+
+## Aggiornamenti APK dall'app (V2)
+
+La Home include **Aggiornamenti dell'app** con due canali: **Debug PR #2**
+e **Stabile**. La PR #2 pubblica gli APK debug firmati su una GitHub
+pre-release dedicata \`debug-pr-2\` dopo i test. Non si accede agli artifact
+temporanei di GitHub Actions e non ci sono token di accesso nell'APK.
+
+Per ogni compilazione riuscita, il workflow pubblica un file
+\`passolibero-debug-v<VERSION_CODE>.apk\` e \`update.json\` (versione, SHA-256
+del file e del certificato). Il JSON viene caricato *dopo* l'APK. L'app
+controlla la versione installata, scarica tramite DownloadManager e verifica
+il file completo in locale: SHA-256, identificativo applicazione, versione
+superiore, firma del pacchetto già installato e certificato dichiarato.
+**Non si aggiorna mentre è attiva una sessione GPS.** Android chiede sempre
+la conferma dell'installazione e, quando necessario, il consenso a
+«Installare app sconosciute» da PassoLibero.
+
+Il canale **Stabile** può essere attivato in futuro pubblicando una release
+GitHub tag \`stable\` con file \`update.json\` e APK
+\`passolibero-stable-v<VERSION_CODE>.apk\` coerente e firmato con lo
+**stesso certificato** dell'app già installata. Altrimenti la verifica
+blocca correttamente l'aggiornamento incrociato.
+
+La pubblicazione GitHub di release e allegati richiede \`contents: write\`
+del token GitHub Actions. Se il workflow fallisce al passaggio «Pubblica
+aggiornamento debug PR 2», verificare in **Settings → Actions → General →
+Workflow permissions** che siano consentite le autorizzazioni di scrittura
+e che il repository non abbia policy di protezione che impediscano il
+rilascio. Non abilitare autorizzazioni più ampie del necessario.

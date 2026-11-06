@@ -126,6 +126,52 @@ jobs:
             echo "Certificato debug verificato: $actual"
           fi
 
+      # Canale aggiornamenti pubblico della PR #2, solo dopo firma e test.
+      - name: Pubblica aggiornamento debug PR 2
+        if: env.PASSOLIBERO_SIGNED == 'true' && github.ref_name == 'feature/v2-session-stats-tabs'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="debug-pr-2"
+          version_code="$((10000 + GITHUB_RUN_NUMBER))"
+          filename="passolibero-debug-v${version_code}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/$filename"
+          export UPDATE_VERSION_CODE="$version_code" UPDATE_APK_NAME="$filename"
+          export UPDATE_APK_SHA256="$(sha256sum "$RUNNER_TEMP/$filename" | cut -d' ' -f1)"
+          export UPDATE_CERT_SHA256="$(cat .github/signing/debug-cert.sha256)"
+          python3 - <<'PY'
+          import json, os, pathlib
+          payload = {
+              "schema": 1,
+              "channel": "debug-pr-2",
+              "packageName": "it.example.passolibero",
+              "versionCode": int(os.environ["UPDATE_VERSION_CODE"]),
+              "apk": os.environ["UPDATE_APK_NAME"],
+              "sha256": os.environ["UPDATE_APK_SHA256"],
+              "certificateSha256": os.environ["UPDATE_CERT_SHA256"],
+              "sourceCommit": os.environ["GITHUB_SHA"],
+              "sourceBranch": os.environ["GITHUB_REF_NAME"]
+          }
+          pathlib.Path(os.environ["RUNNER_TEMP"], "update.json").write_text(
+              json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "PassoLibero V2 - Debug PR #2" \
+              --notes "Canale di sviluppo della PR #2. APK firmati; non e' una release stabile."
+          fi
+          # APK con nome univoco; update.json aggiornato per ultimo.
+          gh release upload "$tag" "$RUNNER_TEMP/$filename" --repo "$GITHUB_REPOSITORY"
+          gh release upload "$tag" "$RUNNER_TEMP/update.json" \
+            --clobber --repo "$GITHUB_REPOSITORY"
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" \
+            --title "PassoLibero V2 - Debug PR #2 - build $GITHUB_RUN_NUMBER" \
+            --notes "Build $GITHUB_RUN_NUMBER dalla PR #2 ($GITHUB_SHA). Sviluppo, non stabile."
+          echo "Update debug pronto: https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"
+
       # 10. Pubblica l'APK per il download
       - name: Pubblica APK
         if: env.PASSOLIBERO_SIGNED == 'true'

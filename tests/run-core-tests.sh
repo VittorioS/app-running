@@ -26,3 +26,6 @@ java -cp build-test WeatherRulesTest
 
 javac -d build-test app/src/main/java/it/example/passolibero/WeatherSchedule.java tests/WeatherScheduleTest.java
 java -cp build-test WeatherScheduleTest
+
+javac -d build-test app/src/main/java/it/example/passolibero/UpdatePolicy.java tests/UpdatePolicyTest.java
+java -cp build-test UpdatePolicyTest
