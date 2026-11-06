@@ -11,7 +11,10 @@ import java.util.List;
 
 /** Storico offline. Migrazione conservativa: mantiene tutte le sessioni preesistenti. */
 public final class TrackerDb extends SQLiteOpenHelper {
-    public TrackerDb(Context context) { super(context, "sessions.db", null, 5); }
+    public TrackerDb(Context context) {
+        super(context, "sessions.db", null, 5);
+        appContext = context.getApplicationContext();
+    }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE sessions ("
@@ -137,6 +140,41 @@ public final class TrackerDb extends SQLiteOpenHelper {
                 "id=?", new String[]{Long.toString(id)}, null, null, null, "1")) {
             return c.moveToFirst() ? readEntry(c) : null;
         }
+    }
+
+    /**
+     * Elimina solo la sessione indicata e i suoi punti GPS, in una transazione.
+     * Non permette mai di cancellare la sessione che il tracking sta registrando.
+     * Una sessione interrotta (non più attiva) può invece essere eliminata.
+     */
+    public boolean deleteSession(long sessionId) {
+        if (sessionId <= 0) return false;
+        android.content.SharedPreferences prefs = AppPrefs.get(getContextForHistory());
+        if (isCurrentSession(prefs, sessionId)) return false;
+
+        SQLiteDatabase database = getWritableDatabase();
+        String[] args = {Long.toString(sessionId)};
+        database.beginTransaction();
+        try {
+            if (isCurrentSession(prefs, sessionId)) return false;
+            int removed = database.delete("sessions", "id=?", args);
+            if (removed != 1) return false;
+            database.delete("points", "session_id=?", args);
+            database.setTransactionSuccessful();
+            return true;
+        } finally {
+            database.endTransaction();
+        }
+    }
+
+    private final Context appContext;
+
+    private Context getContextForHistory() {
+        return appContext;
+    }
+
+    private static boolean isCurrentSession(android.content.SharedPreferences p, long id) {
+        return p.getBoolean("active", false) && p.getLong("active_id", 0) == id;
     }
 
     public static final class TrackPoint {

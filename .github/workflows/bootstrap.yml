@@ -98,6 +98,7 @@ jobs:
           sh tests/run-core-tests.sh
           python3 tests/check-db-migration.py
           python3 tests/check-weather-search.py
+          python3 tests/check-session-deletion.py
 
       - name: Prepara firma debug stabile
         shell: bash
