@@ -94,8 +94,28 @@ jobs:
           sh tests/run-core-tests.sh
           python3 tests/check-db-migration.py
 
+      - name: Prepara firma debug stabile
+        shell: bash
+        env:
+          SIGNING_DATA: ${{ secrets.PASSOLIBERO_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$SIGNING_DATA" ]]; then
+            printf '%s' "$SIGNING_DATA" | base64 --decode > "$RUNNER_TEMP/passolibero-debug.p12"
+            chmod 600 "$RUNNER_TEMP/passolibero-debug.p12"
+            echo "PASSOLIBERO_DEBUG_KEYSTORE=$RUNNER_TEMP/passolibero-debug.p12" >> "$GITHUB_ENV"
+            echo "PASSOLIBERO_SIGNED=true" >> "$GITHUB_ENV"
+          else
+            echo "PASSOLIBERO_SIGNED=false" >> "$GITHUB_ENV"
+            echo "::warning::Firma permanente non ancora configurata: APK non pubblicato."
+          fi
+
       # 8. Compila l'applicazione Android
       - name: Compila APK debug
+        env:
+          PASSOLIBERO_DEBUG_STORE_PASSWORD: ${{ secrets.PASSOLIBERO_DEBUG_STORE_PASSWORD }}
+          PASSOLIBERO_DEBUG_KEY_ALIAS: ${{ secrets.PASSOLIBERO_DEBUG_KEY_ALIAS }}
+          PASSOLIBERO_DEBUG_KEY_PASSWORD: ${{ secrets.PASSOLIBERO_DEBUG_KEY_PASSWORD }}
         run: |
           gradle --no-daemon --stacktrace :app:assembleDebug
 
@@ -107,6 +127,7 @@ jobs:
 
       # 10. Pubblica l'APK per il download
       - name: Pubblica APK
+        if: env.PASSOLIBERO_SIGNED == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: PassoLibero-Android15-debug
