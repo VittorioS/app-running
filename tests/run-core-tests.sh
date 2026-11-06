@@ -29,3 +29,6 @@ java -cp build-test WeatherScheduleTest
 
 javac -d build-test app/src/main/java/it/example/passolibero/UpdatePolicy.java tests/UpdatePolicyTest.java
 java -cp build-test UpdatePolicyTest
+
+javac -d build-test app/src/main/java/it/example/passolibero/UpdateMetadataReader.java tests/UpdateMetadataReaderTest.java
+java -cp build-test UpdateMetadataReaderTest

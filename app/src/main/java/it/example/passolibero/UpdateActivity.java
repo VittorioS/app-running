@@ -148,7 +148,8 @@ public final class UpdateActivity extends Activity {
                     if (isSessionActive()) status.append(
                             "\nTermina prima la sessione GPS in corso.");
                 });
-            } catch (Exception ex) {
+            } catch (Exception | LinkageError ex) {
+                android.util.Log.w("PassoLiberoUpdate", "Controllo update non riuscito", ex);
                 main.post(() -> {
                     checking.set(false);
                     if (isFinishing() || isDestroyed() || !requestedChannel.equals(channel)) return;

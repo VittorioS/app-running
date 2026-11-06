@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Locale;
@@ -71,9 +70,7 @@ public final class UpdateManager {
             if (code != 200) throw new IOException("GitHub: HTTP " + code);
             String json;
             try (InputStream input = conn.getInputStream()) {
-                byte[] buffer = input.readNBytes(16_385);
-                if (buffer.length > 16_384) throw new IOException("Metadati troppo grandi");
-                json = new String(buffer, StandardCharsets.UTF_8);
+                json = UpdateMetadataReader.readJson(input);
             }
             JSONObject data = new JSONObject(json);
             if (data.optInt("schema", -1) != 1
