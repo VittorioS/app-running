@@ -1,6 +1,7 @@
 package it.example.passolibero;
 
 import android.Manifest;
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -15,15 +16,20 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 
-/** Preferenze e notifica locale su previsioni orarie, senza nuove richieste GPS. */
+/**
+ * Meteo programmato in orari scelti. Un allarme INESATTO alla volta,
+ * poi un JobScheduler vincolato alla rete. Nessun GPS o servizio permanente.
+ */
 public final class WeatherMonitor {
     static final int JOB_ID = 69142;
+    static final int ALARM_REQUEST_CODE = 69144;
     private static final int NOTIFICATION_ID = 69143;
     private static final String CHANNEL = "favorable_running_weather";
-    private static final long SIX_HOURS = 6 * 3600L;
     private WeatherMonitor() { }
 
     public static boolean hasCity(SharedPreferences prefs) {
@@ -45,31 +51,60 @@ public final class WeatherMonitor {
                 WeatherRules.optional(prefs.getString("weather_max_wind", "")));
     }
 
+    public static boolean isActive(SharedPreferences prefs) {
+        return prefs.getBoolean("weather_enabled", false) && hasCity(prefs)
+                && !WeatherSchedule.decode(prefs.getString("weather_times", "")).isEmpty();
+    }
+
+    /** Cancella il vecchio job periodico e programma soltanto il prossimo orario. */
     public static void updateSchedule(Context context) {
         Context app = context.getApplicationContext();
-        JobScheduler scheduler = app.getSystemService(JobScheduler.class);
-        if (scheduler == null) return;
         SharedPreferences p = AppPrefs.get(app);
-        if (!p.getBoolean("weather_enabled", false) || !hasCity(p)) {
-            scheduler.cancel(JOB_ID);
-            return;
+        JobScheduler jobs = app.getSystemService(JobScheduler.class);
+        if (jobs != null) jobs.cancel(JOB_ID);
+        AlarmManager alarms = app.getSystemService(AlarmManager.class);
+        if (alarms == null) return;
+        PendingIntent intent = alarmIntent(app);
+        alarms.cancel(intent);
+        if (!isActive(p)) return;
+        List<String> times = WeatherSchedule.decode(p.getString("weather_times", ""));
+        long next = WeatherSchedule.nextEpochMillis(
+                times, ZoneId.systemDefault(), System.currentTimeMillis());
+        if (next <= 0) return;
+        // setAndAllowWhileIdle può ritardare in Doze: niente permessi exact alarm.
+        try {
+            alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, intent);
+        } catch (SecurityException error) {
+            // Ultima alternativa sempre inesatta per produttori con policy restrittive.
+            alarms.set(AlarmManager.RTC_WAKEUP, next, intent);
         }
-        JobInfo job = new JobInfo.Builder(JOB_ID, new ComponentName(app, WeatherJob.class))
+    }
+
+    static PendingIntent alarmIntent(Context context) {
+        Intent intent = new Intent(context, WeatherAlarmReceiver.class);
+        intent.setAction("it.example.passolibero.CHECK_WEATHER");
+        return PendingIntent.getBroadcast(context, ALARM_REQUEST_CODE, intent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+
+    /** Called by alarm receiver; request network availability without spinning. */
+    static void scheduleNetworkCheck(Context context) {
+        if (!isActive(AppPrefs.get(context))) return;
+        JobScheduler jobs = context.getSystemService(JobScheduler.class);
+        if (jobs == null) return;
+        JobInfo job = new JobInfo.Builder(JOB_ID, new ComponentName(context, WeatherJob.class))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                .setPersisted(true)
-                .setPeriodic(60 * 60_000L, 15 * 60_000L)
+                .setBackoffCriteria(15 * 60_000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
                 .build();
-        scheduler.schedule(job);
+        jobs.schedule(job);
     }
 
     static void checkAndNotify(Context context) throws java.io.IOException {
         SharedPreferences prefs = AppPrefs.get(context);
-        if (!prefs.getBoolean("weather_enabled", false) || !hasCity(prefs)) return;
+        if (!isActive(prefs)) return;
         double lat = latitude(prefs), lon = longitude(prefs);
         WeatherApi.Forecast forecast = WeatherApi.forecast(lat, lon);
-        // Le preferenze possono cambiare mentre il download è in corso.
-        if (!prefs.getBoolean("weather_enabled", false) || !hasCity(prefs)
-                || latitude(prefs) != lat || longitude(prefs) != lon) return;
+        if (!isActive(prefs) || latitude(prefs) != lat || longitude(prefs) != lon) return;
         WeatherRules rules;
         try { rules = rules(prefs); }
         catch (IllegalArgumentException ex) { return; }

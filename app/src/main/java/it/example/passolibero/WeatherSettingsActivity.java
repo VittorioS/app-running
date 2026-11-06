@@ -2,6 +2,7 @@ package it.example.passolibero;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -34,7 +35,9 @@ public final class WeatherSettingsActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private EditText citySearch, minTemp, maxTemp, maxWind;
-    private TextView selectedLabel, resultsView;
+    private TextView selectedLabel, resultsView, scheduleSummary;
+    private LinearLayout scheduleRows;
+    private final List<String> times = new ArrayList<>();
     private Spinner cityChoices;
     private Switch enabled;
     private Button searchButton, forecastButton, saveButton;
@@ -44,6 +47,7 @@ public final class WeatherSettingsActivity extends Activity {
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         prefs = AppPrefs.get(this);
+        times.addAll(WeatherSchedule.decode(prefs.getString("weather_times", "")));
         LinearLayout root = Ui.vertical(this);
         root.setBackgroundColor(Ui.BG);
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -115,13 +119,27 @@ public final class WeatherSettingsActivity extends Activity {
         Ui.marginBottom(this, card, maxTemp, 7);
         maxWind = field("Vento massimo km/h (facoltativo)",
                 prefs.getString("weather_max_wind", ""), true);
-        Ui.marginBottom(this, card, maxWind, 10);
+        Ui.marginBottom(this, card, maxWind, 14);
+
+        Ui.marginBottom(this, card, Ui.text(this, "ORARI DI CONTROLLO OGNI GIORNO",
+                13, true, Ui.MUTED), 7);
+        Ui.marginBottom(this, card, Ui.text(this,
+                "Aggiungi tutti gli orari che vuoi. Tocca un orario per modificarlo o premi Rimuovi.",
+                12, false, Ui.MUTED), 6);
+        scheduleRows = Ui.vertical(this);
+        Ui.marginBottom(this, card, scheduleRows, 8);
+        Button addTime = Ui.button(this, "＋ Aggiungi orario", false);
+        addTime.setOnClickListener(v -> chooseTime(null));
+        Ui.marginBottom(this, card, addTime, 8);
+        scheduleSummary = Ui.text(this, "", 12, false, Ui.MUTED);
+        Ui.marginBottom(this, card, scheduleSummary, 12);
+        renderTimes();
 
         saveButton = Ui.button(this, "Salva condizioni e notifiche", true);
         saveButton.setOnClickListener(v -> save());
         Ui.marginBottom(this, card, saveButton, 10);
 
-        forecastButton = Ui.button(this, "Valuta le previsioni delle prossime 24 ore", false);
+        forecastButton = Ui.button(this, "↻ Aggiorna condizioni meteo adesso", false);
         forecastButton.setOnClickListener(v -> previewForecast());
         Ui.marginBottom(this, card, forecastButton, 8);
         Ui.marginBottom(this, content, card, 12);
@@ -129,17 +147,18 @@ public final class WeatherSettingsActivity extends Activity {
         LinearLayout forecastCard = Ui.card(this);
         Ui.marginBottom(this, forecastCard,
                 Ui.text(this, "PREVISIONI ORARIE · OPEN-METEO", 14, true, Ui.INK), 8);
-        resultsView = Ui.text(this, "Cerca una città e tocca «Valuta le previsioni».",
+        resultsView = Ui.text(this, "Scegli una città e tocca «Aggiorna condizioni meteo adesso».",
                 13, false, Ui.MUTED);
         forecastCard.addView(resultsView);
         Ui.marginBottom(this, content, forecastCard, 12);
 
         Ui.marginBottom(this, content, Ui.text(this,
                 "Le temperature e il vento sono STIME del modello meteo, non misure "
-              + "del telefono. Il controllo automatico avviene circa ogni ora, quando "
-              + "Android concede rete e attività in background; l'orario dell'avviso "
-              + "non è esatto e alcune verifiche possono saltare. Massimo un avviso "
-              + "ogni 6 ore. Non attiviamo il GPS e non avviamo sessioni.",
+              + "del telefono. Gli orari sono quelli locali del telefono. Android "
+              + "può ritardare i controlli programmati per il risparmio energetico, "
+              + "quindi non è garantita l'ora esatta; è necessaria una connessione. "
+              + "Con lista vuota non avvengono controlli automatici. "
+              + "Massimo un avviso ogni 6 ore. Nessun GPS attivo e nessun servizio permanente.",
                 13, false, Ui.MUTED), 12);
         Ui.marginBottom(this, content, Ui.text(this,
                 "Dati meteo: Open-Meteo.com (previsioni, attribuzione al provider). "
@@ -173,7 +192,13 @@ public final class WeatherSettingsActivity extends Activity {
                 Toast.makeText(this, "Scegli prima una località", Toast.LENGTH_LONG).show();
                 return;
             }
+            if (enabled.isChecked() && times.isEmpty()) {
+                Toast.makeText(this, "Aggiungi almeno un orario per attivare i controlli automatici",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
             SharedPreferences.Editor change = prefs.edit()
+                    .putString("weather_times", WeatherSchedule.encode(times))
                     .putBoolean("weather_enabled", enabled.isChecked())
                     .putString("weather_min_c", rules.minTemperatureC == null ? "" : rules.minTemperatureC.toString())
                     .putString("weather_max_c", rules.maxTemperatureC == null ? "" : rules.maxTemperatureC.toString())
@@ -199,6 +224,50 @@ public final class WeatherSettingsActivity extends Activity {
         } catch (IllegalArgumentException ex) {
             Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void chooseTime(String previous) {
+        int hour = 6, minute = 0;
+        if (previous != null) {
+            String[] parts = previous.split(":");
+            hour = Integer.parseInt(parts[0]);
+            minute = Integer.parseInt(parts[1]);
+        }
+        new TimePickerDialog(this, (picker, selectedHour, selectedMinute) -> {
+            String value = WeatherSchedule.canonical(selectedHour, selectedMinute);
+            if (previous != null) times.remove(previous);
+            if (!times.contains(value)) times.add(value);
+            java.util.Collections.sort(times);
+            renderTimes();
+        }, hour, minute, true).show();
+    }
+
+    private void renderTimes() {
+        scheduleRows.removeAllViews();
+        if (times.isEmpty()) {
+            Ui.marginBottom(this, scheduleRows, Ui.text(this,
+                    "Nessun controllo automatico programmato.", 13, false, Ui.MUTED), 4);
+        }
+        for (String time : new ArrayList<>(times)) {
+            LinearLayout row = Ui.horizontal(this);
+            Button change = Ui.button(this, "🕒 " + time + " · Modifica", false);
+            change.setOnClickListener(v -> chooseTime(time));
+            LinearLayout.LayoutParams left = new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1);
+            left.rightMargin = Ui.dp(this, 6);
+            row.addView(change, left);
+            Button remove = Ui.button(this, "Rimuovi", false);
+            remove.setOnClickListener(v -> {
+                times.remove(time);
+                renderTimes();
+            });
+            row.addView(remove, new LinearLayout.LayoutParams(
+                    Ui.dp(this, 96), Ui.dp(this, 48)));
+            Ui.marginBottom(this, scheduleRows, row, 6);
+        }
+        scheduleSummary.setText(times.isEmpty()
+                ? "Il controllo manuale resta disponibile anche senza orari."
+                : times.size() + " controlli previsti al giorno · "
+                        + String.join(", ", times) + ". Premi Salva per applicare.");
     }
 
     private void searchCities() {
@@ -263,10 +332,27 @@ public final class WeatherSettingsActivity extends Activity {
                 long now = System.currentTimeMillis() / 1000L;
                 DateTimeFormatter clock = DateTimeFormatter.ofPattern("EEE HH:mm", Locale.ITALY)
                         .withZone(forecast.zone);
-                StringBuilder text = new StringBuilder("Previsioni Open-Meteo per ")
+                StringBuilder text = new StringBuilder("Aggiornato adesso · previsioni Open-Meteo per ")
                         .append(city.title).append("\n")
                         .append("✅ = tutti i criteri rispettati | ✕ = non rispettati\n\n");
                 int count = 0, matching = 0;
+                WeatherApi.Hour closest = null;
+                for (WeatherApi.Hour hour : forecast.hours) {
+                    if (hour.epochSec <= now && hour.epochSec + 3600 > now) {
+                        closest = hour;
+                        break;
+                    }
+                }
+                if (closest != null) {
+                    boolean goodNow = rules.matches(closest.temperatureC, closest.windKmh);
+                    text.append(goodNow ? "✅ CONDIZIONI ADESSO FAVOREVOLI" :
+                            "✕ CONDIZIONI ADESSO NON FAVOREVOLI")
+                            .append(" (stima oraria) · ")
+                            .append(String.format(Locale.ITALY, "%.1f °C", closest.temperatureC))
+                            .append(" · vento ")
+                            .append(String.format(Locale.ITALY, "%.0f km/h", closest.windKmh))
+                            .append("\n\n");
+                }
                 for (WeatherApi.Hour hour : forecast.hours) {
                     if (hour.epochSec + 3600 <= now || hour.epochSec >= now + 24 * 3600) continue;
                     boolean good = rules.matches(hour.temperatureC, hour.windKmh);
