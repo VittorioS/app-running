@@ -13,12 +13,10 @@ import android.os.Looper;
 import android.text.InputType;
 import android.view.View;
 import android.view.WindowInsets;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -35,14 +33,13 @@ public final class WeatherSettingsActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private EditText citySearch, minTemp, maxTemp, maxWind;
-    private TextView selectedLabel, resultsView, scheduleSummary;
-    private LinearLayout scheduleRows;
+    private TextView selectedLabel, resultsView, scheduleSummary, searchStatus;
+    private LinearLayout scheduleRows, cityResults;
     private final List<String> times = new ArrayList<>();
-    private Spinner cityChoices;
+    private int searchSerial;
     private Switch enabled;
     private Button searchButton, forecastButton, saveButton;
     private WeatherApi.City selectedCity;
-    private final List<WeatherApi.City> candidates = new ArrayList<>();
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -78,34 +75,30 @@ public final class WeatherSettingsActivity extends Activity {
                 Ui.text(this, "LOCALITÀ", 13, true, Ui.MUTED), 6);
         citySearch = field("Cerca città (es. Salerno)", "", false);
         citySearch.setSingleLine(true);
-        citySearch.setText(prefs.getString("weather_city", ""));
+        // Campo di ricerca separato dalla localita' confermata e salvata.
+        citySearch.setText("");
         Ui.marginBottom(this, card, citySearch, 5);
 
         searchButton = Ui.button(this, "Cerca località", false);
         searchButton.setOnClickListener(v -> searchCities());
         Ui.marginBottom(this, card, searchButton, 9);
 
-        cityChoices = new Spinner(this);
-        cityChoices.setVisibility(View.GONE);
-        cityChoices.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(android.widget.AdapterView<?> parent,
-                    View view, int position, long id) {
-                if (position == 0 || position > candidates.size()) return;
-                selectedCity = candidates.get(position - 1);
-                selectedLabel.setText("Scelta: " + selectedCity.title);
-            }
-            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
-        });
-        Ui.marginBottom(this, card, cityChoices, 8);
-
         if (WeatherMonitor.hasCity(prefs)) {
             selectedCity = new WeatherApi.City(prefs.getString("weather_city", ""),
                     WeatherMonitor.latitude(prefs), WeatherMonitor.longitude(prefs));
         }
         selectedLabel = Ui.text(this, selectedCity == null
-                ? "Nessuna località selezionata"
-                : "Scelta: " + selectedCity.title, 13, false, Ui.MUTED);
-        Ui.marginBottom(this, card, selectedLabel, 14);
+                ? "Nessuna località selezionata: cercane una qui sopra."
+                : "Località attuale: " + selectedCity.title,
+                14, true, Ui.GREEN);
+        Ui.marginBottom(this, card, selectedLabel, 8);
+        searchStatus = Ui.text(this,
+                "Dopo la ricerca, tocca una località nell'elenco dei risultati.",
+                13, false, Ui.MUTED);
+        Ui.marginBottom(this, card, searchStatus, 8);
+        cityResults = Ui.vertical(this);
+        cityResults.setVisibility(View.GONE);
+        Ui.marginBottom(this, card, cityResults, 14);
 
         Ui.marginBottom(this, card,
                 Ui.text(this, "CONDIZIONI (TUTTE IN AND)", 13, true, Ui.MUTED), 7);
@@ -271,42 +264,59 @@ public final class WeatherSettingsActivity extends Activity {
     }
 
     private void searchCities() {
-        String query = citySearch.getText().toString().trim();
+        final String query = citySearch.getText().toString().trim();
         if (query.length() < 2) {
-            Toast.makeText(this, "Inserisci almeno due caratteri", Toast.LENGTH_SHORT).show();
+            searchStatus.setText("Inserisci almeno due caratteri per cercare una città.");
             return;
         }
+        final int requestId = ++searchSerial;
         searchButton.setEnabled(false);
-        selectedLabel.setText("Ricerca in corso…");
+        searchStatus.setText("Ricerca di «" + query + "» in corso…");
+        cityResults.removeAllViews();
+        cityResults.setVisibility(View.GONE);
+
         new Thread(() -> {
             try {
-                List<WeatherApi.City> found = WeatherApi.findCities(query);
+                final List<WeatherApi.City> found = WeatherApi.findCities(query);
                 main.post(() -> {
-                    if (isFinishing() || isDestroyed()) return;
+                    if (isFinishing() || isDestroyed() || requestId != searchSerial) return;
                     searchButton.setEnabled(true);
-                    candidates.clear();
-                    candidates.addAll(found);
+                    cityResults.removeAllViews();
+
                     if (found.isEmpty()) {
-                        cityChoices.setVisibility(View.GONE);
-                        selectedLabel.setText("Nessuna città trovata; prova a cambiare ricerca.");
+                        searchStatus.setText("Nessuna località trovata per «" + query
+                                + "». Prova a inserire un nome diverso.");
+                        cityResults.setVisibility(View.GONE);
                         return;
                     }
-                    ArrayList<String> labels = new ArrayList<>();
-                    labels.add("Scegli una località dai risultati");
-                    for (WeatherApi.City city : found) labels.add(city.title);
-                    cityChoices.setAdapter(new ArrayAdapter<>(this,
-                            android.R.layout.simple_spinner_dropdown_item, labels));
-                    cityChoices.setSelection(0);
-                    cityChoices.setVisibility(View.VISIBLE);
-                    selectedLabel.setText("Seleziona la località corretta nel menu qui sopra.");
-                    // La scelta precedente non vale dopo una ricerca nuova.
-                    selectedCity = null;
+                    searchStatus.setText(found.size()
+                            + (found.size() == 1 ? " località trovata. " : " località trovate. ")
+                            + "Tocca il risultato corretto (città, regione e Paese):");
+                    for (WeatherApi.City city : found) {
+                        Button option = Ui.button(this, "📍 " + city.title, false);
+                        option.setTextSize(14);
+                        option.setContentDescription("Seleziona località " + city.title);
+                        option.setOnClickListener(v -> {
+                            selectedCity = city;
+                            selectedLabel.setText("✓ Località selezionata: " + city.title);
+                            searchStatus.setText("Località scelta. Premi «Salva condizioni e notifiche» "
+                                    + "per confermare le impostazioni.");
+                            cityResults.removeAllViews();
+                            cityResults.setVisibility(View.GONE);
+                        });
+                        Ui.marginBottom(this, cityResults, option, 7);
+                    }
+                    cityResults.setVisibility(View.VISIBLE);
                 });
-            } catch (Exception ex) {
+            } catch (Exception error) {
+                android.util.Log.w("PassoLiberoWeather", "Ricerca città fallita", error);
                 main.post(() -> {
-                    if (isFinishing() || isDestroyed()) return;
+                    if (isFinishing() || isDestroyed() || requestId != searchSerial) return;
                     searchButton.setEnabled(true);
-                    selectedLabel.setText("Ricerca non riuscita: " + ex.getMessage());
+                    cityResults.removeAllViews();
+                    cityResults.setVisibility(View.GONE);
+                    searchStatus.setText("Ricerca non riuscita. Controlla la connessione e riprova. "
+                            + "(" + error.getClass().getSimpleName() + ")");
                 });
             }
         }, "WeatherCitySearch").start();

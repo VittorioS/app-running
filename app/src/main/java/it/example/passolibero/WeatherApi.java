@@ -1,7 +1,5 @@
 package it.example.passolibero;
 
-import android.os.Build;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -11,7 +9,6 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,10 +47,11 @@ public final class WeatherApi {
         }
     }
 
+    // API 30+: usare overload con String: Charset overload e' disponibile solo da API 33.
     public static List<City> findCities(String query) throws IOException {
         if (query == null || query.trim().length() < 2)
             throw new IOException("Inserisci almeno due caratteri per cercare la città");
-        String encoded = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8);
+        String encoded = URLEncoder.encode(query.trim(), "UTF-8");
         JSONObject json = read("https://geocoding-api.open-meteo.com/v1/search?name="
                 + encoded + "&count=6&language=it&format=json");
         JSONArray results = json.optJSONArray("results");
@@ -129,7 +127,7 @@ public final class WeatherApi {
                     buffer.write(bytes, 0, n);
                 }
                 try {
-                    return new JSONObject(buffer.toString(StandardCharsets.UTF_8));
+                    return new JSONObject(buffer.toString("UTF-8"));
                 } catch (JSONException ex) {
                     throw new IOException("Risposta meteo non valida", ex);
                 }

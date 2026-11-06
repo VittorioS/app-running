@@ -97,6 +97,7 @@ jobs:
         run: |
           sh tests/run-core-tests.sh
           python3 tests/check-db-migration.py
+          python3 tests/check-weather-search.py
 
       - name: Prepara firma debug stabile
         shell: bash
