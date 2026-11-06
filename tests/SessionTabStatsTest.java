@@ -29,6 +29,12 @@ public final class SessionTabStatsTest {
         check(!SessionTabStats.hasCurrentSpeed(total, "MOVING_UNKNOWN"), "Andatura ignota non appartiene alle due");
         check(SessionTabStats.hasCurrentSpeed(total, "WALK"), "Totali prendono la camminata corrente");
         check(SessionTabStats.meters(total, 0, 0) == 0, "Avvio senza campioni");
-        System.out.println("PASS: 19 controlli di isolamento tra tab corsa, camminata e totali");
+        check(SessionTabStats.tabForMovement("RUN") == run, "Riapertura durante corsa");
+        check(SessionTabStats.tabForMovement("WALK") == walk, "Riapertura durante camminata");
+        check(SessionTabStats.tabForMovement("STILL") == null, "Fermo non impone tab");
+        check(SessionTabStats.tabForMovement("MOVING_UNKNOWN") == null, "Andatura ignota non impone tab");
+        check(SessionTabStats.tabForMovement("UNKNOWN") == null, "Movimento incerto non impone tab");
+        check(SessionTabStats.tabForMovement(null) == null, "Stato assente non impone tab");
+        System.out.println("PASS: isolamento tab e selezione al resume senza alterare classificazione");
     }
 }

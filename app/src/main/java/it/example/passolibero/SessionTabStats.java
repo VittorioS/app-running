@@ -6,6 +6,17 @@ public final class SessionTabStats {
 
     private SessionTabStats() { }
 
+    /**
+     * Selezione iniziale sulla riapertura della sessione.
+     * Solo RUN/WALK riconosciuti sono selezionabili automaticamente;
+     * i periodi fermi o incerti non forzano una tab.
+     */
+    public static Tab tabForMovement(String movement) {
+        if ("RUN".equals(movement)) return Tab.RUN;
+        if ("WALK".equals(movement)) return Tab.WALK;
+        return null;
+    }
+
     public static double meters(Tab tab, double runM, double walkM) {
         if (tab == Tab.RUN) return Math.max(0, runM);
         if (tab == Tab.WALK) return Math.max(0, walkM);

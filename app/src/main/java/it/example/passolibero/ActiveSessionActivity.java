@@ -34,6 +34,8 @@ public final class ActiveSessionActivity extends Activity {
     private SessionTabStats.Tab currentTab = SessionTabStats.Tab.TOTAL;
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
+    // Consente una sola selezione automatica dopo onResume. Un tap manuale la annulla.
+    private boolean pendingResumeTabSelection;
     private boolean mapRendered;
     private boolean gpsDialogShown;
     private long pendingJsonExportSessionId;
@@ -108,6 +110,7 @@ public final class ActiveSessionActivity extends Activity {
             tabButton.setTextSize(13);
             tabButton.setContentDescription("Statistiche " + labels[i]);
             tabButton.setOnClickListener(v -> {
+                pendingResumeTabSelection = false;
                 currentTab = tab;
                 updateTabButtons();
                 renderTab(RunState.read(prefs), prefs.getBoolean("active", false));
@@ -354,6 +357,23 @@ public final class ActiveSessionActivity extends Activity {
             if (active) sessionSeen = true;
             if (sessionSeen && !active) { finish(); return; }
             RunState s = RunState.read(prefs);
+            if (pendingResumeTabSelection && active) {
+                // Non usare il movimento salvato prima di un riavvio del telefono:
+                // deve esserci un tracking service che aggiorna effettivamente lo stato.
+                long ageMs = System.currentTimeMillis() - prefs.getLong("heartbeat_wall", 0);
+                if (ageMs >= 0 && ageMs <= 15_000) {
+                    SessionTabStats.Tab movementTab = SessionTabStats.tabForMovement(s.movement);
+                    if (movementTab != null) {
+                        pendingResumeTabSelection = false;
+                        if (currentTab != movementTab) {
+                            currentTab = movementTab;
+                            updateTabButtons();
+                        }
+                    }
+                }
+                // Se lo stato è ancora incerto, attendi la prima classificazione.
+                // La selezione manuale, invece, resta valida per l'intera apertura.
+            }
             if (active) maybeShowGpsAlert(s);
             Rect visiblePart = new Rect();
             boolean mapVisible = map.view().getGlobalVisibleRect(visiblePart)
@@ -394,12 +414,14 @@ public final class ActiveSessionActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
+        pendingResumeTabSelection = true;
         // Render and fetch map tiles only if the card is actually visible.
         handler.removeCallbacks(refreshTask);
         handler.post(refreshTask);
     }
     @Override protected void onPause() {
         resumed = false;
+        pendingResumeTabSelection = false;
         handler.removeCallbacks(refreshTask);
         map.setTrackingMapVisible(false);
         if (mapRendered) {
