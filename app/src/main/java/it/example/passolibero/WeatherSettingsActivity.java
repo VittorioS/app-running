@@ -1,0 +1,310 @@
+package it.example.passolibero;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.InputType;
+import android.view.View;
+import android.view.WindowInsets;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.Switch;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/** Preferenze meteo per la corsa; città scelta manualmente, nessun GPS in background. */
+public final class WeatherSettingsActivity extends Activity {
+    private static final int REQUEST_NOTIFICATIONS = 452;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private SharedPreferences prefs;
+    private EditText citySearch, minTemp, maxTemp, maxWind;
+    private TextView selectedLabel, resultsView;
+    private Spinner cityChoices;
+    private Switch enabled;
+    private Button searchButton, forecastButton, saveButton;
+    private WeatherApi.City selectedCity;
+    private final List<WeatherApi.City> candidates = new ArrayList<>();
+
+    @Override public void onCreate(Bundle saved) {
+        super.onCreate(saved);
+        prefs = AppPrefs.get(this);
+        LinearLayout root = Ui.vertical(this);
+        root.setBackgroundColor(Ui.BG);
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+            v.setPadding(0, bars.top, 0, bars.bottom);
+            return insets;
+        });
+        setContentView(root);
+        ScrollView scroll = new ScrollView(this);
+        root.addView(scroll);
+        LinearLayout content = Ui.vertical(this);
+        content.setPadding(Ui.dp(this, 18), Ui.dp(this, 18),
+                Ui.dp(this, 18), Ui.dp(this, 28));
+        scroll.addView(content);
+
+        Ui.marginBottom(this, content,
+                Ui.text(this, "Meteo per correre", 26, true, Ui.INK), 6);
+        Ui.marginBottom(this, content, Ui.text(this,
+                "Notifiche locali quando la previsione oraria soddisfa tutte le tue condizioni.",
+                14, false, Ui.MUTED), 14);
+
+        LinearLayout card = Ui.card(this);
+        enabled = new Switch(this);
+        enabled.setText("Attiva notifiche meteo favorevole");
+        enabled.setChecked(prefs.getBoolean("weather_enabled", false));
+        Ui.marginBottom(this, card, enabled, 12);
+        Ui.marginBottom(this, card,
+                Ui.text(this, "LOCALITÀ", 13, true, Ui.MUTED), 6);
+        citySearch = field("Cerca città (es. Salerno)", "", false);
+        citySearch.setSingleLine(true);
+        citySearch.setText(prefs.getString("weather_city", ""));
+        Ui.marginBottom(this, card, citySearch, 5);
+
+        searchButton = Ui.button(this, "Cerca località", false);
+        searchButton.setOnClickListener(v -> searchCities());
+        Ui.marginBottom(this, card, searchButton, 9);
+
+        cityChoices = new Spinner(this);
+        cityChoices.setVisibility(View.GONE);
+        cityChoices.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,
+                    View view, int position, long id) {
+                if (position == 0 || position > candidates.size()) return;
+                selectedCity = candidates.get(position - 1);
+                selectedLabel.setText("Scelta: " + selectedCity.title);
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+        Ui.marginBottom(this, card, cityChoices, 8);
+
+        if (WeatherMonitor.hasCity(prefs)) {
+            selectedCity = new WeatherApi.City(prefs.getString("weather_city", ""),
+                    WeatherMonitor.latitude(prefs), WeatherMonitor.longitude(prefs));
+        }
+        selectedLabel = Ui.text(this, selectedCity == null
+                ? "Nessuna località selezionata"
+                : "Scelta: " + selectedCity.title, 13, false, Ui.MUTED);
+        Ui.marginBottom(this, card, selectedLabel, 14);
+
+        Ui.marginBottom(this, card,
+                Ui.text(this, "CONDIZIONI (TUTTE IN AND)", 13, true, Ui.MUTED), 7);
+        Ui.marginBottom(this, card, Ui.text(this,
+                "Lascia vuoto un campo per accettare qualsiasi valore.", 12, false, Ui.MUTED), 8);
+        minTemp = field("Temperatura minima °C (facoltativa)",
+                prefs.getString("weather_min_c", ""), true);
+        Ui.marginBottom(this, card, minTemp, 7);
+        maxTemp = field("Temperatura massima °C (facoltativa)",
+                prefs.getString("weather_max_c", ""), true);
+        Ui.marginBottom(this, card, maxTemp, 7);
+        maxWind = field("Vento massimo km/h (facoltativo)",
+                prefs.getString("weather_max_wind", ""), true);
+        Ui.marginBottom(this, card, maxWind, 10);
+
+        saveButton = Ui.button(this, "Salva condizioni e notifiche", true);
+        saveButton.setOnClickListener(v -> save());
+        Ui.marginBottom(this, card, saveButton, 10);
+
+        forecastButton = Ui.button(this, "Valuta le previsioni delle prossime 24 ore", false);
+        forecastButton.setOnClickListener(v -> previewForecast());
+        Ui.marginBottom(this, card, forecastButton, 8);
+        Ui.marginBottom(this, content, card, 12);
+
+        LinearLayout forecastCard = Ui.card(this);
+        Ui.marginBottom(this, forecastCard,
+                Ui.text(this, "PREVISIONI ORARIE · OPEN-METEO", 14, true, Ui.INK), 8);
+        resultsView = Ui.text(this, "Cerca una città e tocca «Valuta le previsioni».",
+                13, false, Ui.MUTED);
+        forecastCard.addView(resultsView);
+        Ui.marginBottom(this, content, forecastCard, 12);
+
+        Ui.marginBottom(this, content, Ui.text(this,
+                "Le temperature e il vento sono STIME del modello meteo, non misure "
+              + "del telefono. Il controllo automatico avviene circa ogni ora, quando "
+              + "Android concede rete e attività in background; l'orario dell'avviso "
+              + "non è esatto e alcune verifiche possono saltare. Massimo un avviso "
+              + "ogni 6 ore. Non attiviamo il GPS e non avviamo sessioni.",
+                13, false, Ui.MUTED), 12);
+        Ui.marginBottom(this, content, Ui.text(this,
+                "Dati meteo: Open-Meteo.com (previsioni, attribuzione al provider). "
+              + "Servizio esterno: la città e le sue coordinate vengono usate per la richiesta.",
+                12, false, Ui.MUTED), 14);
+        Button back = Ui.button(this, "← Torna alla Home", false);
+        back.setOnClickListener(v -> finish());
+        Ui.marginBottom(this, content, back, 8);
+    }
+
+    private EditText field(String hint, String value, boolean numeric) {
+        EditText edit = new EditText(this);
+        edit.setHint(hint);
+        edit.setSingleLine(true);
+        edit.setText(value);
+        if (numeric) edit.setInputType(InputType.TYPE_CLASS_NUMBER
+                | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
+        return edit;
+    }
+
+    private WeatherRules readRules() {
+        return new WeatherRules(WeatherRules.optional(minTemp.getText().toString()),
+                WeatherRules.optional(maxTemp.getText().toString()),
+                WeatherRules.optional(maxWind.getText().toString()));
+    }
+
+    private void save() {
+        try {
+            WeatherRules rules = readRules();
+            if (enabled.isChecked() && selectedCity == null) {
+                Toast.makeText(this, "Scegli prima una località", Toast.LENGTH_LONG).show();
+                return;
+            }
+            SharedPreferences.Editor change = prefs.edit()
+                    .putBoolean("weather_enabled", enabled.isChecked())
+                    .putString("weather_min_c", rules.minTemperatureC == null ? "" : rules.minTemperatureC.toString())
+                    .putString("weather_max_c", rules.maxTemperatureC == null ? "" : rules.maxTemperatureC.toString())
+                    .putString("weather_max_wind", rules.maxWindKmh == null ? "" : rules.maxWindKmh.toString());
+            if (selectedCity != null) {
+                change.putString("weather_city", selectedCity.title)
+                        .putLong("weather_lat_bits",
+                                Double.doubleToLongBits(selectedCity.latitude))
+                        .putLong("weather_lon_bits",
+                                Double.doubleToLongBits(selectedCity.longitude));
+            }
+            change.apply();
+            WeatherMonitor.updateSchedule(this);
+            Toast.makeText(this, enabled.isChecked()
+                    ? "Criteri salvati: controllo meteo automatico attivo"
+                    : "Criteri salvati: notifiche disattivate", Toast.LENGTH_LONG).show();
+            if (enabled.isChecked() && Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        REQUEST_NOTIFICATIONS);
+            }
+        } catch (IllegalArgumentException ex) {
+            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void searchCities() {
+        String query = citySearch.getText().toString().trim();
+        if (query.length() < 2) {
+            Toast.makeText(this, "Inserisci almeno due caratteri", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        searchButton.setEnabled(false);
+        selectedLabel.setText("Ricerca in corso…");
+        new Thread(() -> {
+            try {
+                List<WeatherApi.City> found = WeatherApi.findCities(query);
+                main.post(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    searchButton.setEnabled(true);
+                    candidates.clear();
+                    candidates.addAll(found);
+                    if (found.isEmpty()) {
+                        cityChoices.setVisibility(View.GONE);
+                        selectedLabel.setText("Nessuna città trovata; prova a cambiare ricerca.");
+                        return;
+                    }
+                    ArrayList<String> labels = new ArrayList<>();
+                    labels.add("Scegli una località dai risultati");
+                    for (WeatherApi.City city : found) labels.add(city.title);
+                    cityChoices.setAdapter(new ArrayAdapter<>(this,
+                            android.R.layout.simple_spinner_dropdown_item, labels));
+                    cityChoices.setSelection(0);
+                    cityChoices.setVisibility(View.VISIBLE);
+                    selectedLabel.setText("Seleziona la località corretta nel menu qui sopra.");
+                    // La scelta precedente non vale dopo una ricerca nuova.
+                    selectedCity = null;
+                });
+            } catch (Exception ex) {
+                main.post(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    searchButton.setEnabled(true);
+                    selectedLabel.setText("Ricerca non riuscita: " + ex.getMessage());
+                });
+            }
+        }, "WeatherCitySearch").start();
+    }
+
+    private void previewForecast() {
+        if (selectedCity == null) {
+            Toast.makeText(this, "Seleziona prima una città", Toast.LENGTH_LONG).show();
+            return;
+        }
+        final WeatherRules rules;
+        try { rules = readRules(); }
+        catch (IllegalArgumentException ex) {
+            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
+        WeatherApi.City city = selectedCity;
+        forecastButton.setEnabled(false);
+        resultsView.setText("Caricamento delle previsioni per " + city.title + "…");
+        new Thread(() -> {
+            try {
+                WeatherApi.Forecast forecast = WeatherApi.forecast(city.latitude, city.longitude);
+                long now = System.currentTimeMillis() / 1000L;
+                DateTimeFormatter clock = DateTimeFormatter.ofPattern("EEE HH:mm", Locale.ITALY)
+                        .withZone(forecast.zone);
+                StringBuilder text = new StringBuilder("Previsioni Open-Meteo per ")
+                        .append(city.title).append("\n")
+                        .append("✅ = tutti i criteri rispettati | ✕ = non rispettati\n\n");
+                int count = 0, matching = 0;
+                for (WeatherApi.Hour hour : forecast.hours) {
+                    if (hour.epochSec + 3600 <= now || hour.epochSec >= now + 24 * 3600) continue;
+                    boolean good = rules.matches(hour.temperatureC, hour.windKmh);
+                    count++;
+                    if (good) matching++;
+                    text.append(good ? "✅ " : "✕ ")
+                            .append(clock.format(Instant.ofEpochSecond(hour.epochSec)))
+                            .append(" · ").append(String.format(Locale.ITALY, "%.1f °C", hour.temperatureC))
+                            .append(" · vento ")
+                            .append(String.format(Locale.ITALY, "%.0f km/h", hour.windKmh))
+                            .append('\n');
+                }
+                text.append("\n").append(matching).append(" ore favorevoli su ")
+                        .append(count).append(" valutate.\n")
+                        .append("Sono previsioni soggette a variazioni; non garantiscono "
+                              + "le condizioni effettive.");
+                main.post(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    forecastButton.setEnabled(true);
+                    resultsView.setText(text.toString());
+                });
+            } catch (Exception ex) {
+                main.post(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    forecastButton.setEnabled(true);
+                    resultsView.setText("Previsioni non disponibili: " + ex.getMessage());
+                });
+            }
+        }, "WeatherForecastPreview").start();
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode,
+            String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == REQUEST_NOTIFICATIONS
+                && (results.length == 0 || results[0] != PackageManager.PERMISSION_GRANTED)) {
+            Toast.makeText(this, "Le notifiche sono bloccate: attivale nelle impostazioni Android.",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+}

@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.stepdetector" android:required="false" />
     <queries>
@@ -19,6 +20,7 @@
         android:icon="@drawable/ic_runner"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
+        <activity android:name=".WeatherSettingsActivity" android:exported="false" />
         <activity android:name=".SessionDetailActivity" android:exported="false" />
         <activity android:name=".ActiveSessionActivity" android:exported="false" />
         <activity android:name=".HistoryActivity" android:exported="false" />
@@ -28,6 +30,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".WeatherJob"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="true" />
         <service
             android:name=".TrackingService"
             android:exported="false"
