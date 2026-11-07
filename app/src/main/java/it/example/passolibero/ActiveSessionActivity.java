@@ -27,10 +27,11 @@ public final class ActiveSessionActivity extends Activity {
     private SharedPreferences prefs;
     private TrackerDb db;
     private TrackMap map;
-    private TextView distance, paceNow, paceAvg, duration, speed, averageSpeed, steps,
+    private TextView distance, paceNow, paceAvg, duration, speed, averageSpeed, maxRunSpeed, steps,
             cadence, tabTitle, tabHint, unclassifiedHint, movement, gps, checkpoint, remaining, goalLabel;
     private Button[] tabButtons;
     private Button trainingButton;
+    private LinearLayout maxRunSpeedContainer;
     private SessionTabStats.Tab currentTab = SessionTabStats.Tab.TOTAL;
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
@@ -128,6 +129,9 @@ public final class ActiveSessionActivity extends Activity {
         duration = stat(statsCard, "TEMPO", "00:00");
         paceAvg = stat(statsCard, "RITMO MEDIO (min/km)", "--:-- min/km");
         averageSpeed = stat(statsCard, "VELOCITÀ MEDIA", "-- km/h");
+        maxRunSpeedContainer = Ui.vertical(this);
+        maxRunSpeed = stat(maxRunSpeedContainer, "VELOCITÀ MASSIMA CORSA", "-- km/h");
+        Ui.marginBottom(this, statsCard, maxRunSpeedContainer, 0);
         paceNow = stat(statsCard, "RITMO ATTUALE (min/km)", "--:-- min/km");
         speed = stat(statsCard, "VELOCITÀ ATTUALE", "-- km/h");
         steps = stat(statsCard, "PASSI ATTRIBUITI", "0");
@@ -251,6 +255,9 @@ public final class ActiveSessionActivity extends Activity {
 
     private void renderTab(RunState s, boolean active) {
         SessionTabStats.Tab tab = currentTab;
+        maxRunSpeedContainer.setVisibility(tab == SessionTabStats.Tab.RUN ? View.VISIBLE : View.GONE);
+        maxRunSpeed.setText(active && Double.isFinite(s.maxRunSpeedKmh) && s.maxRunSpeedKmh > 0
+                ? RunMath.velocity(s.maxRunSpeedKmh) + " km/h" : "-- km/h");
         trainingButton.setVisibility(tab == SessionTabStats.Tab.TOTAL ? View.GONE : View.VISIBLE);
         trainingButton.setEnabled(active);
         if (tab == SessionTabStats.Tab.RUN) {

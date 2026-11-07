@@ -75,6 +75,10 @@ public final class SessionJsonExporter {
         double runM = isLive ? live.runM : entry.runM;
         double walkM = isLive ? live.walkM : entry.walkM;
         long runMs = isLive ? live.runMs : entry.runMs;
+        Double runMaxSpeed = isLive
+                ? (Double.isFinite(live.maxRunSpeedKmh) && live.maxRunSpeedKmh > 0
+                    ? live.maxRunSpeedKmh : null)
+                : entry.maxRunSpeedKmh;
         long walkMs = isLive ? live.walkMs : entry.walkMs;
         long movingMs = isLive ? live.movingMs : entry.movingMs;
         long stillMs = isLive ? live.stillMs : entry.stillMs;
@@ -110,9 +114,9 @@ public final class SessionJsonExporter {
         writer.endObject();
 
         writer.name("running");
-        writeMode(writer, runM, runMs, runSteps);
+        writeMode(writer, runM, runMs, runSteps, runMaxSpeed, true);
         writer.name("walking");
-        writeMode(writer, walkM, walkMs, walkSteps);
+        writeMode(writer, walkM, walkMs, walkSteps, null, false);
 
         writer.name("classified_total");
         writer.beginObject();
@@ -143,13 +147,20 @@ public final class SessionJsonExporter {
     }
 
     private static void writeMode(JsonWriter writer, double meters, long milliseconds,
-                                  Integer steps) throws IOException {
+                                  Integer steps, Double runMaxSpeed,
+                                  boolean running) throws IOException {
         writer.beginObject();
         writer.name("distance_m").value(meters);
         writer.name("duration_ms").value(milliseconds);
         writer.name("steps");
         if (steps == null) writer.nullValue();
         else writer.value(steps);
+        if (running) {
+            writer.name("max_speed_kmh");
+            if (runMaxSpeed != null && Double.isFinite(runMaxSpeed) && runMaxSpeed > 0)
+                writer.value(runMaxSpeed);
+            else writer.nullValue();
+        }
         writer.name("average_cadence_spm");
         double cadence = steps == null ? Double.NaN
                 : SessionTabStats.averageCadence(milliseconds, steps);

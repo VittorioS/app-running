@@ -374,6 +374,10 @@ public final class TrackingService extends Service implements LocationListener, 
         state.distanceM += delta;
         if (movement == MovementClassifier.Kind.WALK) state.walkM += delta;
         else if (movement == MovementClassifier.Kind.RUN) state.runM += delta;
+        // Statistica passiva: solo corsa confermata e fix GPS affidabile.
+        // Non interviene su classificazione, velocita istantanea o distanza.
+        state.maxRunSpeedKmh = RunPeakSpeedPolicy.update(state.maxRunSpeedKmh,
+                movement.name(), moving, freshActivityFix, acc, delta, pointSpeed);
 
         // Punti del percorso quando ci si sposta; a riposo al massimo ogni 15 s.
         if (delta > 0 || location.getTime() - lastPointWall >= 15_000) {

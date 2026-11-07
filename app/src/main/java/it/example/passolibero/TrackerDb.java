@@ -12,7 +12,7 @@ import java.util.List;
 /** Storico offline. Migrazione conservativa: mantiene tutte le sessioni preesistenti. */
 public final class TrackerDb extends SQLiteOpenHelper {
     public TrackerDb(Context context) {
-        super(context, "sessions.db", null, 5);
+        super(context, "sessions.db", null, 6);
         appContext = context.getApplicationContext();
     }
 
@@ -24,6 +24,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
                 + "walk_ms INTEGER NOT NULL DEFAULT 0, run_ms INTEGER NOT NULL DEFAULT 0, still_ms INTEGER NOT NULL DEFAULT 0, unknown_ms INTEGER NOT NULL DEFAULT 0, "
                 + "moving_unknown_ms INTEGER NOT NULL DEFAULT 0, "
                 + "run_steps INTEGER, walk_steps INTEGER, "
+                + "run_max_speed_kmh REAL, "
                 + "walk_m REAL NOT NULL DEFAULT 0, run_m REAL NOT NULL DEFAULT 0, "
                 + "goal_m INTEGER NOT NULL DEFAULT 0, "
                 + "status TEXT NOT NULL DEFAULT 'IN_PROGRESS')");
@@ -43,6 +44,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
             db.execSQL("ALTER TABLE sessions ADD COLUMN run_steps INTEGER");
             db.execSQL("ALTER TABLE sessions ADD COLUMN walk_steps INTEGER");
         }
+        if (oldV < 6) db.execSQL("ALTER TABLE sessions ADD COLUMN run_max_speed_kmh REAL");
     }
 
     public long newSession(long wall) {
@@ -59,6 +61,9 @@ public final class TrackerDb extends SQLiteOpenHelper {
         v.put("steps", s.steps);
         v.put("run_steps", s.runSteps);
         v.put("walk_steps", s.walkSteps);
+        if (Double.isFinite(s.maxRunSpeedKmh) && s.maxRunSpeedKmh > 0)
+            v.put("run_max_speed_kmh", s.maxRunSpeedKmh);
+        else v.putNull("run_max_speed_kmh");
         v.put("walk_ms", s.walkMs);
         v.put("run_ms", s.runMs);
         v.put("still_ms", s.stillMs);
@@ -92,6 +97,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
         public long id, startedAt, elapsedMs, movingMs, runMs, walkMs, stillMs, unknownMs, movingUnknownMs;
         public int steps, goalM;
         public Integer runSteps, walkSteps; // NULL for sessions saved before v2.
+        public Double maxRunSpeedKmh; // NULL for old sessions or no reliable run measurement.
         public Long endedAt; // NULL for sessions still in progress.
         public double distance, runM, walkM;
         public String status;
@@ -117,13 +123,14 @@ public final class TrackerDb extends SQLiteOpenHelper {
         e.runSteps = c.isNull(15) ? null : c.getInt(15);
         e.walkSteps = c.isNull(16) ? null : c.getInt(16);
         e.endedAt = c.isNull(17) ? null : c.getLong(17);
+        e.maxRunSpeedKmh = c.isNull(18) ? null : c.getDouble(18);
         return e;
     }
 
     private static final String[] ENTRY_COLUMNS = {
             "id", "started_at", "elapsed_ms", "distance_m", "steps", "run_m", "walk_m", "status",
             "moving_ms", "walk_ms", "run_ms", "still_ms", "goal_m", "unknown_ms", "moving_unknown_ms",
-            "run_steps", "walk_steps", "ended_at"
+            "run_steps", "walk_steps", "ended_at", "run_max_speed_kmh"
     };
 
     public List<Entry> recent(int count) {

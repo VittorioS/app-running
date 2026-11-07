@@ -69,6 +69,9 @@ public final class SessionDetailActivity extends Activity {
         add(card, "MOVIMENTO CON ANDATURA IGNOTA", RunMath.duration(session.movingUnknownMs));
         add(card, "TEMPO CON MOVIMENTO INCERTO", RunMath.duration(session.unknownMs));
         add(card, "DISTANZA CORSA", RunMath.km(session.runM) + " km");
+        add(card, "VELOCITÀ MASSIMA CORSA", session.maxRunSpeedKmh != null
+                && Double.isFinite(session.maxRunSpeedKmh) && session.maxRunSpeedKmh > 0
+                ? RunMath.velocity(session.maxRunSpeedKmh) + " km/h" : "-- km/h");
         add(card, "DISTANZA CAMMINATA", RunMath.km(session.walkM) + " km");
         add(card, "PASSI TOTALI", Integer.toString(session.steps));
         if (session.goalM > 0) add(card, "OBIETTIVO", RunStats.meters(session.goalM));

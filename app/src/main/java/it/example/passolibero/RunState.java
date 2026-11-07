@@ -8,6 +8,8 @@ public final class RunState {
     public long movingMs, walkMs, runMs, stillMs, unknownMs, movingUnknownMs;
     public int steps, runSteps, walkSteps, cadenceSpm, checkpointIndex, checkpointInterval, goalM;
     public double distanceM, walkM, runM, speedKmh, gpsAccuracy;
+    // NaN significa nessun campione di corsa affidabile (non zero km/h).
+    public double maxRunSpeedKmh = Double.NaN;
     public double lastLatitude, lastLongitude;
     public boolean lastLocationValid;
     public String movement = "UNKNOWN", gpsStatus = "In attesa del GPS";
@@ -40,6 +42,8 @@ public final class RunState {
         s.movement = p.getString("movement", "UNKNOWN");
         s.gpsStatus = p.getString("gps_status", "In attesa del GPS");
         s.speedKmh = Double.longBitsToDouble(p.getLong("speed_bits", Double.doubleToLongBits(0)));
+        s.maxRunSpeedKmh = Double.longBitsToDouble(p.getLong("run_max_speed_bits",
+                Double.doubleToLongBits(Double.NaN)));
         s.gpsAccuracy = Double.longBitsToDouble(p.getLong("accuracy_bits", Double.doubleToLongBits(0)));
         return s;
     }
@@ -65,6 +69,7 @@ public final class RunState {
                 .putInt("checkpoint_interval", checkpointInterval)
                 .putString("movement", movement).putString("gps_status", gpsStatus)
                 .putLong("speed_bits", Double.doubleToLongBits(speedKmh))
+                .putLong("run_max_speed_bits", Double.doubleToLongBits(maxRunSpeedKmh))
                 .putLong("accuracy_bits", Double.doubleToLongBits(gpsAccuracy)).apply();
     }
 }
