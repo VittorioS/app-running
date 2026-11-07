@@ -37,7 +37,8 @@ public final class WeatherSettingsActivity extends Activity {
     private LinearLayout scheduleRows, cityResults, savedCitiesRows;
     private final List<String> times = new ArrayList<>();
     private final List<WeatherLocations.City> cities = new ArrayList<>();
-    private int searchSerial, previewSerial;
+    private int searchSerial;
+    private volatile int previewSerial;
     private Switch enabled;
     private Button searchButton, forecastButton, saveButton;
 
@@ -216,6 +217,14 @@ public final class WeatherSettingsActivity extends Activity {
         }
     }
 
+    private void invalidatePreview() {
+        previewSerial++;
+        if (forecastButton != null) forecastButton.setEnabled(true);
+        if (resultsView != null) resultsView.setText(
+                "Elenco delle città modificato. Premi «Aggiorna condizioni meteo adesso» "
+              + "per consultare la lista aggiornata.");
+    }
+
     private void renderCities() {
         savedCitiesRows.removeAllViews();
         selectedLabel.setText(cities.isEmpty()
@@ -232,7 +241,7 @@ public final class WeatherSettingsActivity extends Activity {
             remove.setContentDescription("Rimuovi " + city.title);
             remove.setOnClickListener(v -> {
                 cities.remove(city);
-                previewSerial++;
+                invalidatePreview();
                 renderCities();
             });
             row.addView(remove, new LinearLayout.LayoutParams(
@@ -336,7 +345,7 @@ public final class WeatherSettingsActivity extends Activity {
                                         + WeatherLocations.MAX_CITIES + " città.");
                                 return;
                             }
-                            previewSerial++;
+                            invalidatePreview();
                             renderCities();
                             searchStatus.setText("✓ «" + city.title + "» aggiunta. "
                                     + "Puoi cercare altre città o premere Salva.");
