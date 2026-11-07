@@ -30,8 +30,11 @@ public final class ActiveSessionActivity extends Activity {
     private TextView distance, paceNow, paceAvg, duration, speed, averageSpeed, maxRunSpeed, steps,
             cadence, tabTitle, tabHint, unclassifiedHint, movement, gps, checkpoint, remaining, goalLabel;
     private Button[] tabButtons;
-    private Button trainingButton;
-    private LinearLayout maxRunSpeedContainer;
+    private Button trainingButton, sprintStartButton, sprintCancelButton;
+    private Spinner sprintCountdown, sprintMode;
+    private EditText sprintTarget;
+    private TextView sprintStatus;
+    private LinearLayout maxRunSpeedContainer, sprintCard;
     private SessionTabStats.Tab currentTab = SessionTabStats.Tab.TOTAL;
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
@@ -153,6 +156,63 @@ public final class ActiveSessionActivity extends Activity {
         Ui.marginBottom(this, statsCard, trainingButton, 0);
         Ui.marginBottom(this, content, statsCard, 12);
 
+        sprintCard = Ui.card(this);
+        Ui.marginBottom(this, sprintCard,
+                Ui.text(this, "🏃 MODALITÀ SPRINT", 17, true, Ui.INK), 7);
+        Ui.marginBottom(this, sprintCard, Ui.text(this,
+                "Imposta il countdown (5–10 s), poi scegli la durata in secondi "
+              + "oppure la distanza in metri. Durante il countdown e lo sprint "
+              + "il GPS richiede fix ogni 200 ms, se supportati dal telefono.",
+                13, false, Ui.MUTED), 9);
+        Ui.marginBottom(this, sprintCard, Ui.text(this,
+                "COUNTDOWN", 12, true, Ui.MUTED), 4);
+        sprintCountdown = new Spinner(this);
+        sprintCountdown.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"5 secondi", "6 secondi", "7 secondi",
+                        "8 secondi", "9 secondi", "10 secondi"}));
+        sprintCountdown.setSelection(0);
+        Ui.marginBottom(this, sprintCard, sprintCountdown, 9);
+
+        Ui.marginBottom(this, sprintCard, Ui.text(this,
+                "TIPO DI SPRINT", 12, true, Ui.MUTED), 4);
+        sprintMode = new Spinner(this);
+        sprintMode.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Per secondi", "Per metri"}));
+        Ui.marginBottom(this, sprintCard, sprintMode, 7);
+        sprintTarget = new EditText(this);
+        sprintTarget.setSingleLine(true);
+        sprintTarget.setInputType(InputType.TYPE_CLASS_NUMBER);
+        sprintTarget.setHint("Secondi (da 5 a 120)");
+        sprintTarget.setText("10");
+        sprintMode.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,
+                                                  View view, int position, long id) {
+                boolean byDistance = position == 1;
+                sprintTarget.setHint(byDistance ? "Metri (da 10 a 500)"
+                        : "Secondi (da 5 a 120)");
+                sprintTarget.setText(byDistance ? "50" : "10");
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+        Ui.marginBottom(this, sprintCard, sprintTarget, 8);
+        sprintStartButton = Ui.button(this, "▶ Sprint", true);
+        sprintStartButton.setOnClickListener(v -> startSprint());
+        Ui.marginBottom(this, sprintCard, sprintStartButton, 6);
+        sprintCancelButton = Ui.button(this, "Annulla sprint", false);
+        sprintCancelButton.setOnClickListener(v -> startService(
+                new Intent(this, TrackingService.class).setAction(TrackingService.SPRINT_CANCEL)));
+        Ui.marginBottom(this, sprintCard, sprintCancelButton, 8);
+        sprintStatus = Ui.text(this, "Nessuno sprint in corso.", 15, true, Ui.GREEN);
+        Ui.marginBottom(this, sprintCard, sprintStatus, 7);
+        Ui.marginBottom(this, sprintCard, Ui.text(this,
+                "Velocità: stima GNSS, non cronometro certificato. "
+              + "Frequenza e precisione effettive dipendono dal ricevitore; "
+              + "servono velocità e accuratezza GPS valide.",
+                12, false, Ui.MUTED), 4);
+        Ui.marginBottom(this, content, sprintCard, 12);
+
         // La sola mappa live dell'app: posizione corrente e punti GPS di questa sessione.
         LinearLayout positionCard = Ui.card(this);
         Ui.marginBottom(this, positionCard,
@@ -255,6 +315,7 @@ public final class ActiveSessionActivity extends Activity {
 
     private void renderTab(RunState s, boolean active) {
         SessionTabStats.Tab tab = currentTab;
+        sprintCard.setVisibility(tab == SessionTabStats.Tab.RUN ? View.VISIBLE : View.GONE);
         maxRunSpeedContainer.setVisibility(tab == SessionTabStats.Tab.RUN ? View.VISIBLE : View.GONE);
         maxRunSpeed.setText(active && Double.isFinite(s.maxRunSpeedKmh) && s.maxRunSpeedKmh > 0
                 ? RunMath.velocity(s.maxRunSpeedKmh) + " km/h" : "-- km/h");
@@ -305,6 +366,79 @@ public final class ActiveSessionActivity extends Activity {
         } else {
             unclassifiedHint.setVisibility(View.GONE);
         }
+    }
+
+    private void startSprint() {
+        if (!prefs.getBoolean("active", false)
+                || prefs.getLong("active_id", 0) <= 0) {
+            Toast.makeText(this, "Avvia prima una sessione", Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            int countdown = sprintCountdown.getSelectedItemPosition() + 5;
+            boolean byDistance = sprintMode.getSelectedItemPosition() == 1;
+            int target = Integer.parseInt(sprintTarget.getText().toString().trim());
+            if ((!byDistance && (target < 5 || target > 120))
+                    || (byDistance && (target < 10 || target > 500))) {
+                throw new NumberFormatException();
+            }
+            Intent intent = new Intent(this, TrackingService.class)
+                    .setAction(TrackingService.SPRINT_START)
+                    .putExtra(TrackingService.EXTRA_SPRINT_COUNTDOWN, countdown)
+                    .putExtra(TrackingService.EXTRA_SPRINT_MODE,
+                            byDistance ? "DISTANCE" : "TIME")
+                    .putExtra(TrackingService.EXTRA_SPRINT_TARGET, target);
+            sprintStartButton.setEnabled(false);
+            sprintStatus.setText("Richiesta sprint inviata. Attendi il countdown…");
+            startService(intent);
+        } catch (NumberFormatException ex) {
+            Toast.makeText(this, "Inserisci una durata da 5 a 120 s o "
+                    + "una distanza da 10 a 500 m", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void renderSprint(long sessionId, boolean active) {
+        String phase = prefs.getLong("sprint_session_id", -1) == sessionId && active
+                ? prefs.getString("sprint_phase", "IDLE") : "IDLE";
+        boolean counting = "COUNTDOWN".equals(phase);
+        boolean measuring = "ACTIVE".equals(phase);
+        boolean busy = counting || measuring;
+        sprintStartButton.setEnabled(active && sessionId > 0 && !busy);
+        sprintCancelButton.setEnabled(active && busy);
+        sprintCountdown.setEnabled(!busy);
+        sprintMode.setEnabled(!busy);
+        sprintTarget.setEnabled(!busy);
+        if (counting) {
+            long end = prefs.getLong("sprint_countdown_end", 0);
+            long remaining = Math.max(0, (end - SystemClock.elapsedRealtime() + 999) / 1000);
+            sprintStatus.setText("Sprint tra " + remaining + "… Preparati!");
+            return;
+        }
+        int samples = prefs.getInt("sprint_samples", 0);
+        double distance = Double.longBitsToDouble(prefs.getLong(
+                "sprint_distance_bits", Double.doubleToLongBits(0)));
+        double max = Double.longBitsToDouble(prefs.getLong(
+                "sprint_peak_bits", Double.doubleToLongBits(Double.NaN)));
+        double avg = Double.longBitsToDouble(prefs.getLong(
+                "sprint_avg_bits", Double.doubleToLongBits(Double.NaN)));
+        long elapsed = measuring
+                ? Math.max(0, SystemClock.elapsedRealtime() - prefs.getLong("sprint_started", 0))
+                : prefs.getLong("sprint_elapsed", 0);
+        if ("IDLE".equals(phase)) {
+            sprintStatus.setText("Nessuno sprint in corso.");
+            return;
+        }
+        String summary = String.format(java.util.Locale.ITALY,
+                "%s · %.1f m · %s\nVelocità media %s · velocità massima %s\n"
+              + "Campioni GNSS validi: %d",
+                measuring ? "SPRINT IN CORSO" :
+                "FINISHED".equals(phase) ? "SPRINT CONCLUSO" : "SPRINT ANNULLATO",
+                distance, RunMath.duration(elapsed),
+                Double.isFinite(avg) ? RunMath.velocity(avg) + " km/h" : "-- km/h",
+                Double.isFinite(max) ? RunMath.velocity(max) + " km/h" : "-- km/h",
+                samples);
+        sprintStatus.setText(summary + (samples < 2
+                ? "\nMisure insufficienti per una velocità media affidabile." : ""));
     }
 
     private void maybeShowGpsAlert(RunState s) {
@@ -373,6 +507,7 @@ public final class ActiveSessionActivity extends Activity {
                 }
             }
             renderTab(s, active);
+            renderSprint(s.id, active);
             gps.setText(active ? s.gpsStatus : "Inizializzazione del GPS…");
             movement.setText(!active ? "Preparazione sessione…" :
                     "RUN".equals(s.movement) ? "🏃 Corsa" :
