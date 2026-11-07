@@ -74,6 +74,7 @@ public final class TrackingService extends Service implements LocationListener, 
     private boolean gpsIncident, gpsAskedWhileStill;
     private String motionBeforeGpsLoss = "UNKNOWN";
     private final SprintTrial sprint = new SprintTrial();
+    private long lastNormalGpsFixMs = -1;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -197,6 +198,7 @@ public final class TrackingService extends Service implements LocationListener, 
             state.goalM = AppPrefs.goalM(prefs);
             state.id = db.newSession(state.startedWallMs);
         }
+        lastNormalGpsFixMs = -1;
         // Uno sprint precedente non puo' proseguire dopo il riavvio del servizio.
         prefs.edit().putString("sprint_phase", "IDLE")
                 .putLong("sprint_session_id", state.id).apply();
@@ -326,6 +328,14 @@ public final class TrackingService extends Service implements LocationListener, 
                 publishSprint();
             }
         }
+        // I fix sprint ad alta frequenza sono gia' stati letti sopra.
+        // Il tracciamento generale resta a circa 1 Hz, come prima dello sprint:
+        // nessuna nuova pressione sulla classificazione RUN/WALK.
+        long normalFixMs = location.getElapsedRealtimeNanos() / 1_000_000L;
+        if (sprint.busy() && lastNormalGpsFixMs >= 0
+                && normalFixMs >= lastNormalGpsFixMs
+                && normalFixMs - lastNormalGpsFixMs < 900L) return;
+        lastNormalGpsFixMs = normalFixMs;
         long now = SystemClock.elapsedRealtime();
         long ageMs = Math.abs(now - location.getElapsedRealtimeNanos() / 1_000_000);
         float acc = location.getAccuracy();
