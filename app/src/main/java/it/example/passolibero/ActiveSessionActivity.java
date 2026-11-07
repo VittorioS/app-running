@@ -30,7 +30,7 @@ public final class ActiveSessionActivity extends Activity {
     private TextView distance, paceNow, paceAvg, duration, speed, averageSpeed, steps,
             cadence, tabTitle, tabHint, unclassifiedHint, movement, gps, checkpoint, remaining, goalLabel;
     private Button[] tabButtons;
-    private Button trainingButton, exportJsonButton;
+    private Button trainingButton;
     private SessionTabStats.Tab currentTab = SessionTabStats.Tab.TOTAL;
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
@@ -38,7 +38,6 @@ public final class ActiveSessionActivity extends Activity {
     private boolean pendingResumeTabSelection;
     private boolean mapRendered;
     private boolean gpsDialogShown;
-    private long pendingJsonExportSessionId;
 
     private static final int[] CHECKPOINTS = {250, 500, 1000, 2000, 5000};
     private static final int[] GOALS = {0, 1000, 2000, 3000, 5000, 10000, 21097, -1};
@@ -48,7 +47,6 @@ public final class ActiveSessionActivity extends Activity {
         prefs = AppPrefs.get(this);
         db = new TrackerDb(this);
         if (savedState != null) {
-            pendingJsonExportSessionId = savedState.getLong("json_export_session_id", 0);
             int index = savedState.getInt("stats_tab", SessionTabStats.Tab.TOTAL.ordinal());
             if (index >= 0 && index < SessionTabStats.Tab.values().length)
                 currentTab = SessionTabStats.Tab.values()[index];
@@ -58,7 +56,6 @@ public final class ActiveSessionActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle outState) {
         outState.putInt("stats_tab", currentTab.ordinal());
-        outState.putLong("json_export_session_id", pendingJsonExportSessionId);
         super.onSaveInstanceState(outState);
     }
 
@@ -151,21 +148,6 @@ public final class ActiveSessionActivity extends Activity {
         });
         Ui.marginBottom(this, statsCard, trainingButton, 0);
         Ui.marginBottom(this, content, statsCard, 12);
-
-        exportJsonButton = Ui.button(this, "↓ Esporta sessione in JSON", false);
-        exportJsonButton.setOnClickListener(v -> {
-            RunState state = RunState.read(prefs);
-            if (state.id <= 0 || !prefs.getBoolean("active", false)) {
-                Toast.makeText(this, "Nessuna sessione attiva da esportare", Toast.LENGTH_LONG).show();
-                return;
-            }
-            pendingJsonExportSessionId = state.id;
-            SessionJsonExporter.requestSave(this, state.id);
-        });
-        Ui.marginBottom(this, content, exportJsonButton, 5);
-        Ui.marginBottom(this, content, Ui.text(this,
-                "Include statistiche e coordinate GPS precise: scegli dove salvare il file.",
-                12, false, Ui.MUTED), 12);
 
         // La sola mappa live dell'app: posizione corrente e punti GPS di questa sessione.
         LinearLayout positionCard = Ui.card(this);
@@ -268,7 +250,6 @@ public final class ActiveSessionActivity extends Activity {
     }
 
     private void renderTab(RunState s, boolean active) {
-        exportJsonButton.setEnabled(active && s.id > 0);
         SessionTabStats.Tab tab = currentTab;
         trainingButton.setVisibility(tab == SessionTabStats.Tab.TOTAL ? View.GONE : View.VISIBLE);
         trainingButton.setEnabled(active);
@@ -316,14 +297,6 @@ public final class ActiveSessionActivity extends Activity {
             unclassifiedHint.setVisibility(View.VISIBLE);
         } else {
             unclassifiedHint.setVisibility(View.GONE);
-        }
-    }
-
-    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == SessionJsonExporter.REQUEST_CODE) {
-            SessionJsonExporter.onSaveResult(this, pendingJsonExportSessionId, resultCode, data);
-            pendingJsonExportSessionId = 0;
         }
     }
 
