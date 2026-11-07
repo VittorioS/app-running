@@ -9,7 +9,7 @@ statements = ["".join(re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', text))
               for text in re.findall(r"db\.execSQL\((.*?)\);", create_body, re.S)]
 migrations = [(int(version), sql) for version, sql in re.findall(
     r'if \(oldV < (\d+)\) db\.execSQL\("([^"]+)"\)', source)]
-assert [v for v, _ in migrations] == [2, 3, 4]
+assert [v for v, _ in migrations] == [2, 3, 4, 6]
 v5_block = re.search(r'if \(oldV < 5\) \{(.*?)\}', source, re.S)
 assert v5_block, "Missing conservative v5 upgrade"
 v5_sql = re.findall(r'db\.execSQL\("([^"]+)"\)', v5_block.group(1))
