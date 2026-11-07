@@ -32,16 +32,23 @@ public final class WeatherMonitor {
     private static final String CHANNEL = "favorable_running_weather";
     private WeatherMonitor() { }
 
+    /** Migra senza perdere la citta' usata dalle precedenti versioni dell'app. */
+    public static List<WeatherLocations.City> cities(SharedPreferences prefs) {
+        if (prefs.contains("weather_cities"))
+            return WeatherLocations.decode(prefs.getString("weather_cities", ""));
+        List<WeatherLocations.City> old = new java.util.ArrayList<>();
+        if (prefs.contains("weather_lat_bits") && prefs.contains("weather_lon_bits")) {
+            WeatherLocations.City city = WeatherLocations.legacy(
+                    prefs.getString("weather_city", ""),
+                    Double.longBitsToDouble(prefs.getLong("weather_lat_bits", 0)),
+                    Double.longBitsToDouble(prefs.getLong("weather_lon_bits", 0)));
+            if (city != null) old.add(city);
+        }
+        return old;
+    }
+
     public static boolean hasCity(SharedPreferences prefs) {
-        return prefs.contains("weather_lat_bits") && prefs.contains("weather_lon_bits");
-    }
-
-    static double latitude(SharedPreferences prefs) {
-        return Double.longBitsToDouble(prefs.getLong("weather_lat_bits", 0));
-    }
-
-    static double longitude(SharedPreferences prefs) {
-        return Double.longBitsToDouble(prefs.getLong("weather_lon_bits", 0));
+        return !cities(prefs).isEmpty();
     }
 
     static WeatherRules rules(SharedPreferences prefs) {
@@ -99,34 +106,58 @@ public final class WeatherMonitor {
         jobs.schedule(job);
     }
 
+    /** Un controllo per ogni localita', con cooldown e notifiche indipendenti. */
     static void checkAndNotify(Context context) throws java.io.IOException {
         SharedPreferences prefs = AppPrefs.get(context);
         if (!isActive(prefs)) return;
-        double lat = latitude(prefs), lon = longitude(prefs);
-        WeatherApi.Forecast forecast = WeatherApi.forecast(lat, lon);
-        if (!isActive(prefs) || latitude(prefs) != lat || longitude(prefs) != lon) return;
         WeatherRules rules;
         try { rules = rules(prefs); }
         catch (IllegalArgumentException ex) { return; }
         if (Build.VERSION.SDK_INT >= 33
                 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) return;
-        long now = System.currentTimeMillis() / 1000L;
-        long last = prefs.getLong("weather_notified_at", 0);
-        long lastSlot = prefs.getLong("weather_notified_slot", -1);
-        for (WeatherApi.Hour hour : forecast.hours) {
-            if (rules.matches(hour.temperatureC, hour.windKmh)
-                    && WeatherRules.shouldNotify(now, hour.epochSec, last, lastSlot)) {
-                notifyFavorable(context, prefs.getString("weather_city", "Città"),
-                        forecast, hour);
-                prefs.edit().putLong("weather_notified_at", now)
-                        .putLong("weather_notified_slot", hour.epochSec).apply();
-                break;
+
+        List<WeatherLocations.City> target = cities(prefs);
+        int successful = 0;
+        java.io.IOException firstFailure = null;
+        for (WeatherLocations.City city : target) {
+            // La lista potrebbe essere stata modificata mentre era in corso il job.
+            if (!isActive(prefs)) return;
+            if (!WeatherLocations.contains(cities(prefs), city)) continue;
+
+            WeatherApi.Forecast forecast;
+            try {
+                forecast = WeatherApi.forecast(city.latitude, city.longitude);
+                successful++;
+            } catch (java.io.IOException error) {
+                android.util.Log.w("PassoLiberoWeather", "Meteo non disponibile per "
+                        + city.title, error);
+                if (firstFailure == null) firstFailure = error;
+                continue; // Un errore di rete per una citta' non blocca le altre.
+            }
+            if (!WeatherLocations.contains(cities(prefs), city) || !isActive(prefs)) continue;
+            long now = System.currentTimeMillis() / 1000L;
+            String key = WeatherLocations.key(city);
+            String oldCity = prefs.getString("weather_city", "");
+            boolean legacy = !oldCity.isEmpty() && oldCity.equals(city.title);
+            long last = prefs.getLong("weather_notified_at_" + key,
+                    legacy ? prefs.getLong("weather_notified_at", 0) : 0);
+            long lastSlot = prefs.getLong("weather_notified_slot_" + key,
+                    legacy ? prefs.getLong("weather_notified_slot", -1) : -1);
+            for (WeatherApi.Hour hour : forecast.hours) {
+                if (rules.matches(hour.temperatureC, hour.windKmh)
+                        && WeatherRules.shouldNotify(now, hour.epochSec, last, lastSlot)) {
+                    notifyFavorable(context, city, forecast, hour);
+                    prefs.edit().putLong("weather_notified_at_" + key, now)
+                            .putLong("weather_notified_slot_" + key, hour.epochSec).apply();
+                    break;
+                }
             }
         }
+        if (successful == 0 && firstFailure != null) throw firstFailure;
     }
 
-    private static void notifyFavorable(Context context, String city,
+    private static void notifyFavorable(Context context, WeatherLocations.City city,
                                         WeatherApi.Forecast forecast, WeatherApi.Hour hour) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return;
@@ -142,7 +173,7 @@ public final class WeatherMonitor {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification notification = new Notification.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_runner)
-                .setContentTitle("Meteo favorevole a " + city)
+                .setContentTitle("Meteo favorevole a " + city.title)
                 .setContentText(message)
                 .setStyle(new Notification.BigTextStyle().bigText(message
                         + " Previsioni Open-Meteo: da verificare prima di uscire."))
@@ -150,6 +181,7 @@ public final class WeatherMonitor {
                 .setCategory(Notification.CATEGORY_RECOMMENDATION)
                 .setAutoCancel(true)
                 .build();
-        manager.notify(NOTIFICATION_ID, notification);
+        manager.notify("weather_" + WeatherLocations.key(city),
+                NOTIFICATION_ID, notification);
     }
 }

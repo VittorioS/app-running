@@ -34,17 +34,18 @@ public final class WeatherSettingsActivity extends Activity {
     private SharedPreferences prefs;
     private EditText citySearch, minTemp, maxTemp, maxWind;
     private TextView selectedLabel, resultsView, scheduleSummary, searchStatus;
-    private LinearLayout scheduleRows, cityResults;
+    private LinearLayout scheduleRows, cityResults, savedCitiesRows;
     private final List<String> times = new ArrayList<>();
-    private int searchSerial;
+    private final List<WeatherLocations.City> cities = new ArrayList<>();
+    private int searchSerial, previewSerial;
     private Switch enabled;
     private Button searchButton, forecastButton, saveButton;
-    private WeatherApi.City selectedCity;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         prefs = AppPrefs.get(this);
         times.addAll(WeatherSchedule.decode(prefs.getString("weather_times", "")));
+        cities.addAll(WeatherMonitor.cities(prefs));
         LinearLayout root = Ui.vertical(this);
         root.setBackgroundColor(Ui.BG);
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -72,7 +73,11 @@ public final class WeatherSettingsActivity extends Activity {
         enabled.setChecked(prefs.getBoolean("weather_enabled", false));
         Ui.marginBottom(this, card, enabled, 12);
         Ui.marginBottom(this, card,
-                Ui.text(this, "LOCALITÀ", 13, true, Ui.MUTED), 6);
+                Ui.text(this, "CITTÀ DA MONITORARE", 13, true, Ui.MUTED), 6);
+        Ui.marginBottom(this, card, Ui.text(this,
+                "Cerca una città e toccala nei risultati per aggiungerla alla lista. "
+              + "Puoi monitorare fino a 20 città con gli stessi criteri e orari.",
+                13, false, Ui.MUTED), 8);
         citySearch = field("Cerca città (es. Salerno)", "", false);
         citySearch.setSingleLine(true);
         // Campo di ricerca separato dalla localita' confermata e salvata.
@@ -83,15 +88,11 @@ public final class WeatherSettingsActivity extends Activity {
         searchButton.setOnClickListener(v -> searchCities());
         Ui.marginBottom(this, card, searchButton, 9);
 
-        if (WeatherMonitor.hasCity(prefs)) {
-            selectedCity = new WeatherApi.City(prefs.getString("weather_city", ""),
-                    WeatherMonitor.latitude(prefs), WeatherMonitor.longitude(prefs));
-        }
-        selectedLabel = Ui.text(this, selectedCity == null
-                ? "Nessuna località selezionata: cercane una qui sopra."
-                : "Località attuale: " + selectedCity.title,
-                14, true, Ui.GREEN);
+        selectedLabel = Ui.text(this, "", 14, true, Ui.GREEN);
         Ui.marginBottom(this, card, selectedLabel, 8);
+        savedCitiesRows = Ui.vertical(this);
+        Ui.marginBottom(this, card, savedCitiesRows, 8);
+        renderCities();
         searchStatus = Ui.text(this,
                 "Dopo la ricerca, tocca una località nell'elenco dei risultati.",
                 13, false, Ui.MUTED);
@@ -140,7 +141,7 @@ public final class WeatherSettingsActivity extends Activity {
         LinearLayout forecastCard = Ui.card(this);
         Ui.marginBottom(this, forecastCard,
                 Ui.text(this, "PREVISIONI ORARIE · OPEN-METEO", 14, true, Ui.INK), 8);
-        resultsView = Ui.text(this, "Scegli una città e tocca «Aggiorna condizioni meteo adesso».",
+        resultsView = Ui.text(this, "Aggiungi una o più città e tocca «Aggiorna condizioni meteo adesso».",
                 13, false, Ui.MUTED);
         forecastCard.addView(resultsView);
         Ui.marginBottom(this, content, forecastCard, 12);
@@ -151,11 +152,13 @@ public final class WeatherSettingsActivity extends Activity {
               + "può ritardare i controlli programmati per il risparmio energetico, "
               + "quindi non è garantita l'ora esatta; è necessaria una connessione. "
               + "Con lista vuota non avvengono controlli automatici. "
-              + "Massimo un avviso ogni 6 ore. Nessun GPS attivo e nessun servizio permanente.",
+              + "Massimo un avviso ogni 6 ore per ciascuna città. "
+              + "Nessun GPS attivo e nessun servizio permanente.",
                 13, false, Ui.MUTED), 12);
         Ui.marginBottom(this, content, Ui.text(this,
                 "Dati meteo: Open-Meteo.com (previsioni, attribuzione al provider). "
-              + "Servizio esterno: la città e le sue coordinate vengono usate per la richiesta.",
+              + "Servizio esterno: i nomi cercati e le coordinate delle città monitorate "
+              + "vengono usati per le richieste.",
                 12, false, Ui.MUTED), 14);
         Button back = Ui.button(this, "← Torna alla Home", false);
         back.setOnClickListener(v -> finish());
@@ -181,8 +184,8 @@ public final class WeatherSettingsActivity extends Activity {
     private void save() {
         try {
             WeatherRules rules = readRules();
-            if (enabled.isChecked() && selectedCity == null) {
-                Toast.makeText(this, "Scegli prima una località", Toast.LENGTH_LONG).show();
+            if (enabled.isChecked() && cities.isEmpty()) {
+                Toast.makeText(this, "Aggiungi almeno una città da monitorare", Toast.LENGTH_LONG).show();
                 return;
             }
             if (enabled.isChecked() && times.isEmpty()) {
@@ -191,23 +194,17 @@ public final class WeatherSettingsActivity extends Activity {
                 return;
             }
             SharedPreferences.Editor change = prefs.edit()
+                    .putString("weather_cities", WeatherLocations.encode(cities))
                     .putString("weather_times", WeatherSchedule.encode(times))
                     .putBoolean("weather_enabled", enabled.isChecked())
                     .putString("weather_min_c", rules.minTemperatureC == null ? "" : rules.minTemperatureC.toString())
                     .putString("weather_max_c", rules.maxTemperatureC == null ? "" : rules.maxTemperatureC.toString())
                     .putString("weather_max_wind", rules.maxWindKmh == null ? "" : rules.maxWindKmh.toString());
-            if (selectedCity != null) {
-                change.putString("weather_city", selectedCity.title)
-                        .putLong("weather_lat_bits",
-                                Double.doubleToLongBits(selectedCity.latitude))
-                        .putLong("weather_lon_bits",
-                                Double.doubleToLongBits(selectedCity.longitude));
-            }
             change.apply();
             WeatherMonitor.updateSchedule(this);
             Toast.makeText(this, enabled.isChecked()
-                    ? "Criteri salvati: controllo meteo automatico attivo"
-                    : "Criteri salvati: notifiche disattivate", Toast.LENGTH_LONG).show();
+                    ? "Criteri salvati per " + cities.size() + " città: controlli attivi"
+                    : "Criteri e lista città salvati: notifiche disattivate", Toast.LENGTH_LONG).show();
             if (enabled.isChecked() && Build.VERSION.SDK_INT >= 33
                     && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -216,6 +213,36 @@ public final class WeatherSettingsActivity extends Activity {
             }
         } catch (IllegalArgumentException ex) {
             Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void renderCities() {
+        savedCitiesRows.removeAllViews();
+        selectedLabel.setText(cities.isEmpty()
+                ? "Nessuna città nell'elenco."
+                : cities.size() + (cities.size() == 1 ? " città da monitorare:" : " città da monitorare:"));
+        for (WeatherLocations.City city : new ArrayList<>(cities)) {
+            LinearLayout row = Ui.horizontal(this);
+            TextView name = Ui.text(this, "📍 " + city.title, 13, false, Ui.INK);
+            LinearLayout.LayoutParams label = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+            label.rightMargin = Ui.dp(this, 6);
+            row.addView(name, label);
+            Button remove = Ui.button(this, "Rimuovi", false);
+            remove.setContentDescription("Rimuovi " + city.title);
+            remove.setOnClickListener(v -> {
+                cities.remove(city);
+                previewSerial++;
+                renderCities();
+            });
+            row.addView(remove, new LinearLayout.LayoutParams(
+                    Ui.dp(this, 94), Ui.dp(this, 48)));
+            Ui.marginBottom(this, savedCitiesRows, row, 8);
+        }
+        if (!cities.isEmpty()) {
+            Ui.marginBottom(this, savedCitiesRows, Ui.text(this,
+                    "Premi Salva per applicare aggiunte o rimozioni ai controlli automatici.",
+                    12, false, Ui.MUTED), 4);
         }
     }
 
@@ -295,14 +322,27 @@ public final class WeatherSettingsActivity extends Activity {
                     for (WeatherApi.City city : found) {
                         Button option = Ui.button(this, "📍 " + city.title, false);
                         option.setTextSize(14);
-                        option.setContentDescription("Seleziona località " + city.title);
+                        option.setContentDescription("Aggiungi località " + city.title);
                         option.setOnClickListener(v -> {
-                            selectedCity = city;
-                            selectedLabel.setText("✓ Località selezionata: " + city.title);
-                            searchStatus.setText("Località scelta. Premi «Salva condizioni e notifiche» "
-                                    + "per confermare le impostazioni.");
+                            WeatherLocations.City added = new WeatherLocations.City(
+                                    city.title, city.latitude, city.longitude);
+                            if (WeatherLocations.contains(cities, added)) {
+                                searchStatus.setText("«" + city.title
+                                        + "» è già nell'elenco delle città.");
+                                return;
+                            }
+                            if (!WeatherLocations.add(cities, added)) {
+                                searchStatus.setText("Puoi monitorare al massimo "
+                                        + WeatherLocations.MAX_CITIES + " città.");
+                                return;
+                            }
+                            previewSerial++;
+                            renderCities();
+                            searchStatus.setText("✓ «" + city.title + "» aggiunta. "
+                                    + "Puoi cercare altre città o premere Salva.");
                             cityResults.removeAllViews();
                             cityResults.setVisibility(View.GONE);
+                            citySearch.setText("");
                         });
                         Ui.marginBottom(this, cityResults, option, 7);
                     }
@@ -323,8 +363,8 @@ public final class WeatherSettingsActivity extends Activity {
     }
 
     private void previewForecast() {
-        if (selectedCity == null) {
-            Toast.makeText(this, "Seleziona prima una città", Toast.LENGTH_LONG).show();
+        if (cities.isEmpty()) {
+            Toast.makeText(this, "Aggiungi prima una o più città", Toast.LENGTH_LONG).show();
             return;
         }
         final WeatherRules rules;
@@ -333,65 +373,84 @@ public final class WeatherSettingsActivity extends Activity {
             Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
             return;
         }
-        WeatherApi.City city = selectedCity;
+        final List<WeatherLocations.City> requested = new ArrayList<>(cities);
+        final int requestId = ++previewSerial;
         forecastButton.setEnabled(false);
-        resultsView.setText("Caricamento delle previsioni per " + city.title + "…");
+        resultsView.setText("Caricamento delle previsioni per "
+                + requested.size() + " città…");
+
         new Thread(() -> {
-            try {
-                WeatherApi.Forecast forecast = WeatherApi.forecast(city.latitude, city.longitude);
-                long now = System.currentTimeMillis() / 1000L;
-                DateTimeFormatter clock = DateTimeFormatter.ofPattern("EEE HH:mm", Locale.ITALY)
-                        .withZone(forecast.zone);
-                StringBuilder text = new StringBuilder("Aggiornato adesso · previsioni Open-Meteo per ")
-                        .append(city.title).append("\n")
-                        .append("✅ = tutti i criteri rispettati | ✕ = non rispettati\n\n");
-                int count = 0, matching = 0;
-                WeatherApi.Hour closest = null;
-                for (WeatherApi.Hour hour : forecast.hours) {
-                    if (hour.epochSec <= now && hour.epochSec + 3600 > now) {
-                        closest = hour;
-                        break;
-                    }
-                }
-                if (closest != null) {
-                    boolean goodNow = rules.matches(closest.temperatureC, closest.windKmh);
-                    text.append(goodNow ? "✅ CONDIZIONI ADESSO FAVOREVOLI" :
-                            "✕ CONDIZIONI ADESSO NON FAVOREVOLI")
-                            .append(" (stima oraria) · ")
-                            .append(String.format(Locale.ITALY, "%.1f °C", closest.temperatureC))
-                            .append(" · vento ")
-                            .append(String.format(Locale.ITALY, "%.0f km/h", closest.windKmh))
+            StringBuilder report = new StringBuilder();
+            int failures = 0;
+            for (WeatherLocations.City city : requested) {
+                if (requestId != previewSerial || isFinishing() || isDestroyed()) return;
+                try {
+                    WeatherApi.Forecast forecast = WeatherApi.forecast(city.latitude, city.longitude);
+                    report.append(formatForecastCity(city, forecast, rules)).append("\n\n");
+                } catch (Exception ex) {
+                    failures++;
+                    report.append("⚠ ").append(city.title)
+                            .append(": previsioni non disponibili. Controlla la connessione.")
                             .append("\n\n");
+                    android.util.Log.w("PassoLiberoWeather", "Previsioni non disponibili per "
+                            + city.title, ex);
                 }
-                for (WeatherApi.Hour hour : forecast.hours) {
-                    if (hour.epochSec + 3600 <= now || hour.epochSec >= now + 24 * 3600) continue;
-                    boolean good = rules.matches(hour.temperatureC, hour.windKmh);
-                    count++;
-                    if (good) matching++;
-                    text.append(good ? "✅ " : "✕ ")
-                            .append(clock.format(Instant.ofEpochSecond(hour.epochSec)))
-                            .append(" · ").append(String.format(Locale.ITALY, "%.1f °C", hour.temperatureC))
-                            .append(" · vento ")
-                            .append(String.format(Locale.ITALY, "%.0f km/h", hour.windKmh))
-                            .append('\n');
-                }
-                text.append("\n").append(matching).append(" ore favorevoli su ")
-                        .append(count).append(" valutate.\n")
-                        .append("Sono previsioni soggette a variazioni; non garantiscono "
-                              + "le condizioni effettive.");
+                final String text = report.toString();
                 main.post(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    forecastButton.setEnabled(true);
-                    resultsView.setText(text.toString());
-                });
-            } catch (Exception ex) {
-                main.post(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    forecastButton.setEnabled(true);
-                    resultsView.setText("Previsioni non disponibili: " + ex.getMessage());
+                    if (requestId != previewSerial || isFinishing() || isDestroyed()) return;
+                    resultsView.setText(text + "\nCaricamento delle altre città in corso…");
                 });
             }
-        }, "WeatherForecastPreview").start();
+            final int errors = failures;
+            final String result = report.toString();
+            main.post(() -> {
+                if (requestId != previewSerial || isFinishing() || isDestroyed()) return;
+                forecastButton.setEnabled(true);
+                resultsView.setText(result + (errors > 0
+                        ? errors + " città senza dati. Puoi riprovare più tardi."
+                        : "Tutte le città controllate. Le previsioni possono variare."));
+            });
+        }, "WeatherMultiCityPreview").start();
+    }
+
+    private String formatForecastCity(WeatherLocations.City city,
+                                      WeatherApi.Forecast forecast, WeatherRules rules) {
+        long now = System.currentTimeMillis() / 1000L;
+        DateTimeFormatter clock = DateTimeFormatter.ofPattern("EEE HH:mm", Locale.ITALY)
+                .withZone(forecast.zone);
+        StringBuilder text = new StringBuilder("📍 ").append(city.title)
+                .append("\n✅ = criteri rispettati | ✕ = non rispettati\n");
+        WeatherApi.Hour closest = null;
+        int count = 0, matching = 0;
+        for (WeatherApi.Hour hour : forecast.hours) {
+            if (hour.epochSec <= now && hour.epochSec + 3600 > now) {
+                closest = hour;
+                break;
+            }
+        }
+        if (closest != null) {
+            text.append(rules.matches(closest.temperatureC, closest.windKmh)
+                    ? "✅ Adesso favorevole" : "✕ Adesso non favorevole")
+                    .append(" (stima oraria) · ")
+                    .append(String.format(Locale.ITALY, "%.1f °C", closest.temperatureC))
+                    .append(" · vento ")
+                    .append(String.format(Locale.ITALY, "%.0f km/h", closest.windKmh))
+                    .append("\n");
+        }
+        for (WeatherApi.Hour hour : forecast.hours) {
+            if (hour.epochSec + 3600 <= now || hour.epochSec >= now + 24 * 3600) continue;
+            boolean good = rules.matches(hour.temperatureC, hour.windKmh);
+            count++;
+            if (good) matching++;
+            text.append(good ? "✅ " : "✕ ")
+                    .append(clock.format(Instant.ofEpochSecond(hour.epochSec)))
+                    .append(" · ").append(String.format(Locale.ITALY, "%.1f °C", hour.temperatureC))
+                    .append(" · vento ")
+                    .append(String.format(Locale.ITALY, "%.0f km/h", hour.windKmh))
+                    .append('\n');
+        }
+        return text.append(matching).append(" ore favorevoli su ")
+                .append(count).append(" nelle prossime 24 ore.").toString();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode,

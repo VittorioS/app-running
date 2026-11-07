@@ -35,3 +35,6 @@ java -cp build-test UpdateMetadataReaderTest
 
 javac -d build-test app/src/main/java/it/example/passolibero/RunPeakSpeedPolicy.java tests/RunPeakSpeedPolicyTest.java
 java -cp build-test RunPeakSpeedPolicyTest
+
+javac -d build-test app/src/main/java/it/example/passolibero/WeatherLocations.java tests/WeatherLocationsTest.java
+java -cp build-test WeatherLocationsTest
