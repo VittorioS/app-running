@@ -720,7 +720,6 @@ public final class TrackingService extends Service implements LocationListener, 
     private void stopSensors() {
         try { locationManager.removeUpdates(this); } catch (SecurityException ignored) { }
         sensors.unregisterListener(this);
-        sprintGpsRequested = false;
     }
 
     @Override public void onDestroy() {
