@@ -5,10 +5,15 @@ on:
     branches:
       - main
       - feature/passolibero-osm-v2
+      - feature/v2-session-stats-tabs
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: debug-signing-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -92,6 +97,14 @@ jobs:
         run: |
           sh tests/run-core-tests.sh
           python3 tests/check-db-migration.py
+          python3 tests/check-weather-search.py
+          python3 tests/check-session-deletion.py
+
+      - name: Prepara firma debug stabile
+        shell: bash
+        env:
+          PASSOLIBERO_SIGNING_PASSPHRASE: ${{ secrets.PASSOLIBERO_SIGNING_PASSPHRASE }}
+        run: bash ci/prepare-debug-signing.sh
 
       # 8. Compila l'applicazione Android
       - name: Compila APK debug
@@ -103,9 +116,66 @@ jobs:
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/apk/debug/app-debug.apk
+          if [[ "${PASSOLIBERO_SIGNED:-false}" == "true" ]]; then
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/apk-cert.txt"
+            actual="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/apk-cert.txt" | head -1)"
+            expected="$(cat .github/signing/debug-cert.sha256)"
+            if [[ -z "$actual" || "$actual" != "$expected" ]]; then
+              echo "::error::Firma dell'APK diversa dal certificato debug persistente!"
+              exit 1
+            fi
+            echo "Certificato debug verificato: $actual"
+          fi
+
+      # Canale aggiornamenti pubblico della PR #2, solo dopo firma e test.
+      - name: Pubblica aggiornamento debug PR 2
+        if: env.PASSOLIBERO_SIGNED == 'true' && github.ref_name == 'feature/v2-session-stats-tabs'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="debug-pr-2"
+          version_code="$((10000 + GITHUB_RUN_NUMBER))"
+          filename="passolibero-debug-v${version_code}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/$filename"
+          export UPDATE_VERSION_CODE="$version_code" UPDATE_APK_NAME="$filename"
+          export UPDATE_APK_SHA256="$(sha256sum "$RUNNER_TEMP/$filename" | cut -d' ' -f1)"
+          export UPDATE_CERT_SHA256="$(cat .github/signing/debug-cert.sha256)"
+          python3 - <<'PY'
+          import json, os, pathlib
+          payload = {
+              "schema": 1,
+              "channel": "debug-pr-2",
+              "packageName": "it.example.passolibero",
+              "versionCode": int(os.environ["UPDATE_VERSION_CODE"]),
+              "apk": os.environ["UPDATE_APK_NAME"],
+              "sha256": os.environ["UPDATE_APK_SHA256"],
+              "certificateSha256": os.environ["UPDATE_CERT_SHA256"],
+              "sourceCommit": os.environ["GITHUB_SHA"],
+              "sourceBranch": os.environ["GITHUB_REF_NAME"]
+          }
+          pathlib.Path(os.environ["RUNNER_TEMP"], "update.json").write_text(
+              json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "PassoLibero V2 - Debug PR #2" \
+              --notes "Canale di sviluppo della PR #2. APK firmati; non e' una release stabile."
+          fi
+          # APK con nome univoco; update.json aggiornato per ultimo.
+          gh release upload "$tag" "$RUNNER_TEMP/$filename" --repo "$GITHUB_REPOSITORY"
+          gh release upload "$tag" "$RUNNER_TEMP/update.json" \
+            --clobber --repo "$GITHUB_REPOSITORY"
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" \
+            --title "PassoLibero V2 - Debug PR #2 - build $GITHUB_RUN_NUMBER" \
+            --notes "Build $GITHUB_RUN_NUMBER dalla PR #2 ($GITHUB_SHA). Sviluppo, non stabile."
+          echo "Update debug pronto: https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"
 
       # 10. Pubblica l'APK per il download
       - name: Pubblica APK
+        if: env.PASSOLIBERO_SIGNED == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: PassoLibero-Android15-debug

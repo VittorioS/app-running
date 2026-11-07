@@ -63,3 +63,66 @@ I file sorgente Java, il manifesto, i test e il README sono versionati singolarm
 3. Controllare l'aggiornamento linea/marker in Home. Tornare alla schermata statistiche, cambiare checkpoint e obiettivo chilometrico.
 4. Terminare: il percorso deve sparire dalla Home ed essere consultabile soltanto nello Storico, senza segmenti fittizi sui tratti con GPS perso.
 5. Senza Internet: GPS, conteggio e percorso continuano; tiles OSM non già in cache potrebbero non apparire.
+
+## Installazione APK debug senza disinstallare a ogni aggiornamento
+
+GitHub Actions usa una firma debug **persistente** e un `versionCode` crescente.
+La chiave privata non viene mai committata in chiaro: il repository pubblico
+contiene solo un keystore cifrato e l'impronta pubblica del certificato.
+
+### Attivazione (una sola volta, anche da telefono)
+
+1. In GitHub apri **Settings → Secrets and variables → Actions**
+   e scegli **New repository secret**.
+2. Crea il secret `PASSOLIBERO_SIGNING_PASSPHRASE` con una password
+   casuale robusta di almeno 32 caratteri, da custodire nel tuo password manager.
+   Non inserirla nel repository, né condividerla in chat.
+3. Avvia nuovamente il workflow **PassoLibero - Genera APK Android**
+   sul ramo `feature/v2-session-stats-tabs` dalla scheda **Actions**.
+4. La prima esecuzione crea una chiave debug e registra SOLO
+   `.github/signing/debug-keystore.p12.enc` (cifrato con
+   AES-256-CBC/PBKDF2) e `debug-cert.sha256` nel ramo.
+   Tutte le build seguenti decifrano e riutilizzano la medesima chiave.
+5. Scarica l'APK soltanto dalle esecuzioni in cui l'artefatto
+   `PassoLibero-Android15-debug` viene pubblicato e la firma è verificata.
+
+Se il secret manca, la CI esegue comunque test e compilazione, ma
+**salta la pubblicazione dell'APK debug**, per evitare firme variabili.
+
+**Attenzione:** la prima build con questa firma non può aggiornare
+la vecchia installazione firmata diversamente. Prima esporta tutte
+le sessioni importanti in JSON, poi esegui una sola disinstallazione
+e installa il nuovo APK. Le build debug successive si possono
+installare direttamente sopra la precedente senza cancellare dati.
+Non alterare la passphrase né eliminare il file cifrato: ciò
+renderebbe impossibile riutilizzare quella chiave.
+
+## Aggiornamenti APK dall'app (V2)
+
+La Home include **Aggiornamenti dell'app** con due canali: **Debug PR #2**
+e **Stabile**. La PR #2 pubblica gli APK debug firmati su una GitHub
+pre-release dedicata \`debug-pr-2\` dopo i test. Non si accede agli artifact
+temporanei di GitHub Actions e non ci sono token di accesso nell'APK.
+
+Per ogni compilazione riuscita, il workflow pubblica un file
+\`passolibero-debug-v<VERSION_CODE>.apk\` e \`update.json\` (versione, SHA-256
+del file e del certificato). Il JSON viene caricato *dopo* l'APK. L'app
+controlla la versione installata, scarica tramite DownloadManager e verifica
+il file completo in locale: SHA-256, identificativo applicazione, versione
+superiore, firma del pacchetto già installato e certificato dichiarato.
+**Non si aggiorna mentre è attiva una sessione GPS.** Android chiede sempre
+la conferma dell'installazione e, quando necessario, il consenso a
+«Installare app sconosciute» da PassoLibero.
+
+Il canale **Stabile** può essere attivato in futuro pubblicando una release
+GitHub tag \`stable\` con file \`update.json\` e APK
+\`passolibero-stable-v<VERSION_CODE>.apk\` coerente e firmato con lo
+**stesso certificato** dell'app già installata. Altrimenti la verifica
+blocca correttamente l'aggiornamento incrociato.
+
+La pubblicazione GitHub di release e allegati richiede \`contents: write\`
+del token GitHub Actions. Se il workflow fallisce al passaggio «Pubblica
+aggiornamento debug PR 2», verificare in **Settings → Actions → General →
+Workflow permissions** che siano consentite le autorizzazioni di scrittura
+e che il repository non abbia policy di protezione che impediscano il
+rilascio. Non abilitare autorizzazioni più ampie del necessario.

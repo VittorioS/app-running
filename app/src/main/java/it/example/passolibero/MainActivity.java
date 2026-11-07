@@ -91,7 +91,13 @@ public final class MainActivity extends Activity {
         }
         Button history = Ui.button(this, "📚  Storico delle sessioni", false);
         history.setOnClickListener(v -> startActivity(new Intent(this, HistoryActivity.class)));
-        Ui.marginBottom(this, content, history, 18);
+        Ui.marginBottom(this, content, history, 9);
+        Button weather = Ui.button(this, "☀ Meteo per correre · notifiche personalizzate", false);
+        weather.setOnClickListener(v -> startActivity(new Intent(this, WeatherSettingsActivity.class)));
+        Ui.marginBottom(this, content, weather, 9);
+        Button updates = Ui.button(this, "⬇  Aggiornamenti dell'app", false);
+        updates.setOnClickListener(v -> startActivity(new Intent(this, UpdateActivity.class)));
+        Ui.marginBottom(this, content, updates, 18);
 
         Ui.marginBottom(this, content, Ui.text(this, "IMPOSTAZIONI DI ALLENAMENTO", 14, true, Ui.INK), 10);
         LinearLayout settings = Ui.card(this);

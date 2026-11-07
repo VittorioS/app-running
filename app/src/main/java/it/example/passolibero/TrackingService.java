@@ -33,6 +33,11 @@ public final class TrackingService extends Service implements LocationListener, 
     public static final String STOP = "it.example.passolibero.STOP";
     public static final String LABEL_WALK = "it.example.passolibero.LABEL_WALK";
     public static final String LABEL_RUN = "it.example.passolibero.LABEL_RUN";
+    public static final String SPRINT_START = "it.example.passolibero.SPRINT_START";
+    public static final String SPRINT_CANCEL = "it.example.passolibero.SPRINT_CANCEL";
+    public static final String EXTRA_SPRINT_COUNTDOWN = "sprint_countdown";
+    public static final String EXTRA_SPRINT_MODE = "sprint_mode";
+    public static final String EXTRA_SPRINT_TARGET = "sprint_target";
     private static final String CHANNEL = "running_tracking";
     private static final int NOTIFICATION_ID = 501;
     private static final String TAG = "PassoLibero";
@@ -68,6 +73,8 @@ public final class TrackingService extends Service implements LocationListener, 
     private long poorSince = -1, recoverySince = -1;
     private boolean gpsIncident, gpsAskedWhileStill;
     private String motionBeforeGpsLoss = "UNKNOWN";
+    private final SprintTrial sprint = new SprintTrial();
+    private long lastNormalGpsFixMs = -1;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -98,6 +105,34 @@ public final class TrackingService extends Service implements LocationListener, 
                 trainingUntilElapsed = SystemClock.elapsedRealtime() + 30_000;
                 state.gpsStatus = "Apprendimento " + (label == MovementClassifier.Kind.RUN ? "corsa" : "camminata") + " (30 s)";
                 state.save(prefs, true);
+            });
+            return START_STICKY;
+        }
+        if (SPRINT_START.equals(action)) {
+            final int countdown = intent.getIntExtra(EXTRA_SPRINT_COUNTDOWN, 5);
+            final int target = intent.getIntExtra(EXTRA_SPRINT_TARGET, 10);
+            final String modeName = intent.getStringExtra(EXTRA_SPRINT_MODE);
+            work.post(() -> {
+                if (state == null || !initialized || !prefs.getBoolean("active", false)) return;
+                try {
+                    SprintTrial.Mode mode = SprintTrial.Mode.valueOf(modeName == null ? "" : modeName);
+                    sprint.start(SystemClock.elapsedRealtime(), countdown, mode, target);
+                    publishSprint();
+                    requestSprintGps(true);
+                    if (voice != null && AppPrefs.voiceEnabled(prefs))
+                        voice.speak("Sprint tra " + countdown + " secondi");
+                } catch (IllegalArgumentException | IllegalStateException ex) {
+                    Log.w(TAG, "Richiesta sprint non valida", ex);
+                }
+            });
+            return START_STICKY;
+        }
+        if (SPRINT_CANCEL.equals(action)) {
+            work.post(() -> {
+                if (state == null || !sprint.busy()) return;
+                sprint.cancel(SystemClock.elapsedRealtime());
+                requestSprintGps(false);
+                publishSprint();
             });
             return START_STICKY;
         }
@@ -163,6 +198,10 @@ public final class TrackingService extends Service implements LocationListener, 
             state.goalM = AppPrefs.goalM(prefs);
             state.id = db.newSession(state.startedWallMs);
         }
+        lastNormalGpsFixMs = -1;
+        // Uno sprint precedente non puo' proseguire dopo il riavvio del servizio.
+        prefs.edit().putString("sprint_phase", "IDLE")
+                .putLong("sprint_session_id", state.id).apply();
         state.lastTickElapsedMs = SystemClock.elapsedRealtime();
         state.lastLocationValid = false; // Ripresa: nessun marker da una posizione vecchia.
         prefs.edit().putBoolean("gps_ack_needed", false).putBoolean("gps_incident", false).apply();
@@ -187,14 +226,7 @@ public final class TrackingService extends Service implements LocationListener, 
         lastUiSavedElapsed = SystemClock.elapsedRealtime();
         syncVoiceCoach();
 
-        try {
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
-                    1_000L, 0f, this, workerThread.getLooper());
-        } catch (SecurityException | IllegalArgumentException ex) {
-            state.gpsStatus = "GPS non disponibile";
-            state.save(prefs, true);
-            Log.e(TAG, "Registrazione GPS fallita", ex);
-        }
+        requestSprintGps(false);
         if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED) {
             stepSensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
             if (stepSensor != null) stepSensorAvailable = sensors.registerListener(this, stepSensor,
@@ -228,6 +260,7 @@ public final class TrackingService extends Service implements LocationListener, 
         @Override public void run() {
             if (state == null) return;
             long now = SystemClock.elapsedRealtime();
+            advanceSprint(now);
             state.lastTickElapsedMs = now;
             state.goalM = AppPrefs.goalM(prefs);
             state.cadenceSpm = cadenceSpm(now);
@@ -276,6 +309,33 @@ public final class TrackingService extends Service implements LocationListener, 
     @Override public void onLocationChanged(Location location) {
         // Callback richiesta sullo stesso Looper del worker.
         if (state == null || !location.hasAccuracy()) return;
+        // Campioni sprint elaborati separatamente dal filtro per la sessione:
+        // lettura nativa GNSS a basso intervallo, senza modificare distanza/classificazione.
+        if (sprint.phase() == SprintTrial.Phase.COUNTDOWN
+                || sprint.phase() == SprintTrial.Phase.ACTIVE) {
+            long sprintNow = SystemClock.elapsedRealtime();
+            advanceSprint(sprintNow);
+            if (sprint.phase() == SprintTrial.Phase.ACTIVE && location.hasSpeed()
+                    && location.hasSpeedAccuracy()) {
+                sprint.onFix(sprintNow, location.getElapsedRealtimeNanos() / 1_000_000L,
+                        location.getSpeed(), location.getSpeedAccuracyMetersPerSecond(),
+                        location.getAccuracy());
+                if (!sprint.busy()) {
+                    requestSprintGps(false);
+                    if (voice != null && AppPrefs.voiceEnabled(prefs))
+                        voice.speak("Sprint terminato");
+                }
+                publishSprint();
+            }
+        }
+        // I fix sprint ad alta frequenza sono gia' stati letti sopra.
+        // Il tracciamento generale resta a circa 1 Hz, come prima dello sprint:
+        // nessuna nuova pressione sulla classificazione RUN/WALK.
+        long normalFixMs = location.getElapsedRealtimeNanos() / 1_000_000L;
+        if (sprint.busy() && lastNormalGpsFixMs >= 0
+                && normalFixMs >= lastNormalGpsFixMs
+                && normalFixMs - lastNormalGpsFixMs < 900L) return;
+        lastNormalGpsFixMs = normalFixMs;
         long now = SystemClock.elapsedRealtime();
         long ageMs = Math.abs(now - location.getElapsedRealtimeNanos() / 1_000_000);
         float acc = location.getAccuracy();
@@ -374,6 +434,10 @@ public final class TrackingService extends Service implements LocationListener, 
         state.distanceM += delta;
         if (movement == MovementClassifier.Kind.WALK) state.walkM += delta;
         else if (movement == MovementClassifier.Kind.RUN) state.runM += delta;
+        // Statistica passiva: solo corsa confermata e fix GPS affidabile.
+        // Non interviene su classificazione, velocita istantanea o distanza.
+        state.maxRunSpeedKmh = RunPeakSpeedPolicy.update(state.maxRunSpeedKmh,
+                movement.name(), moving, freshActivityFix, acc, delta, pointSpeed);
 
         // Punti del percorso quando ci si sposta; a riposo al massimo ogni 15 s.
         if (delta > 0 || location.getTime() - lastPointWall >= 15_000) {
@@ -452,6 +516,61 @@ public final class TrackingService extends Service implements LocationListener, 
         state.movingMs = motionTimeline.movingMs();
         state.movement = motionTimeline.visible().name();
         if (motionTimeline.visible() == MovementClassifier.Kind.STILL) state.speedKmh = 0;
+    }
+
+    /** Ritorna sempre a 1 Hz finita la prova; 200 ms e' una richiesta, non una garanzia. */
+    private void requestSprintGps(boolean fast) {
+        if (locationManager == null || workerThread == null) return;
+        try {
+            locationManager.removeUpdates(this);
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
+                    fast ? 200L : 1_000L, 0f, this, workerThread.getLooper());
+        } catch (SecurityException | IllegalArgumentException ex) {
+            Log.w(TAG, "Frequenza GPS richiesta non disponibile", ex);
+            if (fast) {
+                // Ripristina comunque la lettura normale: lo sprint resta misurabile
+                // ai campioni effettivamente forniti dal ricevitore.
+                requestSprintGps(false);
+            } else if (state != null) {
+                state.gpsStatus = "GPS non disponibile";
+                state.save(prefs, true);
+            }
+        }
+    }
+
+    private void advanceSprint(long now) {
+        if (!sprint.busy()) return;
+        SprintTrial.Phase before = sprint.phase();
+        sprint.advance(now);
+        if (before == SprintTrial.Phase.COUNTDOWN
+                && sprint.phase() == SprintTrial.Phase.ACTIVE
+                && voice != null && AppPrefs.voiceEnabled(prefs))
+            voice.speak("Via, sprint");
+        if (!sprint.busy()) {
+            requestSprintGps(false);
+            if (voice != null && AppPrefs.voiceEnabled(prefs))
+                voice.speak("Sprint terminato");
+        }
+        publishSprint();
+    }
+
+    private void publishSprint() {
+        if (state == null) return;
+        long now = SystemClock.elapsedRealtime();
+        prefs.edit().putLong("sprint_session_id", state.id)
+                .putString("sprint_phase", sprint.phase().name())
+                .putString("sprint_mode", sprint.mode().name())
+                .putInt("sprint_countdown", sprint.countdownSeconds())
+                .putInt("sprint_target", sprint.target())
+                .putLong("sprint_countdown_end", sprint.countdownEndMs())
+                .putLong("sprint_started", sprint.startedMs())
+                .putLong("sprint_elapsed", sprint.elapsedMs(now))
+                .putLong("sprint_distance_bits", Double.doubleToLongBits(sprint.distanceM()))
+                .putLong("sprint_peak_bits", Double.doubleToLongBits(sprint.peakSpeedKmh()))
+                .putLong("sprint_avg_bits", Double.doubleToLongBits(sprint.averageSpeedKmh(now)))
+                .putInt("sprint_samples", sprint.samples())
+                .putString("sprint_finish_reason", sprint.finishReason())
+                .apply();
     }
 
     private void reportGpsQuality(boolean good, long now) {
@@ -547,6 +666,10 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         if (newSteps > 0) {
             state.steps += newSteps;
+            // Attribuzione per la UI, senza alterare la classificazione del movimento.
+            // I passi arrivati mentre lo stato e' incerto restano solo nel totale.
+            if ("RUN".equals(state.movement)) state.runSteps += newSteps;
+            else if ("WALK".equals(state.movement)) state.walkSteps += newSteps;
             state.lastStepElapsedMs = stamp;
             trimSteps(stamp);
         }
@@ -581,6 +704,10 @@ public final class TrackingService extends Service implements LocationListener, 
         advanceTimeline(now);
         motionTimeline.finish();
         applyTimeline();
+        if (sprint.busy()) {
+            sprint.cancel(now);
+            publishSprint();
+        }
         if (BuildConfig.DEBUG) {
             try {
                 Class.forName(getPackageName() + ".BatteryAutoCapture")

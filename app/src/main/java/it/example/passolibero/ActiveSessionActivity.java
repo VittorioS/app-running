@@ -27,11 +27,19 @@ public final class ActiveSessionActivity extends Activity {
     private SharedPreferences prefs;
     private TrackerDb db;
     private TrackMap map;
-    private TextView distance, paceNow, paceAvg, duration, movingTime, speed, steps,
-            cadence, runTime, walkTime, stillTime, unknownTime, movingUnknownTime, runDistance, walkDistance,
-            movement, gps, checkpoint, remaining, goalLabel;
+    private TextView distance, paceNow, paceAvg, duration, speed, averageSpeed, maxRunSpeed, steps,
+            cadence, tabTitle, tabHint, unclassifiedHint, movement, gps, checkpoint, remaining, goalLabel;
+    private Button[] tabButtons;
+    private Button trainingButton, sprintStartButton, sprintCancelButton;
+    private Spinner sprintCountdown, sprintMode;
+    private EditText sprintTarget;
+    private TextView sprintStatus;
+    private LinearLayout maxRunSpeedContainer, sprintCard;
+    private SessionTabStats.Tab currentTab = SessionTabStats.Tab.TOTAL;
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
+    // Consente una sola selezione automatica dopo onResume. Un tap manuale la annulla.
+    private boolean pendingResumeTabSelection;
     private boolean mapRendered;
     private boolean gpsDialogShown;
 
@@ -42,7 +50,17 @@ public final class ActiveSessionActivity extends Activity {
         super.onCreate(savedState);
         prefs = AppPrefs.get(this);
         db = new TrackerDb(this);
+        if (savedState != null) {
+            int index = savedState.getInt("stats_tab", SessionTabStats.Tab.TOTAL.ordinal());
+            if (index >= 0 && index < SessionTabStats.Tab.values().length)
+                currentTab = SessionTabStats.Tab.values()[index];
+        }
         buildUi();
+    }
+
+    @Override protected void onSaveInstanceState(Bundle outState) {
+        outState.putInt("stats_tab", currentTab.ordinal());
+        super.onSaveInstanceState(outState);
     }
 
     private TextView stat(LinearLayout parent, String name, String initial) {
@@ -82,14 +100,118 @@ public final class ActiveSessionActivity extends Activity {
             Ui.marginBottom(this, content, batteryDebug, 12);
         }
 
-        LinearLayout primary = Ui.card(this);
-        Ui.marginBottom(this, primary, Ui.text(this, "DISTANZA TOTALE", 12, true, Ui.MUTED), 3);
-        distance = Ui.text(this, "0,00 km", 44, true, Ui.INK);
-        Ui.marginBottom(this, primary, distance, 13);
-        paceNow = stat(primary, "RITMO ATTUALE (min/km)", "--:-- min/km");
-        paceAvg = stat(primary, "RITMO MEDIO (min/km)", "--:-- min/km");
-        duration = stat(primary, "TEMPO TOTALE", "00:00");
-        Ui.marginBottom(this, content, primary, 12);
+        // Le tre tab modificano solo la visualizzazione: il classificatore GPS resta invariato.
+        LinearLayout tabBar = Ui.horizontal(this);
+        tabButtons = new Button[3];
+        String[] labels = {"🏃 Corsa", "🚶 Camminata", "∑ Totali"};
+        SessionTabStats.Tab[] tabs = SessionTabStats.Tab.values();
+        for (int i = 0; i < tabs.length; i++) {
+            final SessionTabStats.Tab tab = tabs[i];
+            Button tabButton = Ui.button(this, labels[i], false);
+            tabButton.setTextSize(13);
+            tabButton.setContentDescription("Statistiche " + labels[i]);
+            tabButton.setOnClickListener(v -> {
+                pendingResumeTabSelection = false;
+                currentTab = tab;
+                updateTabButtons();
+                renderTab(RunState.read(prefs), prefs.getBoolean("active", false));
+            });
+            tabButtons[i] = tabButton;
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(this, 50), 1f);
+            lp.rightMargin = Ui.dp(this, i == 2 ? 0 : 5);
+            tabBar.addView(tabButton, lp);
+        }
+        Ui.marginBottom(this, content, tabBar, 12);
+        updateTabButtons();
+
+        LinearLayout statsCard = Ui.card(this);
+        tabTitle = Ui.text(this, "TOTALI CORSA + CAMMINATA", 14, true, Ui.MUTED);
+        Ui.marginBottom(this, statsCard, tabTitle, 4);
+        distance = Ui.text(this, "0,00 km", 43, true, Ui.INK);
+        Ui.marginBottom(this, statsCard, distance, 12);
+        duration = stat(statsCard, "TEMPO", "00:00");
+        paceAvg = stat(statsCard, "RITMO MEDIO (min/km)", "--:-- min/km");
+        averageSpeed = stat(statsCard, "VELOCITÀ MEDIA", "-- km/h");
+        maxRunSpeedContainer = Ui.vertical(this);
+        maxRunSpeed = stat(maxRunSpeedContainer, "VELOCITÀ MASSIMA CORSA", "-- km/h");
+        Ui.marginBottom(this, statsCard, maxRunSpeedContainer, 0);
+        paceNow = stat(statsCard, "RITMO ATTUALE (min/km)", "--:-- min/km");
+        speed = stat(statsCard, "VELOCITÀ ATTUALE", "-- km/h");
+        steps = stat(statsCard, "PASSI ATTRIBUITI", "0");
+        cadence = stat(statsCard, "CADENZA MEDIA", "-- passi/min");
+        tabHint = Ui.text(this, "", 13, false, Ui.MUTED);
+        Ui.marginBottom(this, statsCard, tabHint, 8);
+        unclassifiedHint = Ui.text(this, "", 12, false, Ui.MUTED);
+        Ui.marginBottom(this, statsCard, unclassifiedHint, 0);
+        // Un solo pulsante contestuale: l'azione dipende dalla tab selezionata.
+        // Nessun pulsante di addestramento nella tab Totali.
+        trainingButton = Ui.button(this, "Insegna all'app: sto correndo", false);
+        trainingButton.setOnClickListener(v -> {
+            if (currentTab == SessionTabStats.Tab.RUN) {
+                label(TrackingService.LABEL_RUN);
+            } else if (currentTab == SessionTabStats.Tab.WALK) {
+                label(TrackingService.LABEL_WALK);
+            }
+        });
+        Ui.marginBottom(this, statsCard, trainingButton, 0);
+        Ui.marginBottom(this, content, statsCard, 12);
+
+        sprintCard = Ui.card(this);
+        Ui.marginBottom(this, sprintCard,
+                Ui.text(this, "🏃 MODALITÀ SPRINT", 17, true, Ui.INK), 7);
+        Ui.marginBottom(this, sprintCard, Ui.text(this,
+                "Imposta il countdown (5–10 s), poi scegli la durata in secondi "
+              + "oppure la distanza in metri. Durante il countdown e lo sprint "
+              + "il GPS richiede fix ogni 200 ms, se supportati dal telefono.",
+                13, false, Ui.MUTED), 9);
+        Ui.marginBottom(this, sprintCard, Ui.text(this,
+                "COUNTDOWN", 12, true, Ui.MUTED), 4);
+        sprintCountdown = new Spinner(this);
+        sprintCountdown.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"5 secondi", "6 secondi", "7 secondi",
+                        "8 secondi", "9 secondi", "10 secondi"}));
+        sprintCountdown.setSelection(0);
+        Ui.marginBottom(this, sprintCard, sprintCountdown, 9);
+
+        Ui.marginBottom(this, sprintCard, Ui.text(this,
+                "TIPO DI SPRINT", 12, true, Ui.MUTED), 4);
+        sprintMode = new Spinner(this);
+        sprintMode.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Per secondi", "Per metri"}));
+        Ui.marginBottom(this, sprintCard, sprintMode, 7);
+        sprintTarget = new EditText(this);
+        sprintTarget.setSingleLine(true);
+        sprintTarget.setInputType(InputType.TYPE_CLASS_NUMBER);
+        sprintTarget.setHint("Secondi (da 5 a 120)");
+        sprintTarget.setText("10");
+        sprintMode.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,
+                                                  View view, int position, long id) {
+                boolean byDistance = position == 1;
+                sprintTarget.setHint(byDistance ? "Metri (da 10 a 500)"
+                        : "Secondi (da 5 a 120)");
+                sprintTarget.setText(byDistance ? "50" : "10");
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+        Ui.marginBottom(this, sprintCard, sprintTarget, 8);
+        sprintStartButton = Ui.button(this, "▶ Sprint", true);
+        sprintStartButton.setOnClickListener(v -> startSprint());
+        Ui.marginBottom(this, sprintCard, sprintStartButton, 6);
+        sprintCancelButton = Ui.button(this, "Annulla sprint", false);
+        sprintCancelButton.setOnClickListener(v -> startService(
+                new Intent(this, TrackingService.class).setAction(TrackingService.SPRINT_CANCEL)));
+        Ui.marginBottom(this, sprintCard, sprintCancelButton, 8);
+        sprintStatus = Ui.text(this, "Nessuno sprint in corso.", 15, true, Ui.GREEN);
+        Ui.marginBottom(this, sprintCard, sprintStatus, 7);
+        Ui.marginBottom(this, sprintCard, Ui.text(this,
+                "Velocità: stima GNSS, non cronometro certificato. "
+              + "Frequenza e precisione effettive dipendono dal ricevitore; "
+              + "servono velocità e accuratezza GPS valide.",
+                12, false, Ui.MUTED), 4);
+        Ui.marginBottom(this, content, sprintCard, 12);
 
         // La sola mappa live dell'app: posizione corrente e punti GPS di questa sessione.
         LinearLayout positionCard = Ui.card(this);
@@ -103,21 +225,6 @@ public final class ActiveSessionActivity extends Activity {
                 "© OpenStreetMap contributors · La mappa segue la posizione GPS attuale",
                 11, false, Ui.MUTED), 0);
         Ui.marginBottom(this, content, positionCard, 12);
-
-        LinearLayout metrics = Ui.card(this);
-        Ui.marginBottom(this, metrics, Ui.text(this, "DATI DI MOVIMENTO", 14, true, Ui.INK), 12);
-        speed = stat(metrics, "VELOCITÀ ATTUALE", "0,0 km/h");
-        movingTime = stat(metrics, "TEMPO IN MOVIMENTO", "00:00");
-        steps = stat(metrics, "PASSI", "0");
-        cadence = stat(metrics, "CADENZA", "-- passi/min");
-        runTime = stat(metrics, "TEMPO DI CORSA", "00:00");
-        walkTime = stat(metrics, "TEMPO DI CAMMINATA", "00:00");
-        stillTime = stat(metrics, "TEMPO DA FERMO", "00:00");
-        movingUnknownTime = stat(metrics, "MOVIMENTO CON ANDATURA IGNOTA", "00:00");
-        unknownTime = stat(metrics, "TEMPO CON MOVIMENTO INCERTO", "00:00");
-        runDistance = stat(metrics, "DISTANZA CORSA", "0,00 km");
-        walkDistance = stat(metrics, "DISTANZA CAMMINATA", "0,00 km");
-        Ui.marginBottom(this, content, metrics, 12);
 
         LinearLayout progressCard = Ui.card(this);
         Ui.marginBottom(this, progressCard, Ui.text(this, "PROSSIMO CHECKPOINT", 14, true, Ui.INK), 6);
@@ -178,16 +285,6 @@ public final class ActiveSessionActivity extends Activity {
         Ui.marginBottom(this, progressCard, applyGoal, 3);
         Ui.marginBottom(this, content, progressCard, 12);
 
-        LinearLayout train = Ui.card(this);
-        Ui.marginBottom(this, train, Ui.text(this, "Insegna all'app il movimento attuale", 14, true, Ui.INK), 10);
-        Button walk = Ui.button(this, "Sto camminando", false);
-        walk.setOnClickListener(v -> label(TrackingService.LABEL_WALK));
-        Ui.marginBottom(this, train, walk, 6);
-        Button run = Ui.button(this, "Sto correndo", false);
-        run.setOnClickListener(v -> label(TrackingService.LABEL_RUN));
-        Ui.marginBottom(this, train, run, 0);
-        Ui.marginBottom(this, content, train, 12);
-
         Button home = Ui.button(this, "←  Torna alla Home", false);
         home.setOnClickListener(v -> finish());
         Ui.marginBottom(this, content, home, 10);
@@ -200,6 +297,148 @@ public final class ActiveSessionActivity extends Activity {
                         startService(new Intent(this, TrackingService.class).setAction(TrackingService.STOP)))
                 .show());
         Ui.marginBottom(this, content, stop, 4);
+    }
+
+
+    private void updateTabButtons() {
+        if (tabButtons == null) return;
+        SessionTabStats.Tab[] tabs = SessionTabStats.Tab.values();
+        for (int i = 0; i < tabs.length; i++) {
+            boolean selected = tabs[i] == currentTab;
+            tabButtons[i].setSelected(selected);
+            tabButtons[i].setTextColor(selected ? android.graphics.Color.WHITE : Ui.GREEN);
+            tabButtons[i].setBackground(Ui.shape(
+                    selected ? Ui.GREEN : android.graphics.Color.rgb(230, 246, 242),
+                    12, this));
+        }
+    }
+
+    private void renderTab(RunState s, boolean active) {
+        SessionTabStats.Tab tab = currentTab;
+        sprintCard.setVisibility(tab == SessionTabStats.Tab.RUN ? View.VISIBLE : View.GONE);
+        maxRunSpeedContainer.setVisibility(tab == SessionTabStats.Tab.RUN ? View.VISIBLE : View.GONE);
+        maxRunSpeed.setText(active && Double.isFinite(s.maxRunSpeedKmh) && s.maxRunSpeedKmh > 0
+                ? RunMath.velocity(s.maxRunSpeedKmh) + " km/h" : "-- km/h");
+        trainingButton.setVisibility(tab == SessionTabStats.Tab.TOTAL ? View.GONE : View.VISIBLE);
+        trainingButton.setEnabled(active);
+        if (tab == SessionTabStats.Tab.RUN) {
+            trainingButton.setText("Insegna all'app: sto correndo");
+        } else if (tab == SessionTabStats.Tab.WALK) {
+            trainingButton.setText("Insegna all'app: sto camminando");
+        }
+        double meters = active ? SessionTabStats.meters(tab, s.runM, s.walkM) : 0;
+        long milliseconds = active ? SessionTabStats.milliseconds(tab, s.runMs, s.walkMs) : 0;
+        int classifiedSteps = active ? SessionTabStats.steps(tab, s.runSteps, s.walkSteps) : 0;
+        boolean current = active && SessionTabStats.hasCurrentSpeed(tab, s.movement);
+        tabTitle.setText(tab == SessionTabStats.Tab.RUN ? "SOLO CORSA" :
+                tab == SessionTabStats.Tab.WALK ? "SOLO CAMMINATA" : "CORSA + CAMMINATA");
+        distance.setText(RunMath.km(meters) + " km");
+        duration.setText(RunMath.duration(milliseconds));
+        paceAvg.setText(RunMath.pace(milliseconds, meters) + " min/km");
+        double avgSpeed = SessionTabStats.averageSpeedKmh(milliseconds, meters);
+        averageSpeed.setText(Double.isFinite(avgSpeed)
+                ? RunMath.velocity(avgSpeed) + " km/h" : "-- km/h");
+        paceNow.setText(current ? RunStats.instantPace(s.speedKmh) + " min/km" : "--:-- min/km");
+        speed.setText(current ? RunMath.velocity(s.speedKmh) + " km/h" : "-- km/h");
+        steps.setText(Integer.toString(classifiedSteps));
+        double avgCadence = SessionTabStats.averageCadence(milliseconds, classifiedSteps);
+        cadence.setText(Double.isFinite(avgCadence)
+                ? Math.round(avgCadence) + " passi/min" : "-- passi/min");
+        tabHint.setText(tab == SessionTabStats.Tab.RUN
+                ? "Dati attribuiti esclusivamente ai tratti classificati come corsa."
+                : tab == SessionTabStats.Tab.WALK
+                ? "Dati attribuiti esclusivamente ai tratti classificati come camminata."
+                : "Somma dei tratti classificati come corsa e camminata, senza periodi incerti.");
+        if (tab == SessionTabStats.Tab.TOTAL) {
+            int unclassifiedSteps = active ? Math.max(0, s.steps - s.runSteps - s.walkSteps) : 0;
+            double unclassifiedMeters = active
+                    ? Math.max(0, s.distanceM - s.runM - s.walkM) : 0;
+            unclassifiedHint.setText("Fuori dalle due categorie: "
+                    + unclassifiedSteps + " passi, " + RunStats.meters(unclassifiedMeters)
+                    + "; fermo " + RunMath.duration(active ? s.stillMs : 0)
+                    + ", movimento non classificato "
+                    + RunMath.duration(active ? s.movingUnknownMs : 0)
+                    + ", incerto " + RunMath.duration(active ? s.unknownMs : 0)
+                    + ". Totale sessione: "
+                    + RunMath.duration(active ? Math.max(0,
+                    SystemClock.elapsedRealtime() - s.startedElapsedMs) : 0) + ".");
+            unclassifiedHint.setVisibility(View.VISIBLE);
+        } else {
+            unclassifiedHint.setVisibility(View.GONE);
+        }
+    }
+
+    private void startSprint() {
+        if (!prefs.getBoolean("active", false)
+                || prefs.getLong("active_id", 0) <= 0) {
+            Toast.makeText(this, "Avvia prima una sessione", Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            int countdown = sprintCountdown.getSelectedItemPosition() + 5;
+            boolean byDistance = sprintMode.getSelectedItemPosition() == 1;
+            int target = Integer.parseInt(sprintTarget.getText().toString().trim());
+            if ((!byDistance && (target < 5 || target > 120))
+                    || (byDistance && (target < 10 || target > 500))) {
+                throw new NumberFormatException();
+            }
+            Intent intent = new Intent(this, TrackingService.class)
+                    .setAction(TrackingService.SPRINT_START)
+                    .putExtra(TrackingService.EXTRA_SPRINT_COUNTDOWN, countdown)
+                    .putExtra(TrackingService.EXTRA_SPRINT_MODE,
+                            byDistance ? "DISTANCE" : "TIME")
+                    .putExtra(TrackingService.EXTRA_SPRINT_TARGET, target);
+            sprintStartButton.setEnabled(false);
+            sprintStatus.setText("Richiesta sprint inviata. Attendi il countdown…");
+            startService(intent);
+        } catch (NumberFormatException ex) {
+            Toast.makeText(this, "Inserisci una durata da 5 a 120 s o "
+                    + "una distanza da 10 a 500 m", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void renderSprint(long sessionId, boolean active) {
+        String phase = prefs.getLong("sprint_session_id", -1) == sessionId && active
+                ? prefs.getString("sprint_phase", "IDLE") : "IDLE";
+        boolean counting = "COUNTDOWN".equals(phase);
+        boolean measuring = "ACTIVE".equals(phase);
+        boolean busy = counting || measuring;
+        sprintStartButton.setEnabled(active && sessionId > 0 && !busy);
+        sprintCancelButton.setEnabled(active && busy);
+        sprintCountdown.setEnabled(!busy);
+        sprintMode.setEnabled(!busy);
+        sprintTarget.setEnabled(!busy);
+        if (counting) {
+            long end = prefs.getLong("sprint_countdown_end", 0);
+            long remaining = Math.max(0, (end - SystemClock.elapsedRealtime() + 999) / 1000);
+            sprintStatus.setText("Sprint tra " + remaining + "… Preparati!");
+            return;
+        }
+        int samples = prefs.getInt("sprint_samples", 0);
+        double distance = Double.longBitsToDouble(prefs.getLong(
+                "sprint_distance_bits", Double.doubleToLongBits(0)));
+        double max = Double.longBitsToDouble(prefs.getLong(
+                "sprint_peak_bits", Double.doubleToLongBits(Double.NaN)));
+        double avg = Double.longBitsToDouble(prefs.getLong(
+                "sprint_avg_bits", Double.doubleToLongBits(Double.NaN)));
+        long elapsed = measuring
+                ? Math.max(0, SystemClock.elapsedRealtime() - prefs.getLong("sprint_started", 0))
+                : prefs.getLong("sprint_elapsed", 0);
+        if ("IDLE".equals(phase)) {
+            sprintStatus.setText("Nessuno sprint in corso.");
+            return;
+        }
+        String summary = String.format(java.util.Locale.ITALY,
+                "%s · %.1f m · %s\nVelocità media %s · velocità massima %s\n"
+              + "Campioni GNSS validi: %d",
+                measuring ? "SPRINT IN CORSO" :
+                "FINISHED".equals(phase) ? "SPRINT CONCLUSO" : "SPRINT ANNULLATO",
+                distance, RunMath.duration(elapsed),
+                Double.isFinite(avg) ? RunMath.velocity(avg) + " km/h" : "-- km/h",
+                Double.isFinite(max) ? RunMath.velocity(max) + " km/h" : "-- km/h",
+                samples);
+        sprintStatus.setText(summary + (samples < 2
+                ? "\nMisure insufficienti per una velocità media affidabile." : ""));
     }
 
     private void maybeShowGpsAlert(RunState s) {
@@ -232,6 +471,23 @@ public final class ActiveSessionActivity extends Activity {
             if (active) sessionSeen = true;
             if (sessionSeen && !active) { finish(); return; }
             RunState s = RunState.read(prefs);
+            if (pendingResumeTabSelection && active) {
+                // Non usare il movimento salvato prima di un riavvio del telefono:
+                // deve esserci un tracking service che aggiorna effettivamente lo stato.
+                long ageMs = System.currentTimeMillis() - prefs.getLong("heartbeat_wall", 0);
+                if (ageMs >= 0 && ageMs <= 15_000) {
+                    SessionTabStats.Tab movementTab = SessionTabStats.tabForMovement(s.movement);
+                    if (movementTab != null) {
+                        pendingResumeTabSelection = false;
+                        if (currentTab != movementTab) {
+                            currentTab = movementTab;
+                            updateTabButtons();
+                        }
+                    }
+                }
+                // Se lo stato è ancora incerto, attendi la prima classificazione.
+                // La selezione manuale, invece, resta valida per l'intera apertura.
+            }
             if (active) maybeShowGpsAlert(s);
             Rect visiblePart = new Rect();
             boolean mapVisible = map.view().getGlobalVisibleRect(visiblePart)
@@ -250,22 +506,8 @@ public final class ActiveSessionActivity extends Activity {
                     map.clearForSession(0);
                 }
             }
-            long elapsed = active ? Math.max(0, SystemClock.elapsedRealtime() - s.startedElapsedMs) : 0;
-            distance.setText(RunMath.km(active ? s.distanceM : 0) + " km");
-            paceNow.setText(RunStats.instantPace(active ? s.speedKmh : 0) + " min/km");
-            paceAvg.setText(RunMath.pace(elapsed, s.distanceM) + " min/km");
-            duration.setText(RunMath.duration(elapsed));
-            speed.setText(RunMath.velocity(active ? s.speedKmh : 0) + " km/h");
-            movingTime.setText(RunMath.duration(active ? s.movingMs : 0));
-            runTime.setText(RunMath.duration(active ? s.runMs : 0));
-            walkTime.setText(RunMath.duration(active ? s.walkMs : 0));
-            stillTime.setText(RunMath.duration(active ? s.stillMs : 0));
-            unknownTime.setText(RunMath.duration(active ? s.unknownMs : 0));
-            movingUnknownTime.setText(RunMath.duration(active ? s.movingUnknownMs : 0));
-            steps.setText(Integer.toString(active ? s.steps : 0));
-            cadence.setText(active && s.cadenceSpm > 0 ? s.cadenceSpm + " passi/min" : "-- passi/min");
-            runDistance.setText(RunMath.km(active ? s.runM : 0) + " km");
-            walkDistance.setText(RunMath.km(active ? s.walkM : 0) + " km");
+            renderTab(s, active);
+            renderSprint(s.id, active);
             gps.setText(active ? s.gpsStatus : "Inizializzazione del GPS…");
             movement.setText(!active ? "Preparazione sessione…" :
                     "RUN".equals(s.movement) ? "🏃 Corsa" :
@@ -287,12 +529,14 @@ public final class ActiveSessionActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
+        pendingResumeTabSelection = true;
         // Render and fetch map tiles only if the card is actually visible.
         handler.removeCallbacks(refreshTask);
         handler.post(refreshTask);
     }
     @Override protected void onPause() {
         resumed = false;
+        pendingResumeTabSelection = false;
         handler.removeCallbacks(refreshTask);
         map.setTrackingMapVisible(false);
         if (mapRendered) {

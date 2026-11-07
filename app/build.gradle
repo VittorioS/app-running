@@ -2,6 +2,9 @@ plugins {
     id 'com.android.application'
 }
 
+def ciRun = System.getenv('GITHUB_RUN_NUMBER')
+def debugKeyPath = System.getenv('PASSOLIBERO_DEBUG_KEYSTORE')
+
 android {
     namespace 'it.example.passolibero'
     compileSdk 35
@@ -10,7 +13,7 @@ android {
         applicationId 'it.example.passolibero'
         minSdk 30
         targetSdk 35
-        versionCode 2
+        versionCode ciRun ? 10000 + Integer.parseInt(ciRun) : 2
         versionName '1.0.0'
     }
 
@@ -22,7 +25,21 @@ android {
     buildFeatures {
         buildConfig true
     }
+    signingConfigs {
+        if (debugKeyPath) {
+            stableDebug {
+                storeFile file(debugKeyPath)
+                storeType 'PKCS12'
+                storePassword 'android'
+                keyAlias 'passolibero-debug'
+                keyPassword 'android'
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (debugKeyPath) signingConfig signingConfigs.stableDebug
+        }
         release {
             minifyEnabled true
             shrinkResources true
