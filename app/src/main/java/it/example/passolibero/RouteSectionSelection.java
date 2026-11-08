@@ -26,4 +26,20 @@ public final class RouteSectionSelection {
     public static int widthDp(int number, int selectedNumber) {
         return number == selectedNumber && selectedNumber != 0 ? 10 : 7;
     }
+
+    /**
+     * Indici zero-based nell'ordine in cui osmdroid deve disegnare le linee.
+     * Nessuna selezione: ordine cronologico; selezione: tratto scelto per ultimo.
+     */
+    public static int[] drawOrder(int count, int selectedNumber) {
+        if (count < 0 || selectedNumber < 0 || selectedNumber > count)
+            throw new IllegalArgumentException("Selezione fuori intervallo");
+        int[] order = new int[count];
+        int out = 0;
+        for (int i = 0; i < count; i++) {
+            if (i + 1 != selectedNumber) order[out++] = i;
+        }
+        if (selectedNumber != 0) order[out] = selectedNumber - 1;
+        return order;
+    }
 }

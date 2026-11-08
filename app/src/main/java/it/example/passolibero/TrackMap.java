@@ -11,6 +11,7 @@ import org.osmdroid.util.GeoPoint;
 import org.osmdroid.util.BoundingBox;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.Marker;
+import org.osmdroid.views.overlay.Overlay;
 import org.osmdroid.views.overlay.Polyline;
 
 import java.io.File;
@@ -83,10 +84,27 @@ public final class TrackMap {
             showSectionDetails(section);
             return true;
         });
-        view.getOverlays().add(line);
         segments.add(line);
-        if (view.getOverlays().remove(currentPosition)) view.getOverlays().add(currentPosition);
+        reorderSectionOverlays();
         return line;
+    }
+
+    /**
+     * Le polyline osmdroid non hanno z-index: l'ultima overlay viene disegnata
+     * sopra le precedenti (e riceve per prima gli eventi touch).
+     * Manteniamo la sezione selezionata per ultima, sotto il marker GPS.
+     * Questo viene richiamato anche quando nasce una nuova sezione live,
+     * per non coprire il tratto selezionato mentre arriva altro GPS.
+     */
+    private void reorderSectionOverlays() {
+        List<Overlay> overlays = view.getOverlays();
+        overlays.removeAll(segments);
+        for (int index : RouteSectionSelection.drawOrder(
+                segments.size(), selectedSectionNumber)) {
+            overlays.add(segments.get(index));
+        }
+        // Il marker della posizione attuale deve restare visibile.
+        if (overlays.remove(currentPosition)) overlays.add(currentPosition);
     }
 
     private void showSectionDetails(RouteSections.Section section) {
@@ -149,6 +167,9 @@ public final class TrackMap {
             line.setWidth(Ui.dp(view.getContext(),
                     RouteSectionSelection.widthDp(section.number, number)));
         }
+        // I colori da soli non bastano: se due linee coincidono,
+        // la sezione selezionata va anche portata davanti alle altre.
+        reorderSectionOverlays();
         if (number > 0) {
             zoomToSection(all.get(number - 1));
         } else if (autoFollowCurrentPosition) {
