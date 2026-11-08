@@ -11,7 +11,7 @@ for label in ("RITMO MEDIO (min/km)", "VELOCITÀ MEDIA",
               "VELOCITÀ MASSIMA CORSA", "RITMO ATTUALE (min/km)",
               "VELOCITÀ ATTUALE", "PASSI ATTRIBUITI", "CADENZA MEDIA"):
     assert label in live and label in history, label
-assert "SPRINT" in live and "MODALITÀ SPRINT" in history
+assert "sprintCard" in live and "sprintCard" in history
 assert '"🏃 Corsa", "🚶 Camminata", "∑ Totali"' in history
 assert "SessionTabStats.meters(tab, session.runM, session.walkM)" in history
 assert "SessionTabStats.milliseconds(tab, session.runMs, session.walkMs)" in history
