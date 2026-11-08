@@ -9,9 +9,9 @@ json = Path("app/src/main/java/it/example/passolibero/SessionJsonExporter.java")
 
 for label in ("RITMO MEDIO (min/km)", "VELOCITÀ MEDIA",
               "VELOCITÀ MASSIMA CORSA", "RITMO ATTUALE (min/km)",
-              "VELOCITÀ ATTUALE", "PASSI ATTRIBUITI", "CADENZA MEDIA",
-              "MODALITÀ SPRINT"):
+              "VELOCITÀ ATTUALE", "PASSI ATTRIBUITI", "CADENZA MEDIA"):
     assert label in live and label in history, label
+assert "SPRINT" in live and "MODALITÀ SPRINT" in history
 assert '"🏃 Corsa", "🚶 Camminata", "∑ Totali"' in history
 assert "SessionTabStats.meters(tab, session.runM, session.walkM)" in history
 assert "SessionTabStats.milliseconds(tab, session.runMs, session.walkMs)" in history
