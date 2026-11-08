@@ -70,5 +70,3 @@ public final class RouteSectionSelectionTest {
         }
     }
 }
-    }
-}
