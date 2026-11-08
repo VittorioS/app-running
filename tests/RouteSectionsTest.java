@@ -62,6 +62,15 @@ public final class RouteSectionsTest {
         yes(gaps.sections().isEmpty(), "Cambio sessione: niente tratti precedenti");
         yes(RouteSections.kind("SPRINT") == RouteSections.Kind.SPRINT,
                 "Etichetta sprint registrata nel DB");
-        System.out.println("PASS: sei sezioni, colori logici, GPS gap, statistiche, sprint ripetuti.");
+        RouteSections.SprintWindow old = new RouteSections.SprintWindow(70_000, 10_000);
+        yes(old.includes(60_000) && old.includes(70_000), "Sprint del vecchio storico");
+        yes(!old.includes(58_000) && !old.includes(72_000),
+                "Non attribuire movimenti lontani dalla prova");
+        RouteSections.Builder oldRoute = new RouteSections.Builder();
+        oldRoute.accept(new RouteSections.Fix(1, 60_000, 40, 14, 0, 8, 5, "RUN", true));
+        oldRoute.accept(new RouteSections.Fix(2, 61_000, 40.00001, 14, 1, 14, 5, "SPRINT", true));
+        yes(oldRoute.sections().get(1).approximateSprint,
+                "Sezione storica segnala ricostruzione approssimativa");
+        System.out.println("PASS: sei sezioni, GPS gap, statistiche, sprint ripetuti e recupero storico.");
     }
 }

@@ -29,6 +29,8 @@ public final class TrackMap {
     private final RouteSections.Builder routeBuilder = new RouteSections.Builder();
     private RouteSections.Section visibleSection;
     private Polyline visibleLine;
+    private final List<RouteSections.SprintWindow> oldSprintWindows = new ArrayList<>();
+    private boolean oldSprintWindowsLoaded;
     private boolean hasFix;
     private boolean autoFollowCurrentPosition;
     private boolean trackingMapVisible;
@@ -101,7 +103,10 @@ public final class TrackMap {
                 + "\nVelocità massima: " + maxText
                 + "\nCampioni GPS: " + section.samples
                 + "\n\nValori stimati dai campioni GPS registrati per questo tratto; "
-                + "possono differire dai totali dell'allenamento.";
+                + "possono differire dai totali dell'allenamento."
+                + (section.approximateSprint
+                        ? "\n\nSprint storico ricostruito dagli orari della prova: "
+                          + "confini e statistiche approssimativi." : "");
         new AlertDialog.Builder(view.getContext())
                 .setTitle("Sezione " + section.number + " · "
                         + RouteSections.label(section.kind))
@@ -157,6 +162,8 @@ public final class TrackMap {
         pointCursor = 0;
         allPoints.clear();
         routeBuilder.reset();
+        oldSprintWindows.clear();
+        oldSprintWindowsLoaded = false;
         visibleSection = null;
         visibleLine = null;
         hasFix = false;
@@ -172,13 +179,33 @@ public final class TrackMap {
     public int update(TrackerDb db, long id) {
         clearForSession(id);
         if (id <= 0) return 0;
+        if (!oldSprintWindowsLoaded) {
+            oldSprintWindowsLoaded = true;
+            for (TrackerDb.SprintRecord record : db.sprints(id)) {
+                try {
+                    oldSprintWindows.add(new RouteSections.SprintWindow(
+                            record.recordedAt, record.elapsedMs));
+                } catch (IllegalArgumentException ignored) { }
+            }
+        }
         List<TrackerDb.TrackPoint> additional = db.pointsAfter(id, pointCursor, 500);
         for (TrackerDb.TrackPoint p : additional) {
             pointCursor = p.id;
             GeoPoint gp = new GeoPoint(p.lat, p.lon);
+            String type = p.movement;
+            boolean estimated = false;
+            if (!"SPRINT".equals(type)) {
+                for (RouteSections.SprintWindow window : oldSprintWindows) {
+                    if (window.includes(p.time)) {
+                        type = "SPRINT";
+                        estimated = true;
+                        break;
+                    }
+                }
+            }
             RouteSections.Section section = routeBuilder.accept(new RouteSections.Fix(
                     p.id, p.time, p.lat, p.lon, p.deltaM, p.speedKmh,
-                    p.accuracyM, p.movement));
+                    p.accuracyM, type, estimated));
             if (section == null) continue;
             if (visibleSection != section) {
                 visibleSection = section;

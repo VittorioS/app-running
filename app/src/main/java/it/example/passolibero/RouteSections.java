@@ -28,13 +28,38 @@ public final class RouteSections {
         }
     }
 
+    /** Finestra stimata per dati sprint registrati prima delle etichette GPS dedicate. */
+    public static final class SprintWindow {
+        private final long from, until;
+
+        public SprintWindow(long endWallMs, long elapsedMs) {
+            if (endWallMs <= 0 || elapsedMs <= 0 || elapsedMs > 180_000
+                    || endWallMs < elapsedMs)
+                throw new IllegalArgumentException("Prova sprint storica non valida");
+            // Tolleranza per il ritardo fra fine prova e scrittura in DB.
+            this.from = endWallMs - elapsedMs - 1_000L;
+            this.until = endWallMs + 500L;
+        }
+
+        public boolean includes(long wallMs) {
+            return wallMs >= from && wallMs <= until;
+        }
+    }
+
     public static final class Fix {
         public final long id, time;
         public final double lat, lon, deltaM, speedKmh, accuracyM;
         public final String movement;
+        public final boolean estimatedSprint;
 
         public Fix(long id, long time, double lat, double lon,
                    double deltaM, double speedKmh, double accuracyM, String movement) {
+            this(id, time, lat, lon, deltaM, speedKmh, accuracyM, movement, false);
+        }
+
+        public Fix(long id, long time, double lat, double lon,
+                   double deltaM, double speedKmh, double accuracyM,
+                   String movement, boolean estimatedSprint) {
             this.id = id;
             this.time = time;
             this.lat = lat;
@@ -43,6 +68,7 @@ public final class RouteSections {
             this.speedKmh = speedKmh;
             this.accuracyM = accuracyM;
             this.movement = movement;
+            this.estimatedSprint = estimatedSprint;
         }
     }
 
@@ -54,6 +80,7 @@ public final class RouteSections {
         public double distanceM;
         public double maxKmh = Double.NaN;
         public int samples;
+        public boolean approximateSprint;
 
         private Section(int number, Kind kind, long startedAt) {
             this.number = number;
@@ -74,6 +101,7 @@ public final class RouteSections {
             geometry.add(current);
             endedAt = current.time;
             samples++;
+            if (current.estimatedSprint) approximateSprint = true;
             if (connected && Double.isFinite(current.deltaM) && current.deltaM > 0
                     && current.deltaM < 100) {
                 distanceM += current.deltaM;
