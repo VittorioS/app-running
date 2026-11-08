@@ -182,9 +182,13 @@ public final class TrackMap {
         if (!oldSprintWindowsLoaded) {
             oldSprintWindowsLoaded = true;
             for (TrackerDb.SprintRecord record : db.sprints(id)) {
+                if (record.samples < 2) continue;
                 try {
-                    oldSprintWindows.add(new RouteSections.SprintWindow(
-                            record.recordedAt, record.elapsedMs));
+                    RouteSections.SprintWindow window = new RouteSections.SprintWindow(
+                            record.recordedAt, record.elapsedMs);
+                    if (!db.hasTaggedSprintPoints(id, window.fromWallMs(),
+                            window.untilWallMs()))
+                        oldSprintWindows.add(window);
                 } catch (IllegalArgumentException ignored) { }
             }
         }

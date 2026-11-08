@@ -279,6 +279,21 @@ public final class TrackerDb extends SQLiteOpenHelper {
         return p.getBoolean("active", false) && p.getLong("active_id", 0) == id;
     }
 
+    /**
+     * Un vecchio sprint si ricostruisce dagli orari solo se non possiede gia'
+     * punti GNSS con l'etichetta esplicita SPRINT o SPRINT:<id>.
+     */
+    public boolean hasTaggedSprintPoints(long sessionId, long fromWallMs, long untilWallMs) {
+        if (sessionId <= 0 || fromWallMs > untilWallMs) return false;
+        try (Cursor c = getReadableDatabase().rawQuery(
+                "SELECT 1 FROM points WHERE session_id=? AND t_wall>=? AND t_wall<=?"
+                        + " AND movement LIKE 'SPRINT%' LIMIT 1",
+                new String[]{Long.toString(sessionId), Long.toString(fromWallMs),
+                        Long.toString(untilWallMs)})) {
+            return c.moveToFirst();
+        }
+    }
+
     public static final class TrackPoint {
         public long id, time;
         public double lat, lon, deltaM, speedKmh, accuracyM;

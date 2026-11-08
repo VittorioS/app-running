@@ -75,6 +75,8 @@ public final class RouteSectionsTest {
                 "Sprint consecutivi sempre separati anche senza tratti intermedi");
         RouteSections.SprintWindow old = new RouteSections.SprintWindow(70_000, 10_000);
         yes(old.includes(60_000) && old.includes(70_000), "Sprint del vecchio storico");
+        yes(old.fromWallMs() == 59_000 && old.untilWallMs() == 70_500,
+                "Finestra storica circoscritta, utilizzabile dal DB");
         yes(!old.includes(58_000) && !old.includes(72_000),
                 "Non attribuire movimenti lontani dalla prova");
         RouteSections.Builder oldRoute = new RouteSections.Builder();

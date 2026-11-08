@@ -46,6 +46,9 @@ public final class RouteSections {
         public boolean includes(long wallMs) {
             return wallMs >= from && wallMs <= until;
         }
+
+        public long fromWallMs() { return from; }
+        public long untilWallMs() { return until; }
     }
 
     public static final class Fix {
