@@ -21,10 +21,15 @@ v7_block = re.search(r"if \(oldV < 7\) \{(.*?)\}", source, re.S)
 assert v7_block and "checkpoint_interval_m" in v7_block.group(1)
 assert "createSprintTable(db);" in v7_block.group(1)
 assert "CREATE TABLE IF NOT EXISTS sprints" in source
+sprint_body = source.split("private static void createSprintTable", 1)[1].split(
+    "public long newSession", 1)[0]
+sprint_statements = ["".join(re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', part))
+                     for part in re.findall(r"db\.execSQL\((.*?)\);", sprint_body, re.S)]
+assert len(sprint_statements) == 2
 assert 'database.delete("sprints", "session_id=?", args)' in source
 
 with sqlite3.connect(":memory:") as db:
-    for sql in statements:
+    for sql in statements + sprint_statements:
         db.execute(sql)
     columns = {r[1]: r for r in db.execute("PRAGMA table_info(sessions)")}
     assert "run_steps" in columns and "walk_steps" in columns
@@ -65,10 +70,6 @@ for old_version in (1, 2, 3, 4, 5, 6):
         for sql in v6_sql:
             db.execute(sql)
     db.execute("ALTER TABLE sessions ADD COLUMN checkpoint_interval_m INTEGER")
-    sprint_body = source.split("private static void createSprintTable", 1)[1].split(
-        "public long newSession", 1)[0]
-    sprint_statements = ["".join(re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', text))
-                         for text in re.findall(r"db\.execSQL\((.*?)\);", sprint_body, re.S)]
     for sql in sprint_statements:
         db.execute(sql)
     row = db.execute("SELECT started_at, distance_m, run_ms, walk_ms, still_ms, moving_ms, "
