@@ -194,7 +194,7 @@ public final class TrackMap {
             GeoPoint gp = new GeoPoint(p.lat, p.lon);
             String type = p.movement;
             boolean estimated = false;
-            if (!"SPRINT".equals(type)) {
+            if (RouteSections.kind(type) != RouteSections.Kind.SPRINT) {
                 for (RouteSections.SprintWindow window : oldSprintWindows) {
                     if (window.includes(p.time)) {
                         type = "SPRINT";
