@@ -35,6 +35,7 @@ public final class TrackingService extends Service implements LocationListener, 
     public static final String LABEL_RUN = "it.example.passolibero.LABEL_RUN";
     public static final String SPRINT_START = "it.example.passolibero.SPRINT_START";
     public static final String SPRINT_CANCEL = "it.example.passolibero.SPRINT_CANCEL";
+    public static final String SPRINT_PREPARE_VOICE = "it.example.passolibero.SPRINT_PREPARE_VOICE";
     public static final String EXTRA_SPRINT_COUNTDOWN = "sprint_countdown";
     public static final String EXTRA_SPRINT_MODE = "sprint_mode";
     public static final String EXTRA_SPRINT_TARGET = "sprint_target";
@@ -76,6 +77,8 @@ public final class TrackingService extends Service implements LocationListener, 
     private final SprintTrial sprint = new SprintTrial();
     private long lastNormalGpsFixMs = -1;
     private boolean sprintRecorded;
+    private boolean sprintVoicePrepared, sprintVoicePending;
+    private int sprintVoiceGeneration;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -109,21 +112,73 @@ public final class TrackingService extends Service implements LocationListener, 
             });
             return START_STICKY;
         }
+        if (SPRINT_PREPARE_VOICE.equals(action)) {
+            work.post(() -> {
+                if (state != null && initialized && prefs.getBoolean("active", false)) {
+                    sprintVoicePrepared = true;
+                    syncVoiceCoach();
+                }
+            });
+            return START_STICKY;
+        }
         if (SPRINT_START.equals(action)) {
             final int countdown = intent.getIntExtra(EXTRA_SPRINT_COUNTDOWN, 5);
             final int target = intent.getIntExtra(EXTRA_SPRINT_TARGET, 10);
             final String modeName = intent.getStringExtra(EXTRA_SPRINT_MODE);
             work.post(() -> {
-                if (state == null || !initialized || !prefs.getBoolean("active", false)) return;
+                if (state == null || !initialized || !prefs.getBoolean("active", false)
+                        || sprint.busy() || sprintVoicePending) return;
                 try {
-                    SprintTrial.Mode mode = SprintTrial.Mode.valueOf(modeName == null ? "" : modeName);
-                    sprint.start(SystemClock.elapsedRealtime(), countdown, mode, target);
-                    sprintRecorded = false;
-                    publishSprint();
-                    requestSprintGps(true);
-                    if (voice != null && AppPrefs.voiceEnabled(prefs))
-                        voice.speak("Sprint tra " + countdown + " secondi");
-                } catch (IllegalArgumentException | IllegalStateException ex) {
+                    SprintTrial.Mode mode = SprintTrial.Mode.valueOf(
+                            modeName == null ? "" : modeName);
+                    // Parametri gia' validati dalla UI, verificati ancora dal modello
+                    // non appena parte il countdown.
+                    if (countdown < 5 || countdown > 10
+                            || (mode == SprintTrial.Mode.TIME && (target < 5 || target > 120))
+                            || (mode == SprintTrial.Mode.DISTANCE && (target < 10 || target > 500)))
+                        throw new IllegalArgumentException("Valori sprint invalidi");
+                    sprintVoicePrepared = true;
+                    sprintVoicePending = true;
+                    final int token = ++sprintVoiceGeneration;
+                    prefs.edit().putBoolean("sprint_voice_preparing", true)
+                            .remove("sprint_voice_error").apply();
+                    syncVoiceCoach();
+                    // Il countdown parte quando il sintetizzatore italiano e' pronto:
+                    // la prima cifra non viene persa durante l'avvio del motore.
+                    final long deadline = SystemClock.elapsedRealtime() + 5_000L;
+                    work.post(new Runnable() {
+                        @Override public void run() {
+                            if (token != sprintVoiceGeneration || !sprintVoicePending
+                                    || state == null || !prefs.getBoolean("active", false)) return;
+                            long now = SystemClock.elapsedRealtime();
+                            if (voice != null && voice.isReady()) {
+                                sprintVoicePending = false;
+                                prefs.edit().putBoolean("sprint_voice_preparing", false).apply();
+                                try {
+                                    sprint.start(now, countdown, mode, target);
+                                    sprintRecorded = false;
+                                    publishSprint();
+                                    requestSprintGps(true);
+                                    scheduleSpokenSprintCountdown(
+                                            new SprintCountdownVoicePlan(now, countdown), token);
+                                } catch (IllegalArgumentException | IllegalStateException ex) {
+                                    Log.w(TAG, "Sprint non avviabile", ex);
+                                    prefs.edit().putString("sprint_voice_error",
+                                            "Impossibile avviare lo sprint. Riprova.").apply();
+                                }
+                            } else if (now < deadline) {
+                                work.postDelayed(this, 100);
+                            } else {
+                                // Non avviare un countdown silenzioso a sorpresa.
+                                sprintVoicePending = false;
+                                prefs.edit().putBoolean("sprint_voice_preparing", false)
+                                        .putString("sprint_voice_error",
+                                                "Voce italiana non disponibile. Verifica la "
+                                              + "sintesi vocale del telefono e riprova.").apply();
+                            }
+                        }
+                    });
+                } catch (IllegalArgumentException ex) {
                     Log.w(TAG, "Richiesta sprint non valida", ex);
                 }
             });
@@ -131,6 +186,14 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         if (SPRINT_CANCEL.equals(action)) {
             work.post(() -> {
+                ++sprintVoiceGeneration;
+                if (sprintVoicePending) {
+                    sprintVoicePending = false;
+                    prefs.edit().putBoolean("sprint_voice_preparing", false)
+                            .putString("sprint_voice_error", "Preparazione sprint annullata.")
+                            .apply();
+                }
+                if (voice != null) voice.stopSpeaking();
                 if (state == null || !sprint.busy()) return;
                 long now = SystemClock.elapsedRealtime();
                 sprint.cancel(now);
@@ -204,6 +267,10 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         lastNormalGpsFixMs = -1;
         sprintRecorded = false;
+        sprintVoicePending = false;
+        ++sprintVoiceGeneration;
+        prefs.edit().putBoolean("sprint_voice_preparing", false)
+                .remove("sprint_voice_error").apply();
         // Uno sprint precedente non puo' proseguire dopo il riavvio del servizio.
         prefs.edit().putString("sprint_phase", "IDLE")
                 .putLong("sprint_session_id", state.id).apply();
@@ -286,9 +353,10 @@ public final class TrackingService extends Service implements LocationListener, 
         }
     };
 
-    /** Initialize the speech engine only while checkpoint voice is enabled. */
+    /** Attiva anche la voce sprint, indipendentemente dagli avvisi checkpoint. */
     private void syncVoiceCoach() {
-        boolean enabled = AppPrefs.voiceEnabled(prefs) || gpsIncident;
+        boolean enabled = AppPrefs.voiceEnabled(prefs) || gpsIncident
+                || sprintVoicePrepared || sprintVoicePending || sprint.busy();
         if (enabled && voice == null) {
             voice = new VoiceCoach(this);
         } else if (!enabled && voice != null) {
@@ -544,13 +612,37 @@ public final class TrackingService extends Service implements LocationListener, 
         }
     }
 
+    /**
+     * Una chiamata per ogni cifra all'istante previsto, non sui callback GPS.
+     * Il token invalida i messaggi residui dopo annullamento e nuove prove.
+     */
+    private void scheduleSpokenSprintCountdown(SprintCountdownVoicePlan plan, int token) {
+        for (int step = 0; step < plan.steps(); step++) {
+            final int index = step;
+            long delay = Math.max(0, plan.dueAt(index) - SystemClock.elapsedRealtime());
+            work.postDelayed(() -> {
+                if (token != sprintVoiceGeneration || state == null
+                        || !prefs.getBoolean("active", false)) return;
+                long now = SystemClock.elapsedRealtime();
+                if (index == plan.steps() - 1) {
+                    // La transizione e la parola "Via" sono gestite in
+                    // advanceSprint(), quindi non si pronunciano due volte.
+                    advanceSprint(now);
+                } else if (sprint.phase() == SprintTrial.Phase.COUNTDOWN
+                        && !plan.isStale(index, now) && voice != null && voice.isReady()) {
+                    voice.speak(plan.phrase(index));
+                }
+            }, delay);
+        }
+    }
+
     private void advanceSprint(long now) {
         if (!sprint.busy()) return;
         SprintTrial.Phase before = sprint.phase();
         sprint.advance(now);
         if (before == SprintTrial.Phase.COUNTDOWN
                 && sprint.phase() == SprintTrial.Phase.ACTIVE
-                && voice != null && AppPrefs.voiceEnabled(prefs))
+                && voice != null && voice.isReady())
             voice.speak("Via, sprint");
         if (!sprint.busy()) {
             saveCompletedSprint(now);
@@ -611,9 +703,10 @@ public final class TrackingService extends Service implements LocationListener, 
             gpsIncident = true;
             gpsAskedWhileStill = false;
             prefs.edit().putBoolean("gps_incident", true).apply();
-            // One voice warning at onset. The run itself is never blocked.
+            // Evita che l'avviso GPS interrompa le cifre del countdown.
             if (voice == null) voice = new VoiceCoach(this);
-            voice.speak("Segnale GPS impreciso");
+            if (sprint.phase() != SprintTrial.Phase.COUNTDOWN && !sprintVoicePending)
+                voice.speak("Segnale GPS impreciso");
         }
         if (gpsIncident && "STILL".equals(motionBeforeGpsLoss) && !gpsAskedWhileStill) {
             gpsAskedWhileStill = true;
@@ -633,7 +726,8 @@ public final class TrackingService extends Service implements LocationListener, 
         if (reached <= state.checkpointIndex) return;
         state.checkpointIndex = reached; // Prima si salva, così non si annuncia due volte dopo crash.
         state.save(prefs, true);
-        if (AppPrefs.voiceEnabled(prefs) && voice != null) {
+        if (AppPrefs.voiceEnabled(prefs) && voice != null
+                && sprint.phase() != SprintTrial.Phase.COUNTDOWN && !sprintVoicePending) {
             double distance = reached * interval;
             int distanceInt = (int) distance;
             String marker;
@@ -720,6 +814,9 @@ public final class TrackingService extends Service implements LocationListener, 
         advanceTimeline(now);
         motionTimeline.finish();
         applyTimeline();
+        ++sprintVoiceGeneration;
+        sprintVoicePending = false;
+        prefs.edit().putBoolean("sprint_voice_preparing", false).apply();
         if (sprint.busy()) {
             sprint.cancel(now);
             saveCompletedSprint(now);
@@ -761,6 +858,9 @@ public final class TrackingService extends Service implements LocationListener, 
                     motionTimeline.finish();
                     applyTimeline();
                     long now = SystemClock.elapsedRealtime();
+                    ++sprintVoiceGeneration;
+                    sprintVoicePending = false;
+                    prefs.edit().putBoolean("sprint_voice_preparing", false).apply();
                     if (sprint.busy()) {
                         sprint.cancel(now);
                         saveCompletedSprint(now);

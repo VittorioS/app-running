@@ -116,6 +116,7 @@ public final class ActiveSessionActivity extends Activity {
             tabButton.setOnClickListener(v -> {
                 pendingResumeTabSelection = false;
                 currentTab = tab;
+                if (tab == SessionTabStats.Tab.SPRINT) prepareSprintVoice();
                 updateTabButtons();
                 renderTab(RunState.read(prefs), prefs.getBoolean("active", false));
             });
@@ -378,6 +379,12 @@ public final class ActiveSessionActivity extends Activity {
         }
     }
 
+    private void prepareSprintVoice() {
+        if (prefs.getBoolean("active", false))
+            startService(new Intent(this, TrackingService.class)
+                    .setAction(TrackingService.SPRINT_PREPARE_VOICE));
+    }
+
     private void startSprint() {
         if (!prefs.getBoolean("active", false)
                 || prefs.getLong("active_id", 0) <= 0) {
@@ -412,12 +419,18 @@ public final class ActiveSessionActivity extends Activity {
                 ? prefs.getString("sprint_phase", "IDLE") : "IDLE";
         boolean counting = "COUNTDOWN".equals(phase);
         boolean measuring = "ACTIVE".equals(phase);
-        boolean busy = counting || measuring;
+        boolean preparing = active && prefs.getBoolean("sprint_voice_preparing", false);
+        boolean busy = counting || measuring || preparing;
         sprintStartButton.setEnabled(active && sessionId > 0 && !busy);
         sprintCancelButton.setEnabled(active && busy);
         sprintCountdown.setEnabled(!busy);
         sprintMode.setEnabled(!busy);
         sprintTarget.setEnabled(!busy);
+        if (preparing) {
+            sprintStatus.setText("Preparo la voce italiana per il countdown…");
+            refreshSprintHistory(sessionId, active);
+            return;
+        }
         if (counting) {
             long end = prefs.getLong("sprint_countdown_end", 0);
             long remaining = Math.max(0, (end - SystemClock.elapsedRealtime() + 999) / 1000);
@@ -439,7 +452,9 @@ public final class ActiveSessionActivity extends Activity {
         avg = SprintTrial.averageSpeedKmh(distance, elapsed, samples);
         refreshSprintHistory(sessionId, active);
         if ("IDLE".equals(phase)) {
-            sprintStatus.setText("Nessuno sprint in corso. Imposta e avvia una prova.");
+            String problem = prefs.getString("sprint_voice_error", "");
+            sprintStatus.setText(problem.isEmpty()
+                    ? "Nessuno sprint in corso. Imposta e avvia una prova." : problem);
             return;
         }
         String summary = String.format(java.util.Locale.ITALY,
@@ -599,6 +614,7 @@ public final class ActiveSessionActivity extends Activity {
         super.onResume();
         resumed = true;
         pendingResumeTabSelection = true;
+        if (currentTab == SessionTabStats.Tab.SPRINT) prepareSprintVoice();
         // Render and fetch map tiles only if the card is actually visible.
         handler.removeCallbacks(refreshTask);
         handler.post(refreshTask);

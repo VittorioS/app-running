@@ -70,6 +70,11 @@ public final class VoiceCoach {
         if (code != TextToSpeech.SUCCESS) releaseAudio();
     }
 
+    public void stopSpeaking() {
+        if (tts != null) tts.stop();
+        releaseAudio();
+    }
+
     private void releaseAudio() { audio.abandonAudioFocusRequest(focusRequest); }
     public boolean isReady() { return ready; }
     public void close() {
