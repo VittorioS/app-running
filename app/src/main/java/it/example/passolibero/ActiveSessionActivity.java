@@ -230,6 +230,12 @@ public final class ActiveSessionActivity extends Activity {
         positionCard.addView(map.view(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 300)));
         Ui.marginBottom(this, positionCard, Ui.text(this,
+                "Tocca un tratto per vedere distanza, durata e velocità della sezione.",
+                12, false, Ui.MUTED), 5);
+        Ui.marginBottom(this, positionCard, Ui.text(this,
+                "🟢 Camminata · 🔵 Corsa · 🔴 Sprint · ⚪ Fermo/incerto",
+                12, true, Ui.INK), 7);
+        Ui.marginBottom(this, positionCard, Ui.text(this,
                 "© OpenStreetMap contributors · La mappa segue la posizione GPS attuale",
                 11, false, Ui.MUTED), 0);
         Ui.marginBottom(this, content, positionCard, 12);

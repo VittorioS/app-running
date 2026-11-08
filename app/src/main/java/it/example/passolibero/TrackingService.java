@@ -78,6 +78,8 @@ public final class TrackingService extends Service implements LocationListener, 
     private final SprintTrial sprint = new SprintTrial();
     private long lastNormalGpsFixMs = -1;
     private boolean sprintRecorded;
+    // Distanza registrata dai fix GNSS accettati per il percorso sprint sulla mappa.
+    private double sprintMappedMeters;
     private boolean sprintVoicePrepared, sprintVoicePending;
     private int sprintVoiceGeneration;
     private SprintProgressVoicePlan sprintProgressVoice;
@@ -162,6 +164,7 @@ public final class TrackingService extends Service implements LocationListener, 
                                     sprintProgressVoice = new SprintProgressVoicePlan(mode, target);
                                     sprintProgressLastSpeakMs = -1;
                                     sprintRecorded = false;
+                                    sprintMappedMeters = 0;
                                     publishSprint();
                                     requestSprintGps(true);
                                     scheduleSpokenSprintCountdown(
@@ -276,6 +279,7 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         lastNormalGpsFixMs = -1;
         sprintRecorded = false;
+        sprintMappedMeters = 0;
         sprintVoicePending = false;
         ++sprintVoiceGeneration;
         sprintProgressVoice = null;
@@ -396,18 +400,31 @@ public final class TrackingService extends Service implements LocationListener, 
     @Override public void onLocationChanged(Location location) {
         // Callback richiesta sullo stesso Looper del worker.
         if (state == null || !location.hasAccuracy()) return;
-        // Campioni sprint elaborati separatamente dal filtro per la sessione:
-        // lettura nativa GNSS a basso intervallo, senza modificare distanza/classificazione.
+        // Solo il disegno della rotta usa la nuova etichetta "SPRINT".
+        // Il classificatore/contatore della sessione continua a 1 Hz invariato.
+        boolean sprintRouteWindow = false;
         if (sprint.phase() == SprintTrial.Phase.COUNTDOWN
                 || sprint.phase() == SprintTrial.Phase.ACTIVE) {
             long sprintNow = SystemClock.elapsedRealtime();
             advanceSprint(sprintNow);
-            if (sprint.phase() == SprintTrial.Phase.ACTIVE && location.hasSpeed()
+            sprintRouteWindow = sprint.phase() == SprintTrial.Phase.ACTIVE;
+            if (sprintRouteWindow && location.hasSpeed()
                     && location.hasSpeedAccuracy()) {
                 boolean accepted = sprint.onFix(sprintNow,
                         location.getElapsedRealtimeNanos() / 1_000_000L,
                         location.getSpeed(), location.getSpeedAccuracyMetersPerSecond(),
                         location.getAccuracy());
+                if (accepted) {
+                    // I punti sprint sono i soli fix GNSS ad alta frequenza
+                    // riconosciuti affidabili da SprintTrial. Non alterano
+                    // distanza globale, andatura o attivita' del rilevatore.
+                    double acceptedMeters = sprint.distanceM();
+                    double sectionDelta = Math.max(0, acceptedMeters - sprintMappedMeters);
+                    db.point(state.id, location.getTime(), location.getLatitude(),
+                            location.getLongitude(), location.getAccuracy(),
+                            location.getSpeed() * 3.6, sectionDelta, "SPRINT");
+                    sprintMappedMeters = acceptedMeters;
+                }
                 if (accepted && sprint.phase() == SprintTrial.Phase.ACTIVE
                         && sprintProgressVoice != null
                         && sprint.mode() == SprintTrial.Mode.DISTANCE) {
@@ -536,7 +553,10 @@ public final class TrackingService extends Service implements LocationListener, 
                 movement.name(), moving, freshActivityFix, acc, delta, pointSpeed);
 
         // Punti del percorso quando ci si sposta; a riposo al massimo ogni 15 s.
-        if (delta > 0 || location.getTime() - lastPointWall >= 15_000) {
+        // Non duplicare i punti "SPRINT" con punti RUN/WALK dello stesso
+        // istante; durante countdown e dopo lo sprint resta il tracciato normale.
+        if (!sprintRouteWindow
+                && (delta > 0 || location.getTime() - lastPointWall >= 15_000)) {
             db.point(state.id, location.getTime(), state.lastLatitude, state.lastLongitude,
                     acc, state.speedKmh, delta, movement);
             lastPointWall = location.getTime();

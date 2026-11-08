@@ -100,6 +100,13 @@ public final class TrackerDb extends SQLiteOpenHelper {
 
     public void point(long id, long wall, double lat, double lon, double acc,
                       double speed, double delta, MovementClassifier.Kind kind) {
+        point(id, wall, lat, lon, acc, speed, delta, kind.name());
+    }
+
+    /** Per i tratti Sprint, la tipologia e' un'etichetta della mappa,
+     * indipendente dal classificatore RUN/WALK. Nessuna migrazione necessaria. */
+    public void point(long id, long wall, double lat, double lon, double acc,
+                      double speed, double delta, String movement) {
         ContentValues v = new ContentValues();
         v.put("session_id", id);
         v.put("t_wall", wall);
@@ -108,7 +115,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
         v.put("accuracy_m", acc);
         v.put("speed_kmh", speed);
         v.put("delta_m", delta);
-        v.put("movement", kind.name());
+        v.put("movement", movement);
         getWritableDatabase().insertOrThrow("points", null, v);
     }
 
@@ -274,7 +281,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
 
     public static final class TrackPoint {
         public long id, time;
-        public double lat, lon;
+        public double lat, lon, deltaM, speedKmh, accuracyM;
         public String movement;
     }
 
@@ -282,7 +289,8 @@ public final class TrackerDb extends SQLiteOpenHelper {
     public List<TrackPoint> pointsAfter(long sessionId, long afterId, int limit) {
         ArrayList<TrackPoint> points = new ArrayList<>();
         try (Cursor c = getReadableDatabase().query("points",
-                new String[]{"id", "t_wall", "lat", "lon", "movement"},
+                new String[]{"id", "t_wall", "lat", "lon", "movement",
+                        "delta_m", "speed_kmh", "accuracy_m"},
                 "session_id=? AND id>?", new String[]{Long.toString(sessionId), Long.toString(afterId)},
                 null, null, "id ASC", Integer.toString(Math.min(Math.max(limit, 1), 2000)))) {
             while (c.moveToNext()) {
@@ -292,6 +300,9 @@ public final class TrackerDb extends SQLiteOpenHelper {
                 p.lat = c.getDouble(2);
                 p.lon = c.getDouble(3);
                 p.movement = c.getString(4);
+                p.deltaM = c.getDouble(5);
+                p.speedKmh = c.getDouble(6);
+                p.accuracyM = c.getDouble(7);
                 points.add(p);
             }
         }

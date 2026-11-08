@@ -2,6 +2,7 @@ package it.example.passolibero;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.app.AlertDialog;
 
 import org.osmdroid.config.Configuration;
 import org.osmdroid.config.IConfigurationProvider;
@@ -15,21 +16,23 @@ import org.osmdroid.views.overlay.Polyline;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Date;
+import java.text.DateFormat;
+import java.util.Locale;
 
 /** Mappa OSM: soltanto punti locali della sessione richiesta, mai tracce precedenti. */
 public final class TrackMap {
     private final MapView view;
-    private Polyline path;
     private final Marker currentPosition;
     private final List<Polyline> segments = new ArrayList<>();
-    private final List<GeoPoint> points = new ArrayList<>();
     private final List<GeoPoint> allPoints = new ArrayList<>();
+    private final RouteSections.Builder routeBuilder = new RouteSections.Builder();
+    private RouteSections.Section visibleSection;
+    private Polyline visibleLine;
     private boolean hasFix;
     private boolean autoFollowCurrentPosition;
     private boolean trackingMapVisible;
     private GeoPoint lastCenteredPosition;
-    private long lastPointTime;
-    private GeoPoint previousPoint;
     private boolean firstPoint = true;
     private long pointCursor;
     private long sessionId = -1;
@@ -54,20 +57,57 @@ public final class TrackMap {
         view.setMultiTouchControls(true);
         view.getController().setZoom(5.0);
         view.getController().setCenter(new GeoPoint(41.8, 12.6));
-        path = newSegment();
         currentPosition = new Marker(view);
         currentPosition.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER);
         currentPosition.setTitle("Posizione attuale");
         // Il marker compare soltanto dopo l'arrivo di una posizione valida.
     }
 
-    private Polyline newSegment() {
-        Polyline line = new Polyline();
-        line.setColor(Color.rgb(0, 125, 115));
-        line.setWidth(Ui.dp(view.getContext(), 5));
+    private Polyline newSegment(RouteSections.Section section) {
+        Polyline line = new Polyline(view);
+        switch (section.kind) {
+            case WALK: line.setColor(Color.rgb(30, 153, 84)); break;
+            case RUN: line.setColor(Color.rgb(40, 99, 224)); break;
+            case SPRINT: line.setColor(Color.rgb(222, 53, 64)); break;
+            default: line.setColor(Color.rgb(127, 133, 141)); break;
+        }
+        line.setWidth(Ui.dp(view.getContext(), 7));
+        line.setOnClickListener((polyline, mapView, touched) -> {
+            showSectionDetails(section);
+            return true;
+        });
         view.getOverlays().add(line);
         segments.add(line);
+        if (view.getOverlays().remove(currentPosition)) view.getOverlays().add(currentPosition);
         return line;
+    }
+
+    private void showSectionDetails(RouteSections.Section section) {
+        if (section == null) return;
+        String clockStart = DateFormat.getTimeInstance(
+                DateFormat.SHORT, Locale.ITALY).format(new Date(section.startedAt));
+        String clockEnd = DateFormat.getTimeInstance(
+                DateFormat.SHORT, Locale.ITALY).format(new Date(section.endedAt));
+        double average = section.averageKmh();
+        String averageText = Double.isFinite(average)
+                ? RunMath.velocity(average) + " km/h" : "—";
+        String maxText = Double.isFinite(section.maxKmh)
+                ? RunMath.velocity(section.maxKmh) + " km/h" : "—";
+        String information = "Andatura: " + RouteSections.label(section.kind)
+                + "\nOrario: " + clockStart + " – " + clockEnd
+                + "\nDurata: " + RunMath.duration(section.durationMs())
+                + "\nDistanza: " + String.format(Locale.ITALY, "%.1f m", section.distanceM)
+                + "\nVelocità media: " + averageText
+                + "\nVelocità massima: " + maxText
+                + "\nCampioni GPS: " + section.samples
+                + "\n\nValori stimati dai campioni GPS registrati per questo tratto; "
+                + "possono differire dai totali dell'allenamento.";
+        new AlertDialog.Builder(view.getContext())
+                .setTitle("Sezione " + section.number + " · "
+                        + RouteSections.label(section.kind))
+                .setMessage(information)
+                .setPositiveButton("Chiudi", null)
+                .show();
     }
 
     public MapView view() { return view; }
@@ -75,6 +115,7 @@ public final class TrackMap {
     /** Per le sessioni attive segue il GPS; lo storico resta liberamente esplorabile. */
     public void setAutoFollowCurrentPosition(boolean enabled) {
         autoFollowCurrentPosition = enabled;
+        currentPosition.setTitle(enabled ? "Posizione attuale" : "Fine percorso");
         trackingMapVisible = false;
         syncMapNetworkAccess();
     }
@@ -114,16 +155,15 @@ public final class TrackMap {
         if (sessionId == id) return;
         sessionId = id;
         pointCursor = 0;
-        points.clear();
         allPoints.clear();
+        routeBuilder.reset();
+        visibleSection = null;
+        visibleLine = null;
         hasFix = false;
         lastCenteredPosition = null;
         syncMapNetworkAccess();
         view.getOverlays().removeAll(segments);
         segments.clear();
-        path = newSegment();
-        previousPoint = null;
-        lastPointTime = 0;
         view.getOverlays().remove(currentPosition);
         firstPoint = true;
         view.invalidate();
@@ -136,19 +176,22 @@ public final class TrackMap {
         for (TrackerDb.TrackPoint p : additional) {
             pointCursor = p.id;
             GeoPoint gp = new GeoPoint(p.lat, p.lon);
-            if (previousPoint != null && RouteSegmenter.isGap(lastPointTime,
-                    previousPoint.getLatitude(), previousPoint.getLongitude(),
-                    p.time, p.lat, p.lon)) {
-                points.clear();
-                path = newSegment();
+            RouteSections.Section section = routeBuilder.accept(new RouteSections.Fix(
+                    p.id, p.time, p.lat, p.lon, p.deltaM, p.speedKmh,
+                    p.accuracyM, p.movement));
+            if (section == null) continue;
+            if (visibleSection != section) {
+                visibleSection = section;
+                visibleLine = newSegment(section);
+                if (section.geometry.size() > 1) {
+                    RouteSections.Fix anchor = section.geometry.get(0);
+                    visibleLine.addPoint(new GeoPoint(anchor.lat, anchor.lon));
+                }
             }
-            points.add(gp);
-            path.addPoint(gp); // Append one point instead of recopying the entire route.
+            visibleLine.addPoint(gp);
             allPoints.add(gp);
             hasFix = true;
             syncMapNetworkAccess();
-            previousPoint = gp;
-            lastPointTime = p.time;
             currentPosition.setPosition(gp);
             if (!view.getOverlays().contains(currentPosition)) view.getOverlays().add(currentPosition);
             if (firstPoint) {

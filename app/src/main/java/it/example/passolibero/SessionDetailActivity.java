@@ -176,6 +176,12 @@ public final class SessionDetailActivity extends Activity {
         mapCard.addView(map.view(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 300)));
         Ui.marginBottom(this, mapCard, Ui.text(this,
+                "Tocca un tratto della mappa per vedere le statistiche della sezione.",
+                12, false, Ui.MUTED), 5);
+        Ui.marginBottom(this, mapCard, Ui.text(this,
+                "🟢 Camminata · 🔵 Corsa · 🔴 Sprint · ⚪ Fermo/incerto",
+                12, true, Ui.INK), 7);
+        Ui.marginBottom(this, mapCard, Ui.text(this,
                 "© OpenStreetMap contributors · Percorso salvato, esplorabile con le dita",
                 11, false, Ui.MUTED), 0);
         Ui.marginBottom(this, content, mapCard, 12);
