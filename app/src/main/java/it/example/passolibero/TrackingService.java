@@ -62,6 +62,7 @@ public final class TrackingService extends Service implements LocationListener, 
     private final DistanceAccumulator distanceAccumulator = new DistanceAccumulator();
     private final MotionEvidencePolicy motionEvidence = new MotionEvidencePolicy();
     private final MotionTimeline motionTimeline = new MotionTimeline();
+    private final SessionMotionVoiceEvents sessionVoice = new SessionMotionVoiceEvents();
     private boolean detectorSeen;
     private final StepCounterEvidence counterEvidence = new StepCounterEvidence();
     private boolean stepSensorAvailable;
@@ -287,6 +288,8 @@ public final class TrackingService extends Service implements LocationListener, 
         long elapsed = Math.max(0, state.lastTickElapsedMs - state.startedElapsedMs);
         if (restore && elapsed > accounted) state.unknownMs += elapsed - accounted;
         motionTimeline.restore(state.runMs, state.walkMs, state.stillMs, state.unknownMs, state.movingUnknownMs);
+        // Non dedurre pause o riprese precedenti a un riavvio del servizio.
+        sessionVoice.reset();
         motionTimeline.advance(restore ? state.lastTickElapsedMs : state.startedElapsedMs,
                 MotionEvidencePolicy.Evidence.UNCERTAIN, MovementClassifier.Kind.UNKNOWN);
         inertialGait.reset();
@@ -356,6 +359,7 @@ public final class TrackingService extends Service implements LocationListener, 
     /** Attiva anche la voce sprint, indipendentemente dagli avvisi checkpoint. */
     private void syncVoiceCoach() {
         boolean enabled = AppPrefs.voiceEnabled(prefs) || gpsIncident
+                || sessionVoice.hasSeenMovement()
                 || sprintVoicePrepared || sprintVoicePending || sprint.busy();
         if (enabled && voice == null) {
             voice = new VoiceCoach(this);
@@ -570,7 +574,8 @@ public final class TrackingService extends Service implements LocationListener, 
         MovementClassifier.Kind previous = motionTimeline.visible();
         boolean cumulativeSteps = stepSensorAvailable && stepSensor != null
                 && stepSensor.getType() == Sensor.TYPE_STEP_COUNTER;
-        motionTimeline.advance(now, evaluateMotion(now), freshActivity,
+        MotionEvidencePolicy.Evidence evidence = evaluateMotion(now);
+        motionTimeline.advance(now, evidence, freshActivity,
                 cumulativeSteps ? StepCounterEvidence.STOP_CONFIRM_MS : 0);
         MovementClassifier.Kind current = motionTimeline.visible();
         if (previous != current && (current == MovementClassifier.Kind.STILL
@@ -579,6 +584,14 @@ public final class TrackingService extends Service implements LocationListener, 
             activityEvidence.onMotionState(current);
         }
         applyTimeline();
+        // Solo stati confermati dal ledger esistente: non cambiare la logica
+        // di movimento, i tempi della sessione o i filtri GPS.
+        boolean speechReady = voice != null && voice.isReady();
+        boolean sprintPriority = sprint.busy() || sprintVoicePending;
+        String announcement = sessionVoice.observe(current, evidence,
+                speechReady, sprintPriority);
+        if (sessionVoice.hasSeenMovement() && voice == null) syncVoiceCoach();
+        if (announcement != null && voice != null) voice.speak(announcement);
     }
 
     private void applyTimeline() {
