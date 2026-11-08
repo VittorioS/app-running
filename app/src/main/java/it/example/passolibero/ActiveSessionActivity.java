@@ -27,6 +27,7 @@ public final class ActiveSessionActivity extends Activity {
     private SharedPreferences prefs;
     private TrackerDb db;
     private TrackMap map;
+    private RouteSectionList routeSectionList;
     private TextView distance, paceNow, paceAvg, duration, speed, averageSpeed, maxRunSpeed, steps,
             cadence, tabTitle, tabHint, unclassifiedHint, movement, gps, checkpoint, remaining, goalLabel;
     private Button[] tabButtons;
@@ -235,6 +236,8 @@ public final class ActiveSessionActivity extends Activity {
         Ui.marginBottom(this, positionCard, Ui.text(this,
                 "🟢 Camminata · 🔵 Corsa · 🔴 Sprint · ⚪ Fermo/incerto",
                 12, true, Ui.INK), 7);
+        routeSectionList = new RouteSectionList(this, map);
+        Ui.marginBottom(this, positionCard, routeSectionList.view(), 8);
         Ui.marginBottom(this, positionCard, Ui.text(this,
                 "© OpenStreetMap contributors · La mappa segue la posizione GPS attuale",
                 11, false, Ui.MUTED), 0);
@@ -588,13 +591,20 @@ public final class ActiveSessionActivity extends Activity {
                 if (mapVisible) map.onResume();
                 else map.onPause();
             }
-            if (mapVisible) {
+            Rect sectionPart = new Rect();
+            boolean listVisible = routeSectionList.view().getGlobalVisibleRect(sectionPart)
+                    && sectionPart.height() >= Ui.dp(ActiveSessionActivity.this, 32);
+            if (mapVisible || listVisible) {
                 if (active && s.id > 0) {
                     map.update(db, s.id);
-                    map.updateLivePosition(s.lastLatitude, s.lastLongitude, s.lastLocationValid);
+                    if (mapVisible) {
+                        map.updateLivePosition(s.lastLatitude, s.lastLongitude,
+                                s.lastLocationValid);
+                    }
                 } else {
                     map.clearForSession(0);
                 }
+                routeSectionList.sync();
             }
             renderTab(s, active);
             renderSprint(s.id, active);

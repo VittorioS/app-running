@@ -53,3 +53,5 @@ java -cp build-test SprintProgressVoicePlanTest
 
 javac -cp build-test -d build-test app/src/main/java/it/example/passolibero/RouteSections.java tests/RouteSectionsTest.java
 java -cp build-test RouteSectionsTest
+javac -cp build-test -d build-test app/src/main/java/it/example/passolibero/RouteSectionSelection.java tests/RouteSectionSelectionTest.java
+java -cp build-test RouteSectionSelectionTest

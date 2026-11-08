@@ -23,6 +23,7 @@ App Android nativa in Java (min SDK 30, target SDK 35). Tracciamento GPS e senso
 - **Database migrato da versione 1 a 2 con ALTER TABLE** per aggiungere `goal_m` senza cancellare sessioni e punti precedenti.
 - **SessionDetailActivity** con mappa di una sessione storica e statistiche salvate.
 - **RouteSegmenter** impedisce linee fittizie sulla mappa dopo salti o lunghe perdite di segnale.
+- **Sezioni del percorso:** nella sessione corrente e nello storico i tratti WALK/RUN/SPRINT hanno colori distinti e statistiche dedicate. La lista sotto la mappa permette di selezionare un tratto: solo quello mantiene il proprio colore, gli altri diventano grigi. Toccando un tratto sulla mappa si seleziona la riga corrispondente e si apre il dettaglio GPS. "Mostra tutte" ripristina i colori e, nella sessione live, il seguito della posizione.
 - Se non hai autorizzato Attività fisica, GPS e durata funzionano; passi/cadenza richiedono il sensore compatibile e il permesso ACTIVITY_RECOGNITION.
 
 ## Test

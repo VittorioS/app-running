@@ -15,6 +15,7 @@ import org.osmdroid.views.overlay.Polyline;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Date;
 import java.text.DateFormat;
@@ -29,6 +30,12 @@ public final class TrackMap {
     private final RouteSections.Builder routeBuilder = new RouteSections.Builder();
     private RouteSections.Section visibleSection;
     private Polyline visibleLine;
+    private int selectedSectionNumber;
+    private OnSectionSelectedListener sectionSelectedListener;
+
+    public interface OnSectionSelectedListener {
+        void onSectionSelected(int sectionNumber);
+    }
     private final List<RouteSections.SprintWindow> oldSprintWindows = new ArrayList<>();
     private boolean oldSprintWindowsLoaded;
     private boolean hasFix;
@@ -67,14 +74,12 @@ public final class TrackMap {
 
     private Polyline newSegment(RouteSections.Section section) {
         Polyline line = new Polyline(view);
-        switch (section.kind) {
-            case WALK: line.setColor(Color.rgb(30, 153, 84)); break;
-            case RUN: line.setColor(Color.rgb(40, 99, 224)); break;
-            case SPRINT: line.setColor(Color.rgb(222, 53, 64)); break;
-            default: line.setColor(Color.rgb(127, 133, 141)); break;
-        }
-        line.setWidth(Ui.dp(view.getContext(), 7));
+        line.setColor(RouteSectionSelection.color(section.kind, section.number,
+                selectedSectionNumber));
+        line.setWidth(Ui.dp(view.getContext(),
+                RouteSectionSelection.widthDp(section.number, selectedSectionNumber)));
         line.setOnClickListener((polyline, mapView, touched) -> {
+            selectSection(section.number);
             showSectionDetails(section);
             return true;
         });
@@ -117,6 +122,65 @@ public final class TrackMap {
 
     public MapView view() { return view; }
 
+    /** La lista e la mappa condividono lo stesso stato di selezione. Zero = tutte. */
+    public List<RouteSections.Section> sections() {
+        return Collections.unmodifiableList(routeBuilder.sections());
+    }
+
+    public int selectedSectionNumber() { return selectedSectionNumber; }
+
+    public void setOnSectionSelectedListener(OnSectionSelectedListener listener) {
+        sectionSelectedListener = listener;
+    }
+
+    /**
+     * Evidenzia una sola sezione. I nuovi tratti ricevuti durante il tracking
+     * restano grigi finché una selezione è attiva.
+     */
+    public boolean selectSection(int number) {
+        if (number < 0 || number > segments.size()) return false;
+        if (number == selectedSectionNumber) return true;
+        selectedSectionNumber = number;
+        List<RouteSections.Section> all = routeBuilder.sections();
+        for (int i = 0; i < segments.size(); i++) {
+            RouteSections.Section section = all.get(i);
+            Polyline line = segments.get(i);
+            line.setColor(RouteSectionSelection.color(section.kind, section.number, number));
+            line.setWidth(Ui.dp(view.getContext(),
+                    RouteSectionSelection.widthDp(section.number, number)));
+        }
+        if (number > 0) {
+            zoomToSection(all.get(number - 1));
+        } else if (autoFollowCurrentPosition) {
+            lastCenteredPosition = null;
+            followCurrentPosition();
+        } else {
+            zoomToRoute();
+        }
+        view.invalidate();
+        if (sectionSelectedListener != null) sectionSelectedListener.onSectionSelected(number);
+        return true;
+    }
+
+    private void zoomToSection(RouteSections.Section section) {
+        if (section.geometry.isEmpty()) return;
+        if (section.geometry.size() == 1) {
+            RouteSections.Fix fix = section.geometry.get(0);
+            view.getController().setCenter(new GeoPoint(fix.lat, fix.lon));
+            view.getController().setZoom(18.0);
+            return;
+        }
+        double north = -90, south = 90, east = -180, west = 180;
+        for (RouteSections.Fix fix : section.geometry) {
+            north = Math.max(north, fix.lat);
+            south = Math.min(south, fix.lat);
+            east = Math.max(east, fix.lon);
+            west = Math.min(west, fix.lon);
+        }
+        view.zoomToBoundingBox(new BoundingBox(north + 0.0001, east + 0.0001,
+                south - 0.0001, west - 0.0001), true, Ui.dp(view.getContext(), 35));
+    }
+
     /** Per le sessioni attive segue il GPS; lo storico resta liberamente esplorabile. */
     public void setAutoFollowCurrentPosition(boolean enabled) {
         autoFollowCurrentPosition = enabled;
@@ -142,7 +206,8 @@ public final class TrackMap {
     }
 
     private void followCurrentPosition() {
-        if (!autoFollowCurrentPosition || !trackingMapVisible || !hasFix
+        if (selectedSectionNumber != 0 || !autoFollowCurrentPosition
+                || !trackingMapVisible || !hasFix
                 || currentPosition.getPosition() == null) return;
         GeoPoint p = currentPosition.getPosition();
         if (lastCenteredPosition != null &&
@@ -166,6 +231,8 @@ public final class TrackMap {
         oldSprintWindowsLoaded = false;
         visibleSection = null;
         visibleLine = null;
+        selectedSectionNumber = 0;
+        if (sectionSelectedListener != null) sectionSelectedListener.onSectionSelected(0);
         hasFix = false;
         lastCenteredPosition = null;
         syncMapNetworkAccess();

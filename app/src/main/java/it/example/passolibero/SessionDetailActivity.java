@@ -23,6 +23,7 @@ import java.util.Locale;
  */
 public final class SessionDetailActivity extends Activity {
     private TrackMap map;
+    private RouteSectionList routeSectionList;
     private TrackerDb db;
     private TrackerDb.Entry session;
     private long sessionId;
@@ -181,6 +182,8 @@ public final class SessionDetailActivity extends Activity {
         Ui.marginBottom(this, mapCard, Ui.text(this,
                 "🟢 Camminata · 🔵 Corsa · 🔴 Sprint · ⚪ Fermo/incerto",
                 12, true, Ui.INK), 7);
+        routeSectionList = new RouteSectionList(this, map);
+        Ui.marginBottom(this, mapCard, routeSectionList.view(), 8);
         Ui.marginBottom(this, mapCard, Ui.text(this,
                 "© OpenStreetMap contributors · Percorso salvato, esplorabile con le dita",
                 11, false, Ui.MUTED), 0);
@@ -189,6 +192,7 @@ public final class SessionDetailActivity extends Activity {
         for (int batch = 0; batch < 100; batch++) {
             if (map.update(db, sessionId) < 500) break;
         }
+        routeSectionList.sync();
         map.view().post(() -> map.zoomToRoute());
 
         LinearLayout progressCard = Ui.card(this);
