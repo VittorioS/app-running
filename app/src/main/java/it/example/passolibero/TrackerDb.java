@@ -164,7 +164,11 @@ public final class TrackerDb extends SQLiteOpenHelper {
                 sprint.elapsedMs = c.getLong(5);
                 sprint.distanceM = c.getDouble(6);
                 sprint.peakKmh = c.isNull(7) ? null : c.getDouble(7);
-                sprint.averageKmh = c.isNull(8) ? null : c.getDouble(8);
+                // Le vecchie build salvavano la velocità media 1000x troppo alta.
+                // Ricalcolala dai dati originali per correggere anche lo storico.
+                double corrected = SprintTrial.averageSpeedKmh(
+                        sprint.distanceM, sprint.elapsedMs, c.getInt(9));
+                sprint.averageKmh = Double.isFinite(corrected) ? corrected : null;
                 sprint.samples = c.getInt(9);
                 sprint.outcome = c.getString(10);
                 results.add(sprint);

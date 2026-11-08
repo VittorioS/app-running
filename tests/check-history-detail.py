@@ -12,7 +12,10 @@ for label in ("RITMO MEDIO (min/km)", "VELOCITÀ MEDIA",
               "VELOCITÀ ATTUALE", "PASSI ATTRIBUITI", "CADENZA MEDIA"):
     assert label in live and label in history, label
 assert "sprintCard" in live and "sprintCard" in history
-assert '"🏃 Corsa", "🚶 Camminata", "∑ Totali"' in history
+assert '"🏃 Corsa", "🚶 Cammina", "∑ Totali", "⚡ Sprint"' in history
+assert '"🏃 Corsa", "🚶 Cammina", "∑ Totali", "⚡ Sprint"' in live
+assert 'statsCard.setVisibility(sprint ? View.GONE : View.VISIBLE)' in history
+assert 'statsCard.setVisibility(sprintTab ? View.GONE : View.VISIBLE)' in live
 assert "SessionTabStats.meters(tab, session.runM, session.walkM)" in history
 assert "SessionTabStats.milliseconds(tab, session.runMs, session.walkMs)" in history
 assert "SessionTabStats.averageCadence(milliseconds, tabSteps)" in history
@@ -22,6 +25,8 @@ assert "map.update(db, sessionId)" in history
 assert "map.zoomToRoute()" in history
 assert "checkpointIntervalM" in history
 assert "db.sprints(sessionId)" in history
+assert "db.sprints(sessionId)" in live
+assert "SprintTrial.averageSpeedKmh(distance, elapsed, samples)" in live
 assert 'writer.name("sprints")' in json
 assert "db.recordSprint(state.id, sprint, now)" in service
 assert "sprintRecorded = true;" in service

@@ -9,6 +9,13 @@ public final class SessionTabStatsTest {
         SessionTabStats.Tab run = SessionTabStats.Tab.RUN;
         SessionTabStats.Tab walk = SessionTabStats.Tab.WALK;
         SessionTabStats.Tab total = SessionTabStats.Tab.TOTAL;
+        SessionTabStats.Tab sprint = SessionTabStats.Tab.SPRINT;
+        check(SessionTabStats.Tab.values().length == 4, "Quattro tab distinte");
+        check(!SessionTabStats.hasCurrentSpeed(sprint, "RUN"), "Sprint non eredita velocita' corrente da Corsa");
+        boolean separated = false;
+        try { SessionTabStats.meters(sprint, 1200, 430); }
+        catch (IllegalArgumentException expected) { separated = true; }
+        check(separated, "Sprint non mescola le distanze classificate");
         check(SessionTabStats.meters(run, 1200, 430) == 1200, "Corsa senza metri camminata");
         check(SessionTabStats.meters(walk, 1200, 430) == 430, "Camminata senza metri corsa");
         check(SessionTabStats.meters(total, 1200, 430) == 1630, "Totale = corsa + camminata");

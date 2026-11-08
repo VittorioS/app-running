@@ -28,7 +28,7 @@ public final class SessionDetailActivity extends Activity {
     private long sessionId;
     private SessionTabStats.Tab selectedTab = SessionTabStats.Tab.TOTAL;
     private Button[] tabButtons;
-    private LinearLayout runningSpeedBox, sprintCard;
+    private LinearLayout runningSpeedBox, sprintCard, statsCard;
     private TextView tabTitle, distance, duration, paceAvg, averageSpeed,
             currentPace, currentSpeed, steps, cadence, maxRunSpeed, tabHint, unclassified;
     private List<TrackerDb.SprintRecord> sprintRecords;
@@ -87,15 +87,15 @@ public final class SessionDetailActivity extends Activity {
                         : "Allenamento interrotto o non completato",
                 13, false, Ui.MUTED), 14);
 
-        // Stesse tre tab e stesse proiezioni statistiche della schermata live.
+        // Stesse quattro tab e stesse proiezioni della schermata live.
         LinearLayout tabBar = Ui.horizontal(this);
-        String[] labels = {"🏃 Corsa", "🚶 Camminata", "∑ Totali"};
+        String[] labels = {"🏃 Corsa", "🚶 Cammina", "∑ Totali", "⚡ Sprint"};
         SessionTabStats.Tab[] tabs = SessionTabStats.Tab.values();
         tabButtons = new Button[tabs.length];
         for (int i = 0; i < tabs.length; i++) {
             final SessionTabStats.Tab tab = tabs[i];
             Button button = Ui.button(this, labels[i], false);
-            button.setTextSize(13);
+            button.setTextSize(11);
             button.setContentDescription("Statistiche storiche " + labels[i]);
             button.setOnClickListener(v -> {
                 selectedTab = tab;
@@ -105,12 +105,12 @@ public final class SessionDetailActivity extends Activity {
             tabButtons[i] = button;
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                     0, Ui.dp(this, 50), 1f);
-            params.rightMargin = Ui.dp(this, i == 2 ? 0 : 5);
+            params.rightMargin = Ui.dp(this, i == tabs.length - 1 ? 0 : 3);
             tabBar.addView(button, params);
         }
         Ui.marginBottom(this, content, tabBar, 12);
 
-        LinearLayout statsCard = Ui.card(this);
+        statsCard = Ui.card(this);
         tabTitle = Ui.text(this, "", 14, true, Ui.MUTED);
         Ui.marginBottom(this, statsCard, tabTitle, 4);
         distance = Ui.text(this, "0,00 km", 43, true, Ui.INK);
@@ -255,9 +255,12 @@ public final class SessionDetailActivity extends Activity {
 
     private void renderTab() {
         SessionTabStats.Tab tab = selectedTab;
+        boolean sprint = tab == SessionTabStats.Tab.SPRINT;
+        statsCard.setVisibility(sprint ? View.GONE : View.VISIBLE);
+        sprintCard.setVisibility(sprint ? View.VISIBLE : View.GONE);
+        if (sprint) return;
         boolean running = tab == SessionTabStats.Tab.RUN;
         runningSpeedBox.setVisibility(running ? View.VISIBLE : View.GONE);
-        sprintCard.setVisibility(running ? View.VISIBLE : View.GONE);
         tabTitle.setText(running ? "SOLO CORSA" :
                 tab == SessionTabStats.Tab.WALK ? "SOLO CAMMINATA"
                         : "CORSA + CAMMINATA");

@@ -34,7 +34,10 @@ public final class ActiveSessionActivity extends Activity {
     private Spinner sprintCountdown, sprintMode;
     private EditText sprintTarget;
     private TextView sprintStatus;
-    private LinearLayout maxRunSpeedContainer, sprintCard;
+    private LinearLayout maxRunSpeedContainer, sprintCard, statsCard, sprintHistoryRows;
+    private long sprintHistorySessionId = -1;
+    private long sprintHistoryLastRefreshMs;
+    private int sprintHistorySize = -1;
     private SessionTabStats.Tab currentTab = SessionTabStats.Tab.TOTAL;
     private ProgressBar goalProgress;
     private boolean resumed, sessionSeen;
@@ -100,15 +103,15 @@ public final class ActiveSessionActivity extends Activity {
             Ui.marginBottom(this, content, batteryDebug, 12);
         }
 
-        // Le tre tab modificano solo la visualizzazione: il classificatore GPS resta invariato.
+        // Le quattro tab modificano solo la visualizzazione: il classificatore resta invariato.
         LinearLayout tabBar = Ui.horizontal(this);
-        tabButtons = new Button[3];
-        String[] labels = {"🏃 Corsa", "🚶 Camminata", "∑ Totali"};
+        tabButtons = new Button[4];
+        String[] labels = {"🏃 Corsa", "🚶 Cammina", "∑ Totali", "⚡ Sprint"};
         SessionTabStats.Tab[] tabs = SessionTabStats.Tab.values();
         for (int i = 0; i < tabs.length; i++) {
             final SessionTabStats.Tab tab = tabs[i];
             Button tabButton = Ui.button(this, labels[i], false);
-            tabButton.setTextSize(13);
+            tabButton.setTextSize(11);
             tabButton.setContentDescription("Statistiche " + labels[i]);
             tabButton.setOnClickListener(v -> {
                 pendingResumeTabSelection = false;
@@ -118,13 +121,13 @@ public final class ActiveSessionActivity extends Activity {
             });
             tabButtons[i] = tabButton;
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(this, 50), 1f);
-            lp.rightMargin = Ui.dp(this, i == 2 ? 0 : 5);
+            lp.rightMargin = Ui.dp(this, i == tabs.length - 1 ? 0 : 3);
             tabBar.addView(tabButton, lp);
         }
         Ui.marginBottom(this, content, tabBar, 12);
         updateTabButtons();
 
-        LinearLayout statsCard = Ui.card(this);
+        statsCard = Ui.card(this);
         tabTitle = Ui.text(this, "TOTALI CORSA + CAMMINATA", 14, true, Ui.MUTED);
         Ui.marginBottom(this, statsCard, tabTitle, 4);
         distance = Ui.text(this, "0,00 km", 43, true, Ui.INK);
@@ -211,6 +214,10 @@ public final class ActiveSessionActivity extends Activity {
               + "Frequenza e precisione effettive dipendono dal ricevitore; "
               + "servono velocità e accuratezza GPS valide.",
                 12, false, Ui.MUTED), 4);
+        sprintHistoryRows = Ui.vertical(this);
+        Ui.marginBottom(this, sprintCard, Ui.text(this,
+                "SPRINT EFFETTUATI IN QUESTA SESSIONE", 13, true, Ui.MUTED), 9);
+        Ui.marginBottom(this, sprintCard, sprintHistoryRows, 0);
         Ui.marginBottom(this, content, sprintCard, 12);
 
         // La sola mappa live dell'app: posizione corrente e punti GPS di questa sessione.
@@ -315,7 +322,10 @@ public final class ActiveSessionActivity extends Activity {
 
     private void renderTab(RunState s, boolean active) {
         SessionTabStats.Tab tab = currentTab;
-        sprintCard.setVisibility(tab == SessionTabStats.Tab.RUN ? View.VISIBLE : View.GONE);
+        boolean sprintTab = tab == SessionTabStats.Tab.SPRINT;
+        sprintCard.setVisibility(sprintTab ? View.VISIBLE : View.GONE);
+        statsCard.setVisibility(sprintTab ? View.GONE : View.VISIBLE);
+        if (sprintTab) return;
         maxRunSpeedContainer.setVisibility(tab == SessionTabStats.Tab.RUN ? View.VISIBLE : View.GONE);
         maxRunSpeed.setText(active && Double.isFinite(s.maxRunSpeedKmh) && s.maxRunSpeedKmh > 0
                 ? RunMath.velocity(s.maxRunSpeedKmh) + " km/h" : "-- km/h");
@@ -412,6 +422,7 @@ public final class ActiveSessionActivity extends Activity {
             long end = prefs.getLong("sprint_countdown_end", 0);
             long remaining = Math.max(0, (end - SystemClock.elapsedRealtime() + 999) / 1000);
             sprintStatus.setText("Sprint tra " + remaining + "… Preparati!");
+            refreshSprintHistory(sessionId, active);
             return;
         }
         int samples = prefs.getInt("sprint_samples", 0);
@@ -419,13 +430,16 @@ public final class ActiveSessionActivity extends Activity {
                 "sprint_distance_bits", Double.doubleToLongBits(0)));
         double max = Double.longBitsToDouble(prefs.getLong(
                 "sprint_peak_bits", Double.doubleToLongBits(Double.NaN)));
-        double avg = Double.longBitsToDouble(prefs.getLong(
-                "sprint_avg_bits", Double.doubleToLongBits(Double.NaN)));
+        // Ricalcolo con le unità corrette anche per snapshot di vecchie build.
+        // Ignoriamo il valore sprint_avg_bits precedentemente salvato (1000x).
+        double avg;
         long elapsed = measuring
                 ? Math.max(0, SystemClock.elapsedRealtime() - prefs.getLong("sprint_started", 0))
                 : prefs.getLong("sprint_elapsed", 0);
+        avg = SprintTrial.averageSpeedKmh(distance, elapsed, samples);
+        refreshSprintHistory(sessionId, active);
         if ("IDLE".equals(phase)) {
-            sprintStatus.setText("Nessuno sprint in corso.");
+            sprintStatus.setText("Nessuno sprint in corso. Imposta e avvia una prova.");
             return;
         }
         String summary = String.format(java.util.Locale.ITALY,
@@ -439,6 +453,56 @@ public final class ActiveSessionActivity extends Activity {
                 samples);
         sprintStatus.setText(summary + (samples < 2
                 ? "\nMisure insufficienti per una velocità media affidabile." : ""));
+    }
+
+    /** Elenco conservativo: un refresh ogni 3 s mentre la tab Sprint è visibile. */
+    private void refreshSprintHistory(long sessionId, boolean active) {
+        if (currentTab != SessionTabStats.Tab.SPRINT || sprintHistoryRows == null) return;
+        if (!active || sessionId <= 0) {
+            sprintHistoryRows.removeAllViews();
+            sprintHistoryRows.addView(Ui.text(this,
+                    "Avvia una sessione per registrare gli sprint.", 13, false, Ui.MUTED));
+            sprintHistorySessionId = -1;
+            return;
+        }
+        long now = SystemClock.elapsedRealtime();
+        if (sprintHistorySessionId == sessionId && now - sprintHistoryLastRefreshMs < 3000)
+            return;
+        sprintHistoryLastRefreshMs = now;
+        java.util.List<TrackerDb.SprintRecord> records;
+        try {
+            records = db.sprints(sessionId);
+        } catch (RuntimeException error) {
+            android.util.Log.w("PassoLiberoSprint", "Storico sprint temporaneamente non disponibile", error);
+            return;
+        }
+        if (sprintHistorySessionId == sessionId && sprintHistorySize == records.size()) return;
+        sprintHistorySessionId = sessionId;
+        sprintHistorySize = records.size();
+        sprintHistoryRows.removeAllViews();
+        if (records.isEmpty()) {
+            Ui.marginBottom(this, sprintHistoryRows, Ui.text(this,
+                    "Nessuno sprint completato. Puoi eseguire più prove, una per volta.",
+                    13, false, Ui.MUTED), 5);
+            return;
+        }
+        for (int i = 0; i < records.size(); i++) {
+            TrackerDb.SprintRecord record = records.get(i);
+            String type = "DISTANCE".equals(record.mode)
+                    ? record.target + " m" : record.target + " s";
+            String average = record.averageKmh == null ? "--"
+                    : RunMath.velocity(record.averageKmh);
+            String peak = record.peakKmh == null ? "--"
+                    : RunMath.velocity(record.peakKmh);
+            String outcome = "CANCELLED".equals(record.outcome) ? "Annullato" : "Completato";
+            String item = "Sprint " + (i + 1) + " · " + type + " · " + outcome
+                    + "\n" + String.format(java.util.Locale.ITALY, "%.1f m", record.distanceM)
+                    + " in " + RunMath.duration(record.elapsedMs)
+                    + " · media " + average + " km/h · max " + peak + " km/h"
+                    + "\nCampioni validi: " + record.samples;
+            Ui.marginBottom(this, sprintHistoryRows,
+                    Ui.text(this, item, 13, false, Ui.INK), 12);
+        }
     }
 
     private void maybeShowGpsAlert(RunState s) {
@@ -476,7 +540,12 @@ public final class ActiveSessionActivity extends Activity {
                 // deve esserci un tracking service che aggiorna effettivamente lo stato.
                 long ageMs = System.currentTimeMillis() - prefs.getLong("heartbeat_wall", 0);
                 if (ageMs >= 0 && ageMs <= 15_000) {
-                    SessionTabStats.Tab movementTab = SessionTabStats.tabForMovement(s.movement);
+                    String sprintPhase = prefs.getLong("sprint_session_id", -1) == s.id
+                            ? prefs.getString("sprint_phase", "IDLE") : "IDLE";
+                    SessionTabStats.Tab movementTab =
+                            ("COUNTDOWN".equals(sprintPhase) || "ACTIVE".equals(sprintPhase))
+                            ? SessionTabStats.Tab.SPRINT
+                            : SessionTabStats.tabForMovement(s.movement);
                     if (movementTab != null) {
                         pendingResumeTabSelection = false;
                         if (currentTab != movementTab) {

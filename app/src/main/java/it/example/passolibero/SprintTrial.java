@@ -127,9 +127,14 @@ public final class SprintTrial {
     public double peakSpeedKmh() { return maxKmh; }
     public int samples() { return validSamples; }
     public String finishReason() { return finishReason; }
+    /** Distanza in metri, durata in millisecondi: m * 3600 / ms = km/h. */
+    public static double averageSpeedKmh(double meters, long durationMs, int samples) {
+        if (samples < 2 || durationMs <= 0 || !Double.isFinite(meters) || meters <= 0)
+            return Double.NaN;
+        return meters * 3_600.0 / durationMs;
+    }
+
     public double averageSpeedKmh(long now) {
-        long elapsed = elapsedMs(now);
-        return validSamples < 2 || elapsed <= 0 ? Double.NaN
-                : meters * 3_600_000.0 / elapsed;
+        return averageSpeedKmh(meters, elapsedMs(now), validSamples);
     }
 }

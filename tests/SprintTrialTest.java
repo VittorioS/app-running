@@ -34,7 +34,22 @@ public final class SprintTrialTest {
         check(s.elapsedMs(120_000) == 10_000, "Durata esatta");
         check(!fix(s, 116_000, 114_900, 10), "Nessun campione dopo fine");
         check(Double.isFinite(s.averageSpeedKmh(120_000)), "Media calcolata");
+        check(Math.abs(SprintTrial.averageSpeedKmh(55.0, 11_000, 12) - 18.0) < .00001,
+                "55 metri in 11 secondi = 18 km/h, non 18000");
+        check(Math.abs(SprintTrial.averageSpeedKmh(51.6, 11_000, 12) - 16.8872727) < .001,
+                "Regressione screenshot: 16882 km/h diventano circa 16.9");
+        check(Double.isNaN(SprintTrial.averageSpeedKmh(55.0, 11_000, 1)),
+                "GNSS insufficiente: media non disponibile");
+        check(Double.isNaN(SprintTrial.averageSpeedKmh(55.0, 0, 12)),
+                "Durata nulla: niente divisione per zero");
+        check(Double.isNaN(SprintTrial.averageSpeedKmh(Double.NaN, 11_000, 12)),
+                "Distanza non valida");
+        // Una nuova prova sulla stessa sessione riparte da zero senza sovrascrivere la precedente.
+        double firstPeak = s.peakSpeedKmh();
         s.start(200_000, 10, SprintTrial.Mode.DISTANCE, 10);
+        check(s.samples() == 0 && s.distanceM() == 0 && Double.isNaN(s.peakSpeedKmh()),
+                "Secondo sprint indipendente dal precedente");
+        check(firstPeak > 0, "Risultato precedente completato");
         s.advance(210_000);
         fix(s, 210_000, 210_000, 8);
         fix(s, 211_000, 211_000, 8);
