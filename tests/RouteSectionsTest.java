@@ -61,7 +61,18 @@ public final class RouteSectionsTest {
         gaps.reset();
         yes(gaps.sections().isEmpty(), "Cambio sessione: niente tratti precedenti");
         yes(RouteSections.kind("SPRINT") == RouteSections.Kind.SPRINT,
-                "Etichetta sprint registrata nel DB");
+                "Etichetta sprint legacy nel DB");
+        yes(RouteSections.kind("SPRINT:123456") == RouteSections.Kind.SPRINT,
+                "Nuova etichetta di sprint con id univoco");
+        RouteSections.Builder successive = new RouteSections.Builder();
+        successive.accept(p(1,1000,40,14,0,20,"SPRINT:111"));
+        successive.accept(p(2,2000,40.00001,14,1,20,"SPRINT:111"));
+        successive.accept(p(3,3000,40.00002,14,0,21,"SPRINT:222"));
+        successive.accept(p(4,4000,40.00003,14,1,21,"SPRINT:222"));
+        yes(successive.sections().size() == 2
+                && successive.sections().get(0).kind == RouteSections.Kind.SPRINT
+                && successive.sections().get(1).kind == RouteSections.Kind.SPRINT,
+                "Sprint consecutivi sempre separati anche senza tratti intermedi");
         RouteSections.SprintWindow old = new RouteSections.SprintWindow(70_000, 10_000);
         yes(old.includes(60_000) && old.includes(70_000), "Sprint del vecchio storico");
         yes(!old.includes(58_000) && !old.includes(72_000),

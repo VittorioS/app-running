@@ -15,7 +15,9 @@ public final class RouteSections {
     public static Kind kind(String movement) {
         if ("WALK".equals(movement)) return Kind.WALK;
         if ("RUN".equals(movement)) return Kind.RUN;
-        if ("SPRINT".equals(movement)) return Kind.SPRINT;
+        if ("SPRINT".equals(movement)
+                || (movement != null && movement.startsWith("SPRINT:")))
+            return Kind.SPRINT;
         return Kind.OTHER;
     }
 
@@ -150,7 +152,11 @@ public final class RouteSections {
                     && !RouteSegmenter.isGap(previous.time, previous.lat, previous.lon,
                     fix.time, fix.lat, fix.lon);
             Kind kind = kind(fix.movement);
-            if (!connected || current == null || current.kind != kind) {
+            // Sprint consecutivi sono prove diverse anche senza punti di altra
+            // andatura nell\u0027intervallo fra due countdown.
+            boolean differentSprint = kind == Kind.SPRINT && previous != null
+                    && !java.util.Objects.equals(previous.movement, fix.movement);
+            if (!connected || current == null || current.kind != kind || differentSprint) {
                 Section next = new Section(sections.size() + 1, kind,
                         connected ? previous.time : fix.time);
                 if (connected) next.geometry.add(previous); // soltanto per il disegno

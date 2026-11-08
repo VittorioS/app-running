@@ -80,6 +80,7 @@ public final class TrackingService extends Service implements LocationListener, 
     private boolean sprintRecorded;
     // Distanza registrata dai fix GNSS accettati per il percorso sprint sulla mappa.
     private double sprintMappedMeters;
+    private String sprintMapMovement = "SPRINT";
     private boolean sprintVoicePrepared, sprintVoicePending;
     private int sprintVoiceGeneration;
     private SprintProgressVoicePlan sprintProgressVoice;
@@ -165,6 +166,7 @@ public final class TrackingService extends Service implements LocationListener, 
                                     sprintProgressLastSpeakMs = -1;
                                     sprintRecorded = false;
                                     sprintMappedMeters = 0;
+                                    sprintMapMovement = "SPRINT:" + System.currentTimeMillis();
                                     publishSprint();
                                     requestSprintGps(true);
                                     scheduleSpokenSprintCountdown(
@@ -280,6 +282,7 @@ public final class TrackingService extends Service implements LocationListener, 
         lastNormalGpsFixMs = -1;
         sprintRecorded = false;
         sprintMappedMeters = 0;
+        sprintMapMovement = "SPRINT";
         sprintVoicePending = false;
         ++sprintVoiceGeneration;
         sprintProgressVoice = null;
@@ -422,7 +425,7 @@ public final class TrackingService extends Service implements LocationListener, 
                     double sectionDelta = Math.max(0, acceptedMeters - sprintMappedMeters);
                     db.point(state.id, location.getTime(), location.getLatitude(),
                             location.getLongitude(), location.getAccuracy(),
-                            location.getSpeed() * 3.6, sectionDelta, "SPRINT");
+                            location.getSpeed() * 3.6, sectionDelta, sprintMapMovement);
                     sprintMappedMeters = acceptedMeters;
                 }
                 if (accepted && sprint.phase() == SprintTrial.Phase.ACTIVE
