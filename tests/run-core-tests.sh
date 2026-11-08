@@ -47,3 +47,6 @@ java -cp build-test SprintCountdownVoicePlanTest
 
 javac -cp build-test -d build-test app/src/main/java/it/example/passolibero/SessionMotionVoiceEvents.java tests/SessionMotionVoiceEventsTest.java
 java -cp build-test SessionMotionVoiceEventsTest
+
+javac -cp build-test -d build-test app/src/main/java/it/example/passolibero/SprintProgressVoicePlan.java tests/SprintProgressVoicePlanTest.java
+java -cp build-test SprintProgressVoicePlanTest

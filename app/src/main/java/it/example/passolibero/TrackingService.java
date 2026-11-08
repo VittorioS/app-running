@@ -80,6 +80,8 @@ public final class TrackingService extends Service implements LocationListener, 
     private boolean sprintRecorded;
     private boolean sprintVoicePrepared, sprintVoicePending;
     private int sprintVoiceGeneration;
+    private SprintProgressVoicePlan sprintProgressVoice;
+    private long sprintProgressLastSpeakMs = -1;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -157,11 +159,15 @@ public final class TrackingService extends Service implements LocationListener, 
                                 prefs.edit().putBoolean("sprint_voice_preparing", false).apply();
                                 try {
                                     sprint.start(now, countdown, mode, target);
+                                    sprintProgressVoice = new SprintProgressVoicePlan(mode, target);
+                                    sprintProgressLastSpeakMs = -1;
                                     sprintRecorded = false;
                                     publishSprint();
                                     requestSprintGps(true);
                                     scheduleSpokenSprintCountdown(
                                             new SprintCountdownVoicePlan(now, countdown), token);
+                                    if (mode == SprintTrial.Mode.TIME)
+                                        scheduleTimedSprintProgress(token);
                                 } catch (IllegalArgumentException | IllegalStateException ex) {
                                     Log.w(TAG, "Sprint non avviabile", ex);
                                     prefs.edit().putString("sprint_voice_error",
@@ -188,6 +194,8 @@ public final class TrackingService extends Service implements LocationListener, 
         if (SPRINT_CANCEL.equals(action)) {
             work.post(() -> {
                 ++sprintVoiceGeneration;
+                sprintProgressVoice = null;
+                sprintProgressLastSpeakMs = -1;
                 if (sprintVoicePending) {
                     sprintVoicePending = false;
                     prefs.edit().putBoolean("sprint_voice_preparing", false)
@@ -270,6 +278,8 @@ public final class TrackingService extends Service implements LocationListener, 
         sprintRecorded = false;
         sprintVoicePending = false;
         ++sprintVoiceGeneration;
+        sprintProgressVoice = null;
+        sprintProgressLastSpeakMs = -1;
         prefs.edit().putBoolean("sprint_voice_preparing", false)
                 .remove("sprint_voice_error").apply();
         // Uno sprint precedente non puo' proseguire dopo il riavvio del servizio.
@@ -394,10 +404,18 @@ public final class TrackingService extends Service implements LocationListener, 
             advanceSprint(sprintNow);
             if (sprint.phase() == SprintTrial.Phase.ACTIVE && location.hasSpeed()
                     && location.hasSpeedAccuracy()) {
-                sprint.onFix(sprintNow, location.getElapsedRealtimeNanos() / 1_000_000L,
+                boolean accepted = sprint.onFix(sprintNow,
+                        location.getElapsedRealtimeNanos() / 1_000_000L,
                         location.getSpeed(), location.getSpeedAccuracyMetersPerSecond(),
                         location.getAccuracy());
+                if (accepted && sprint.phase() == SprintTrial.Phase.ACTIVE
+                        && sprintProgressVoice != null
+                        && sprint.mode() == SprintTrial.Mode.DISTANCE) {
+                    String message = sprintProgressVoice.onDistanceM(sprint.distanceM());
+                    speakSprintProgress(message, sprintNow);
+                }
                 if (!sprint.busy()) {
+                    sprintProgressVoice = null;
                     saveCompletedSprint(sprintNow);
                     requestSprintGps(false);
                     if (voice != null && AppPrefs.voiceEnabled(prefs))
@@ -649,6 +667,42 @@ public final class TrackingService extends Service implements LocationListener, 
         }
     }
 
+    /**
+     * Cronometro dedicato alle soglie 20/40/60/80%: non dipende dai fix GPS.
+     * Il token elimina tutti i callback pendenti dopo annullamento/nuovo sprint.
+     */
+    private void scheduleTimedSprintProgress(int token) {
+        if (sprintProgressVoice == null || sprint.mode() != SprintTrial.Mode.TIME) return;
+        final SprintProgressVoicePlan plan = sprintProgressVoice;
+        for (int i = 1; i <= 4; i++) {
+            final int milestone = i;
+            final long dueMs = plan.dueAt(sprint.countdownEndMs(), milestone);
+            long delay = Math.max(0L, dueMs - SystemClock.elapsedRealtime());
+            work.postDelayed(() -> {
+                if (token != sprintVoiceGeneration || sprintProgressVoice != plan
+                        || state == null || !prefs.getBoolean("active", false)) return;
+                long now = SystemClock.elapsedRealtime();
+                // Non pronunciare un avviso vecchio per un callback in ritardo.
+                // Gli sprint brevi hanno soglie ravvicinate: non creare una coda.
+                if (now < dueMs || now - dueMs > 700L) return;
+                advanceSprint(now);
+                if (sprint.phase() != SprintTrial.Phase.ACTIVE) return;
+                String message = plan.onElapsedMs(now - sprint.startedMs());
+                speakSprintProgress(message, now);
+            }, delay);
+        }
+    }
+
+    private void speakSprintProgress(String message, long now) {
+        if (message == null || sprint.phase() != SprintTrial.Phase.ACTIVE
+                || voice == null || !voice.isReady()) return;
+        // Evita accavallamenti serrati dovuti a misure GNSS irregolari.
+        if (sprintProgressLastSpeakMs >= 0
+                && now - sprintProgressLastSpeakMs < 850L) return;
+        sprintProgressLastSpeakMs = now;
+        voice.speak(message);
+    }
+
     private void advanceSprint(long now) {
         if (!sprint.busy()) return;
         SprintTrial.Phase before = sprint.phase();
@@ -658,6 +712,7 @@ public final class TrackingService extends Service implements LocationListener, 
                 && voice != null && voice.isReady())
             voice.speak("Via, sprint");
         if (!sprint.busy()) {
+            sprintProgressVoice = null;
             saveCompletedSprint(now);
             requestSprintGps(false);
             if (voice != null && AppPrefs.voiceEnabled(prefs))
@@ -718,7 +773,7 @@ public final class TrackingService extends Service implements LocationListener, 
             prefs.edit().putBoolean("gps_incident", true).apply();
             // Evita che l'avviso GPS interrompa le cifre del countdown.
             if (voice == null) voice = new VoiceCoach(this);
-            if (sprint.phase() != SprintTrial.Phase.COUNTDOWN && !sprintVoicePending)
+            if (!sprint.busy() && !sprintVoicePending)
                 voice.speak("Segnale GPS impreciso");
         }
         if (gpsIncident && "STILL".equals(motionBeforeGpsLoss) && !gpsAskedWhileStill) {
@@ -740,7 +795,7 @@ public final class TrackingService extends Service implements LocationListener, 
         state.checkpointIndex = reached; // Prima si salva, così non si annuncia due volte dopo crash.
         state.save(prefs, true);
         if (AppPrefs.voiceEnabled(prefs) && voice != null
-                && sprint.phase() != SprintTrial.Phase.COUNTDOWN && !sprintVoicePending) {
+                && !sprint.busy() && !sprintVoicePending) {
             double distance = reached * interval;
             int distanceInt = (int) distance;
             String marker;
@@ -829,6 +884,7 @@ public final class TrackingService extends Service implements LocationListener, 
         applyTimeline();
         ++sprintVoiceGeneration;
         sprintVoicePending = false;
+        sprintProgressVoice = null;
         prefs.edit().putBoolean("sprint_voice_preparing", false).apply();
         if (sprint.busy()) {
             sprint.cancel(now);
@@ -873,6 +929,7 @@ public final class TrackingService extends Service implements LocationListener, 
                     long now = SystemClock.elapsedRealtime();
                     ++sprintVoiceGeneration;
                     sprintVoicePending = false;
+                    sprintProgressVoice = null;
                     prefs.edit().putBoolean("sprint_voice_preparing", false).apply();
                     if (sprint.busy()) {
                         sprint.cancel(now);
