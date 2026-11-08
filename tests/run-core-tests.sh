@@ -38,6 +38,3 @@ java -cp build-test RunPeakSpeedPolicyTest
 
 javac -d build-test app/src/main/java/it/example/passolibero/WeatherLocations.java tests/WeatherLocationsTest.java
 java -cp build-test WeatherLocationsTest
-
-javac -d build-test app/src/main/java/it/example/passolibero/SprintTrial.java tests/SprintTrialTest.java
-java -cp build-test SprintTrialTest

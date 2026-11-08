@@ -139,6 +139,28 @@ public final class SessionJsonExporter {
         writer.name("note").value("Non attribuire automaticamente i periodi incerti a corsa o camminata.");
         writer.endObject();
 
+        writer.name("sprints");
+        writer.beginArray();
+        for (TrackerDb.SprintRecord sprint : db.sprints(sessionId)) {
+            writer.beginObject();
+            writer.name("recorded_at_utc_ms").value(sprint.recordedAt);
+            writer.name("mode").value(sprint.mode);
+            writer.name("target").value(sprint.target);
+            writer.name("countdown_seconds").value(sprint.countdownSeconds);
+            writer.name("elapsed_ms").value(sprint.elapsedMs);
+            writer.name("distance_m").value(sprint.distanceM);
+            writer.name("valid_gnss_samples").value(sprint.samples);
+            writer.name("outcome").value(sprint.outcome);
+            writer.name("peak_speed_kmh");
+            if (sprint.peakKmh == null) writer.nullValue();
+            else writer.value(sprint.peakKmh);
+            writer.name("average_speed_kmh");
+            if (sprint.averageKmh == null) writer.nullValue();
+            else writer.value(sprint.averageKmh);
+            writer.endObject();
+        }
+        writer.endArray();
+
         writer.name("gps_points");
         writer.beginArray();
         writePoints(writer, db, sessionId);

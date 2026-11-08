@@ -75,6 +75,7 @@ public final class TrackingService extends Service implements LocationListener, 
     private String motionBeforeGpsLoss = "UNKNOWN";
     private final SprintTrial sprint = new SprintTrial();
     private long lastNormalGpsFixMs = -1;
+    private boolean sprintRecorded;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -117,6 +118,7 @@ public final class TrackingService extends Service implements LocationListener, 
                 try {
                     SprintTrial.Mode mode = SprintTrial.Mode.valueOf(modeName == null ? "" : modeName);
                     sprint.start(SystemClock.elapsedRealtime(), countdown, mode, target);
+                    sprintRecorded = false;
                     publishSprint();
                     requestSprintGps(true);
                     if (voice != null && AppPrefs.voiceEnabled(prefs))
@@ -130,7 +132,9 @@ public final class TrackingService extends Service implements LocationListener, 
         if (SPRINT_CANCEL.equals(action)) {
             work.post(() -> {
                 if (state == null || !sprint.busy()) return;
-                sprint.cancel(SystemClock.elapsedRealtime());
+                long now = SystemClock.elapsedRealtime();
+                sprint.cancel(now);
+                saveCompletedSprint(now);
                 requestSprintGps(false);
                 publishSprint();
             });
@@ -199,6 +203,7 @@ public final class TrackingService extends Service implements LocationListener, 
             state.id = db.newSession(state.startedWallMs);
         }
         lastNormalGpsFixMs = -1;
+        sprintRecorded = false;
         // Uno sprint precedente non puo' proseguire dopo il riavvio del servizio.
         prefs.edit().putString("sprint_phase", "IDLE")
                 .putLong("sprint_session_id", state.id).apply();
@@ -321,6 +326,7 @@ public final class TrackingService extends Service implements LocationListener, 
                         location.getSpeed(), location.getSpeedAccuracyMetersPerSecond(),
                         location.getAccuracy());
                 if (!sprint.busy()) {
+                    saveCompletedSprint(sprintNow);
                     requestSprintGps(false);
                     if (voice != null && AppPrefs.voiceEnabled(prefs))
                         voice.speak("Sprint terminato");
@@ -547,11 +553,21 @@ public final class TrackingService extends Service implements LocationListener, 
                 && voice != null && AppPrefs.voiceEnabled(prefs))
             voice.speak("Via, sprint");
         if (!sprint.busy()) {
+            saveCompletedSprint(now);
             requestSprintGps(false);
             if (voice != null && AppPrefs.voiceEnabled(prefs))
                 voice.speak("Sprint terminato");
         }
         publishSprint();
+    }
+
+    /** Ogni prova conclusa viene scritta una sola volta nello storico. */
+    private void saveCompletedSprint(long now) {
+        if (state == null || sprintRecorded || sprint.busy()
+                || (sprint.phase() != SprintTrial.Phase.FINISHED
+                && sprint.phase() != SprintTrial.Phase.CANCELLED)) return;
+        db.recordSprint(state.id, sprint, now);
+        sprintRecorded = true;
     }
 
     private void publishSprint() {
@@ -706,6 +722,7 @@ public final class TrackingService extends Service implements LocationListener, 
         applyTimeline();
         if (sprint.busy()) {
             sprint.cancel(now);
+            saveCompletedSprint(now);
             publishSprint();
         }
         if (BuildConfig.DEBUG) {
@@ -743,7 +760,13 @@ public final class TrackingService extends Service implements LocationListener, 
                     advanceTimeline(SystemClock.elapsedRealtime());
                     motionTimeline.finish();
                     applyTimeline();
-                    persist(SystemClock.elapsedRealtime(), true, false);
+                    long now = SystemClock.elapsedRealtime();
+                    if (sprint.busy()) {
+                        sprint.cancel(now);
+                        saveCompletedSprint(now);
+                        publishSprint();
+                    }
+                    persist(now, true, false);
                 }
                 if (voice != null) voice.close();
                 db.close();

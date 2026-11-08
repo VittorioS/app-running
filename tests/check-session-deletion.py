@@ -10,6 +10,7 @@ assert 'if (isCurrentSession(prefs, sessionId)) return false;' in delete_method
 assert 'database.beginTransaction()' in delete_method
 assert 'database.delete("sessions", "id=?", args)' in delete_method
 assert 'database.delete("points", "session_id=?", args)' in delete_method
+assert 'database.delete("sprints", "session_id=?", args)' in delete_method
 assert 'database.setTransactionSuccessful()' in delete_method
 assert 'database.endTransaction()' in delete_method
 

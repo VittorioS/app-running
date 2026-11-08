@@ -99,6 +99,7 @@ jobs:
           python3 tests/check-db-migration.py
           python3 tests/check-weather-search.py
           python3 tests/check-session-deletion.py
+          python3 tests/check-history-detail.py
 
       - name: Prepara firma debug stabile
         shell: bash
