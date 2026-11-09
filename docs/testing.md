@@ -25,6 +25,12 @@ sh ./gradlew :app:spotlessCheck
 ```
 Il guardiano degli import applica la matrice di `docs/clean-architecture.md` ai nuovi package ma non ai file legacy nel package radice. Spotless formatta i nuovi package secondo AOSP e controlla gli script Gradle; non riscrive il codice storico. Per correggere la formattazione: `sh ./gradlew :app:spotlessApply`. Il repository deve essere completo di `origin/main` (`git fetch origin main`; la CI usa `fetch-depth: 0`).
 
+## Issue #17 / ADR-002 — Prima suite migrata a Gradle JUnit
+
+`WeatherRulesTest` si trova ora in `app/src/test/java/it/example/passolibero/` ed è eseguito da `sh ./gradlew :app:testDebugUnitTest` (job `verify`). La migrazione riproduce **20 asserzioni** della vecchia `tests/WeatherRulesTest.java`: 17 verifiche booleane e 3 attese di `IllegalArgumentException`, con gli stessi input e valori limite. Prima della rimozione del runner duplicato, la [CI di confronto](https://github.com/VittorioS/app-running/actions/runs/42663767918) ha superato sia la suite Java originale in `tests/run-core-tests.sh` sia il nuovo test Gradle/JUnit, oltre ad Android 11.
+
+`tests/run-core-tests.sh` continua a eseguire **tutte le altre** suite indipendenti da Android; per il controllo completo eseguire **entrambi** `sh tests/run-core-tests.sh` e `sh ./gradlew :app:testDebugUnitTest`. La logica `WeatherRules`, la UI e il servizio meteo non sono stati modificati. Revert della singola PR ripristina il runner originale senza modifiche ai dati.
+
 ## Verifica veloce senza Android SDK
 ```sh
 sh tests/run-core-tests.sh
