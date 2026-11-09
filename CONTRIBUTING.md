@@ -10,6 +10,7 @@ La repository è pubblica: apri una issue (o scegline una esistente), crea un fo
 6. Apri la PR non draft solo quando è revisionabile; compila il template e attendi i controlli automatici e la review del maintainer.
 
 ## Convenzioni
+- **Android 11 (API 30) è obbligatorio** per ogni nuova funzionalità. Non aumentare minSdk; API più recenti richiedono un controllo runtime e un fallback su API 30. La CI esegue test strumentali su Android 11.
 - Java 17, API Android compatibili con minSdk 30; evita migrazioni a nuovi framework senza issue concordata.
 - Metri internamente, chilometri nelle schermate, ritmo in minuti/km; tempo monotono per classificazione/durata e wall clock solo per registrazioni esterne.
 - Mantieni algoritmi Android-free quando possibile; i test non devono dipendere da GPS reale o rete.
