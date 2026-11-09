@@ -5,6 +5,9 @@ In Settings → Rules → Rulesets crea una regola per `main` (o Branch protecti
 
 Abilita GitHub Issues, forking pubblico e, se disponibile, segnalazione privata delle vulnerabilità. Invita i contributori a usare issue e template, senza concedere write access. CODEOWNERS richiede review obbligatoria soltanto se la regola GitHub richiede anche il code-owner review.
 
+## Clean Architecture e standard di codice
+Le PR devono dichiarare layer toccati, direzione delle dipendenze, eccezioni legacy e motivazioni delle astrazioni. Il job `verify` contiene `tests/check-architecture.py`, self-test del guardiano e `:app:spotlessCheck`, oltre a build, lint e JVM. Il guardiano controlla solo i **nuovi** package `domain`, `application`, `data`, `platform`, `presentation`: review necessaria per il package radice ancora legacy. Refactor a piccoli passi con test, iniziando da issue #6.
+
 ## Sicurezza Actions
 - PR da fork: evento `pull_request`, permessi `contents: read`, nessun secret e nessuna pubblicazione.
 - Firma APK, release, canale di aggiornamento e gestione keystore: workflow separato **solo da main protetto o workflow_dispatch affidabile**, con `environment` approvato e permessi minimi. Non eseguire codice o artifact non verificati provenienti da fork nel contesto di pubblicazione.
