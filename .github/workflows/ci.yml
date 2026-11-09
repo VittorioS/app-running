@@ -25,6 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -49,6 +50,14 @@ jobs:
 
       - name: SQLite migration preservation
         run: python3 tests/check-db-migration.py
+
+      - name: Architecture dependency guard
+        run: |
+          python3 tests/check-architecture.py
+          python3 -m unittest discover -s tests -p 'test_architecture.py'
+
+      - name: Spotless formatting check
+        run: sh ./gradlew --no-daemon :app:spotlessCheck
 
       - name: Android unit tests, APK and lint
         run: sh ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
@@ -83,6 +92,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Java 17
         uses: actions/setup-java@v4
