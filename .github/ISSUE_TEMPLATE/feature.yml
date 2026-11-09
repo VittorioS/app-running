@@ -1,0 +1,47 @@
+name: Feature per coding agent
+description: Specifica verificabile di una singola funzionalità, sviluppabile tramite PR
+title: "[Feature] "
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Obiettivo e comportamento utente
+      description: Cosa deve poter fare l'utente al termine della PR?
+      placeholder: "Come utente voglio..., così da..."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criteri di accettazione verificabili
+      description: Elenca casi con input e risultato atteso, inclusi casi limite.
+      placeholder: |
+        - [ ] Dato ... quando ... allora ...
+        - [ ] Con GPS/sensori mancanti ...
+        - [ ] Al riavvio / offline ...
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope e non-obiettivi
+      description: Cosa si può modificare e cosa deve restare immutato?
+    validations:
+      required: true
+  - type: textarea
+    id: storage
+    attributes:
+      label: Persistenza, privacy, permessi, rete
+      description: Indica quali dati devono essere salvati, eventuali migrazioni, permessi o API esterne. Scrivi "nessuno" se non servono.
+  - type: textarea
+    id: verification
+    attributes:
+      label: Test e verifica manuale
+      description: Quali prove e regressioni rendono la feature accettabile?
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dipendenze e rischi
+      description: Eventuali issue/PR prerequisite o decisioni di architettura aperte.
