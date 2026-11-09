@@ -1,6 +1,6 @@
 # PassoLibero 2.0 — Mappa live e statistiche complete
 
-App Android nativa in Java (min SDK 30, target SDK 35). Tracciamento GPS e sensori passi durante sessioni avviate dall'utente; storico interamente sul dispositivo.
+App Android nativa in Java (**Android 11/API 30 obbligatorio**, min SDK 30; compile/target SDK 35). La CI verifica sia il livello API minimo dell'APK sia l'avvio su emulatore Android 11. Tracciamento GPS e sensori passi durante sessioni avviate dall'utente; storico interamente sul dispositivo.
 
 ## Schermate
 
