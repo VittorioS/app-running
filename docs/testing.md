@@ -6,6 +6,13 @@ JDK 17, Android SDK con platforms;android-35 e build-tools;35.0.0, Python 3 e ac
 ## Firma e release APK
 Per le prove di metadata, versionCode e sicurezza del workflow eseguire `python3 -m unittest discover -s tests -p 'test_release_metadata.py'`. Per una release pre-produzione firmata su `main` seguire `docs/release.md`; non si eseguono release con credenziali dalle PR.
 
+## Issue #5 — test lifecycle, sensori e persistenza
+La CI esegue il replay deterministico GPS/step counter in `tests/TrackingReplayTest.java` tramite `sh tests/run-core-tests.sh`. I test coprono fix fuori ordine, GPS assente, ripresa, contatore ritardato/assente, conservazione dei tempi e jitter.
+
+Sul dispositivo emulato Android 11, `TrackingUiInstrumentedTest` verifica Home, sessione, storico, ricreazione Activity e contratto permessi **senza concedere/revocare permessi né avviare il tracking**. `TrackingPersistenceInstrumentedTest` verifica `RunState`, persistenza SQLite/GPS e upgrade reale del database v1→v7 usando un contesto di prova con database e preferenze isolati. Il test non deve accedere a `sessions.db` reale del dispositivo.
+
+Per il collaudo manuale di schermo spento, foreground service, sensor fallback e conservazione storico dopo l'aggiornamento usare [la matrice dispositivo reale](issue-5-device-matrix.md). L'emulatore **non** riproduce fedelmente step detector, ottimizzazione batteria e GPS all'aperto.
+
 ## Android 11 — requisito obbligatorio
 La versione minima supportata è Android 11 (API 30). Il job CI `android11` avvia un emulatore API 30, installa l'APK ed esegue smoke test delle schermate Home e Storico. Il job `verify` controlla anche la proprietà minSdk dell'APK. Per riprodurre localmente, avvia un emulatore Android 11 e lancia `sh ./gradlew :app:connectedDebugAndroidTest`. Per modifiche a GPS, permessi, passi e foreground service è obbligatoria anche una verifica manuale su telefono fisico Android 11: un emulatore non riproduce tutti i sensori e il comportamento a schermo spento.
 
