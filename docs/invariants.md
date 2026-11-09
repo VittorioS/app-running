@@ -11,6 +11,7 @@ Ogni modifica che tocca il tracking deve confermare esplicitamente questi vincol
 7. **Privacy.** Coordinate e tracciati delle sessioni non sono caricati su server dell'app. Le richieste alle tile OSM possono rivelare l'area visualizzata; mostrare attribuzione e rispettare le policy del provider.
 8. **Offline e permessi.** Sessione, GPS, cronometro, algoritmi, voce e storico funzionano senza rete; GPS o contapassi mancanti/negati degradano correttamente le statistiche, senza crash.
 9. **Lifecycle.** Tracciamento solo dopo avvio esplicito; foreground service coerente con Android; chiusura e recupero non perdono dati e non proseguono il tracking fuori sessione.
-10. **Unità.** Distanza in metri nel modello, km nell'UI; andatura in min/km; durata con tempo monotono quando possibile.
+10. **Android 11 obbligatorio.** Ogni funzionalità deve funzionare su Android 11/API 30; mai aumentare minSdk oltre 30. Le API Android 12+ richiedono controlli runtime e fallback. La CI su emulatore API 30 è obbligatoria.
+11. **Unità.** Distanza in metri nel modello, km nell'UI; andatura in min/km; durata con tempo monotono quando possibile.
 
 Test utili: `tests/CoreAlgorithmTest.java`, `tests/MotionRegressionTest.java`, `tests/check-db-migration.py`. I test devono includere sia comportamento nominale sia regressioni su input incerti; la CI non sostituisce una prova su telefono reale.
