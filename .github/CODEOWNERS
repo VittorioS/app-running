@@ -1,0 +1,9 @@
+# Owners are auto-requested on matching changes.
+# Enable "Require review from Code Owners" in branch rules to enforce.
+/.github/ @VittorioS
+/AGENTS.md @VittorioS
+/docs/invariants.md @VittorioS
+/app/src/main/java/it/example/passolibero/TrackingService.java @VittorioS
+/app/src/main/java/it/example/passolibero/TrackerDb.java @VittorioS
+/app/src/main/AndroidManifest.xml @VittorioS
+/app/build.gradle @VittorioS

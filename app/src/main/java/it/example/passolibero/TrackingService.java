@@ -18,6 +18,7 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
@@ -225,7 +226,9 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         try {
             int type = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION;
-            if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT >= 34
+                    && checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED) {
+                // HEALTH foreground-service type is unavailable on Android 11 (API 30).
                 type |= ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH;
             }
             startForeground(NOTIFICATION_ID, notification("Tracciamento in corso"), type);

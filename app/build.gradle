@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+    id 'com.diffplug.spotless'
 }
 
 def ciRun = System.getenv('GITHUB_RUN_NUMBER')
@@ -11,7 +12,9 @@ android {
 
     defaultConfig {
         applicationId 'it.example.passolibero'
+        // Android 11 / API 30 is the mandatory minimum supported version.
         minSdk 30
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         targetSdk 35
         versionCode ciRun ? 10000 + Integer.parseInt(ciRun) : 2
         versionName '1.0.0'
@@ -24,6 +27,10 @@ android {
 
     buildFeatures {
         buildConfig true
+    }
+    lint {
+        abortOnError true
+        fatal 'NewApi'
     }
     signingConfigs {
         if (debugKeyPath) {
@@ -50,4 +57,28 @@ android {
 dependencies {
     // Libreria open source per OpenStreetMap. Nessuna API a pagamento.
     implementation 'org.osmdroid:osmdroid-android:6.1.20'
+
+    // Test locali Android-free: verificano le invarianti senza dispositivo.
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test:core:1.6.1'
+}
+
+// Incremental formatting: root-package Android classes are legacy.
+spotless {
+    ratchetFrom 'origin/main'
+    java {
+        target 'src/*/java/it/example/passolibero/domain/**/*.java',
+               'src/*/java/it/example/passolibero/application/**/*.java',
+               'src/*/java/it/example/passolibero/data/**/*.java',
+               'src/*/java/it/example/passolibero/platform/**/*.java',
+               'src/*/java/it/example/passolibero/presentation/**/*.java'
+        googleJavaFormat('1.22.0').aosp()
+    }
+    format 'gradleScripts', {
+        target '*.gradle'
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }

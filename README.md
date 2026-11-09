@@ -1,6 +1,6 @@
 # PassoLibero 2.0 — Mappa live e statistiche complete
 
-App Android nativa in Java (min SDK 30, target SDK 35). Tracciamento GPS e sensori passi durante sessioni avviate dall'utente; storico interamente sul dispositivo.
+App Android nativa in Java (**Android 11/API 30 obbligatorio**, minSdk 30, compile/target SDK 35). CI con test strumentali API 30. Tracciamento GPS e sensori passi durante sessioni avviate dall'utente; storico interamente sul dispositivo.
 
 ## Schermate
 
@@ -48,14 +48,13 @@ I test JVM includono 100 m a piccoli incrementi GPS, anti-drift, classificazione
 
 Configurazione Gradle: plugin Android `8.7.3`, Gradle `8.9`, Java `17`, compileSdk `35`.
 
-La build richiede accesso a Google Maven/Maven Central (una volta) per Android Gradle Plugin e dipendenza open source osmdroid. La compilazione APK in questo ambiente non è stata verificata, perché l'Android SDK non è disponibile qui. Il workflow usa Java 17 e `android-actions/setup-android@v3` con solo `platform-tools` (non il vecchio pacchetto `tools`, che non esiste più).
+La build richiede accesso a Google Maven/Maven Central (una volta) per Android Gradle Plugin e dipendenza open source osmdroid. Le pull request sono verificate dal workflow di sola lettura con compilazione, test, lint e test Android 11. Il workflow non pubblica release e non accede a credenziali di firma.
 
 ## Pull request GitHub
 
-La versione 2.0 è proposta tramite una normale pull request dal ramo `feature/passolibero-osm-v2` verso `main` nel repository `VittorioS/app-running`.
-I file sorgente Java, il manifesto, i test e il README sono versionati singolarmente nel repository: non è richiesto caricare ZIP. Il workflow GitHub Actions del repository viene eseguito anche sul ramo della PR, genera `:app:assembleDebug` e pubblica l'artefatto APK se la compilazione riesce.
+Consulta [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md) e [docs/clean-architecture.md](docs/clean-architecture.md). Le PR da fork sono verificate automaticamente; i check `verify` e `android11`, la review umana e il ruleset `protect-main` sono obbligatori.
 
-**Attenzione alla firma:** un APK debug generato da un altro runner può usare una chiave diversa e rifiutare l'aggiornamento. Non disinstallare l'app esistente se vuoi conservarne le sessioni senza aver prima esportato i dati.
+**Firma APK:** un APK debug generato senza la firma persistente può non aggiornare un'installazione già esistente. Conserva un backup dello storico prima di sostituire un'installazione con firma diversa.
 
 ## Verifiche pratiche consigliate
 
@@ -65,65 +64,10 @@ I file sorgente Java, il manifesto, i test e il README sono versionati singolarm
 4. Terminare: il percorso deve sparire dalla Home ed essere consultabile soltanto nello Storico, senza segmenti fittizi sui tratti con GPS perso.
 5. Senza Internet: GPS, conteggio e percorso continuano; tiles OSM non già in cache potrebbero non apparire.
 
-## Installazione APK debug senza disinstallare a ogni aggiornamento
+## Firma debug e aggiornamenti APK (V2)
 
-GitHub Actions usa una firma debug **persistente** e un `versionCode` crescente.
-La chiave privata non viene mai committata in chiaro: il repository pubblico
-contiene solo un keystore cifrato e l'impronta pubblica del certificato.
+La V2 include la schermata **Aggiornamenti dell'app** e un verificatore di APK che controlla hash, certificato, package e versione prima di richiedere l'installazione. È disponibile il canale preesistente `debug-pr-2`; non è garantito che contenga una versione successiva.
 
-### Attivazione (una sola volta, anche da telefono)
+La vecchia pipeline `bootstrap.yml`, che poteva pubblicare release ed eseguire push con permessi di scrittura, **non viene ripristinata** dopo l'integrazione delle regole di contribuzione. La CI delle PR verifica soltanto codice e APK, senza token di pubblicazione o segreti. Per avere nuovi APK firmati, incrementi di versione e update automatici serve una pipeline di release **separata e affidabile**, prevista dalla [issue #7](https://github.com/VittorioS/app-running/issues/7). Non allargare i permessi del workflow che esegue codice di PR esterne.
 
-1. In GitHub apri **Settings → Secrets and variables → Actions**
-   e scegli **New repository secret**.
-2. Crea il secret `PASSOLIBERO_SIGNING_PASSPHRASE` con una password
-   casuale robusta di almeno 32 caratteri, da custodire nel tuo password manager.
-   Non inserirla nel repository, né condividerla in chat.
-3. Avvia nuovamente il workflow **PassoLibero - Genera APK Android**
-   sul ramo `feature/v2-session-stats-tabs` dalla scheda **Actions**.
-4. La prima esecuzione crea una chiave debug e registra SOLO
-   `.github/signing/debug-keystore.p12.enc` (cifrato con
-   AES-256-CBC/PBKDF2) e `debug-cert.sha256` nel ramo.
-   Tutte le build seguenti decifrano e riutilizzano la medesima chiave.
-5. Scarica l'APK soltanto dalle esecuzioni in cui l'artefatto
-   `PassoLibero-Android15-debug` viene pubblicato e la firma è verificata.
-
-Se il secret manca, la CI esegue comunque test e compilazione, ma
-**salta la pubblicazione dell'APK debug**, per evitare firme variabili.
-
-**Attenzione:** la prima build con questa firma non può aggiornare
-la vecchia installazione firmata diversamente. Prima esporta tutte
-le sessioni importanti in JSON, poi esegui una sola disinstallazione
-e installa il nuovo APK. Le build debug successive si possono
-installare direttamente sopra la precedente senza cancellare dati.
-Non alterare la passphrase né eliminare il file cifrato: ciò
-renderebbe impossibile riutilizzare quella chiave.
-
-## Aggiornamenti APK dall'app (V2)
-
-La Home include **Aggiornamenti dell'app** con due canali: **Debug PR #2**
-e **Stabile**. La PR #2 pubblica gli APK debug firmati su una GitHub
-pre-release dedicata \`debug-pr-2\` dopo i test. Non si accede agli artifact
-temporanei di GitHub Actions e non ci sono token di accesso nell'APK.
-
-Per ogni compilazione riuscita, il workflow pubblica un file
-\`passolibero-debug-v<VERSION_CODE>.apk\` e \`update.json\` (versione, SHA-256
-del file e del certificato). Il JSON viene caricato *dopo* l'APK. L'app
-controlla la versione installata, scarica tramite DownloadManager e verifica
-il file completo in locale: SHA-256, identificativo applicazione, versione
-superiore, firma del pacchetto già installato e certificato dichiarato.
-**Non si aggiorna mentre è attiva una sessione GPS.** Android chiede sempre
-la conferma dell'installazione e, quando necessario, il consenso a
-«Installare app sconosciute» da PassoLibero.
-
-Il canale **Stabile** può essere attivato in futuro pubblicando una release
-GitHub tag \`stable\` con file \`update.json\` e APK
-\`passolibero-stable-v<VERSION_CODE>.apk\` coerente e firmato con lo
-**stesso certificato** dell'app già installata. Altrimenti la verifica
-blocca correttamente l'aggiornamento incrociato.
-
-La pubblicazione GitHub di release e allegati richiede \`contents: write\`
-del token GitHub Actions. Se il workflow fallisce al passaggio «Pubblica
-aggiornamento debug PR 2», verificare in **Settings → Actions → General →
-Workflow permissions** che siano consentite le autorizzazioni di scrittura
-e che il repository non abbia policy di protezione che impediscano il
-rilascio. Non abilitare autorizzazioni più ampie del necessario.
+È possibile generare una build debug locale con `sh ./gradlew :app:assembleDebug`. Per aggiornare senza perdere dati occorre usare la stessa chiave di firma dell'APK già installato; se non coincide, esportare e salvare i dati prima di prendere decisioni sull'installazione. L'aggiornamento in-app non deve interrompere una sessione attiva.
