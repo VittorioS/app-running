@@ -58,3 +58,7 @@ Per gli scenari che usano emulatori e sensori, effettuare test strumentali su un
 
 ## Interpretare l'esito
 Un APK compilato non prova il corretto funzionamento su hardware. Una PR dichiara sempre i comandi effettivamente eseguiti, i loro risultati e le verifiche non fatte; un fallimento non va nascosto.
+
+## Issue #6 — invarianti di ripresa del service
+
+`tests/SessionRecoveryPolicyTest.java` (eseguito in `tests/run-core-tests.sh`) confronta il calcolo puro di recupero con la **formula legacy** per 1000 tracce deterministiche. Verifica anche ordine/numero delle letture clock, fallback dopo reboot, intervalli non osservati classificati esclusivamente come `UNKNOWN` e assenza di doppio conteggio. I test GPS stale/out-of-order sono in `TrackingReplayTest.java`; lo smoke Android API 30 controlla anche manifest e foreground lifecycle nelle PR successive del piano #6.

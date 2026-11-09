@@ -1,6 +1,6 @@
 # Architettura PassoLibero (baseline main)
 
-Questa descrizione riguarda `main`. I branch e le PR non ancora integrate (in particolare la PR #2) possono introdurre altre funzionalità: non considerarle già disponibili sul ramo stabile.
+Questa descrizione riguarda il codice presente in `main` e il percorso incrementale della [issue #6](https://github.com/VittorioS/app-running/issues/6). PassoLibero V2 (PR #2) è già integrata; i prossimi refactor avvengono in PR autonome, dopo i test della issue #5.
 
 ## Flusso dati
 
@@ -31,3 +31,41 @@ Leggere [Clean Architecture](clean-architecture.md) e [Coding Standards](coding-
 ## Layout di repository
 
 `app/src/main/java/it/example/passolibero/` codice app; `app/src/debug/` diagnostica solo debug; `tests/` regression test indipendenti da Android e verifiche SQLite; `app/src/test/` test locali eseguiti da Gradle; `.github/workflows/` build/verifica; `docs/` contratti e runbook.
+
+
+## Responsabilità attuali di TrackingService — issue #6
+
+```mermaid
+flowchart TD
+    Home[MainActivity] -->|START / STOP espliciti| Service[TrackingService - orchestratore Android]
+    Location[LocationManager - fix GPS] --> Service
+    Sensors[SensorManager - step e accelerometro] --> Service
+    Service --> Policy[GpsQualityPolicy + MotionEvidencePolicy + ActivityEvidence]
+    Policy --> Timeline[MotionTimeline + DistanceAccumulator]
+    Service --> Recovery[SessionRecoveryPolicy - domain puro]
+    Recovery --> State[RunState - snapshot SharedPreferences]
+    Timeline --> State
+    Service --> State
+    Service --> Db[TrackerDb - sessioni, punti, sprint SQLite]
+    Service --> Voice[VoiceCoach + SessionMotionVoiceEvents]
+    State --> SessionUi[ActiveSessionActivity]
+    Db --> History[HistoryActivity + SessionDetailActivity]
+    Service -->|startForeground, notifiche| Android[NotificationManager + lifecycle]
+```
+
+| Responsabilità | Contratto da preservare | Confine previsto |
+| --- | --- | --- |
+| Avvio esplicito, permessi, `startForeground`, STOP / `onDestroy` | Nessun tracking senza azione utente o sessione preesistente; API 30 senza HEALTH type | `TrackingService` e futuri adapter `platform` |
+| Callback `LocationManager`, `SensorManager` e relativi timestamp | Fix stale/futuri ignorati, niente sprint doppio, nessuna attività inventata | Adapter sensor/GPS futuri; policy pure già esistenti |
+| Filtri GPS, classificatore, intervalli `UNKNOWN` | Nessun salto GPS, tempo monotono e ledger conservativo | `GpsQualityPolicy`, `MotionEvidencePolicy`, `MotionTimeline` |
+| Ripartenza e tempo non osservato | Vecchi intervalli non dedotti come RUN, WALK o STILL; snapshot riletto senza cancellare dati | **`domain/SessionRecoveryPolicy` (prima estrazione)** |
+| Persistenza `RunState` + `TrackerDb` | Snapshot periodici, id sessione, schema v7 e coordinate locali invariati | Adapter SQLite e SharedPreferences già esistenti |
+| Annunci e sprint | Priorità TTS, countdown e ritmo GPS separato | `SessionMotionVoiceEvents`, `SprintTrial`, `VoiceCoach` |
+
+### Piano di estrazione: PR autonome e revisionabili
+
+1. **PR 1 — recupero puro del cronometro**: estrazione di `SessionRecoveryPolicy`, test di equivalenza con la vecchia formula, riavvio telefono e tempo `UNKNOWN`; nessuna modifica ai sensori o al database.
+2. **PR 2 — decisioni di avvio/foreground**: isolare il controllo di permessi e tipo FGS in una policy pure Java; test di compatibilità API 30/34, lifecycle e STOP senza registrare sensori.
+3. **PR 3 — confine GPS/sensori**: spostare una decisione per volta dai callback in adapter/policy puri, con replay dei fix tardivi e dei batch contapassi della suite #5; **solo dopo** valutare un'orchestrazione ulteriore, senza cambiare sampling o stato persistito.
+
+Ogni PR richiede `verify` e `android11` verdi; sono vietate modifiche di schema, soglie GPS, temporizzazioni, permessi, firma o annunci nella stessa estrazione.
