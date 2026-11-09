@@ -1,42 +1,31 @@
 #!/usr/bin/env bash
+# Only the trusted main-only release workflow may call this script.
 set -euo pipefail
+: "${RUNNER_TEMP:?RUNNER_TEMP is required}"
+: "${GITHUB_ENV:?GITHUB_ENV is required}"
 
 if [[ -z "${PASSOLIBERO_SIGNING_PASSPHRASE:-}" ]]; then
-  echo "::warning::Firma debug persistente non configurata: imposta il repository secret PASSOLIBERO_SIGNING_PASSPHRASE."
-  echo "PASSOLIBERO_SIGNED=false" >> "$GITHUB_ENV"
-  exit 0
+  echo "::error::Missing PASSOLIBERO_SIGNING_PASSPHRASE in protected apk-release environment."
+  exit 1
 fi
-
 encrypted=".github/signing/debug-keystore.p12.enc"
 fingerprint=".github/signing/debug-cert.sha256"
-mkdir -p .github/signing
-keystore="$RUNNER_TEMP/passolibero-debug.p12"
-
-if [[ -f "$encrypted" ]]; then
-  openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in "$encrypted" -out "$keystore" -pass env:PASSOLIBERO_SIGNING_PASSPHRASE
-elif [[ -f "$fingerprint" ]]; then
-  echo "::error::Fingerprint presente senza chiave cifrata. Non generare una chiave diversa."
+if [[ ! -s "$encrypted" || ! -s "$fingerprint" ]]; then
+  echo "::error::Encrypted signing key and certificate fingerprint are required."
   exit 1
-else
-  keytool -genkeypair -noprompt -keystore "$keystore" -storetype PKCS12 -storepass android -keypass android -alias passolibero-debug -keyalg RSA -keysize 3072 -validity 36500 -dname "CN=PassoLibero Debug, OU=Development, O=PassoLibero, C=IT"
-  openssl enc -aes-256-cbc -salt -pbkdf2 -iter 250000 -in "$keystore" -out "$encrypted" -pass env:PASSOLIBERO_SIGNING_PASSPHRASE
 fi
-
+keystore="$RUNNER_TEMP/passolibero-debug.p12"
+umask 077
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 \
+  -in "$encrypted" -out "$keystore" -pass env:PASSOLIBERO_SIGNING_PASSPHRASE
+actual="$(keytool -exportcert -keystore "$keystore" -storetype PKCS12 \
+  -storepass android -alias passolibero-debug | sha256sum | cut -d ' ' -f1)"
+expected="$(tr -d '\r\n' < "$fingerprint" | tr '[:upper:]' '[:lower:]')"
+if [[ ! "$expected" =~ ^[[:xdigit:]]{64}$ || "$actual" != "$expected" ]]; then
+  echo "::error::Signing certificate mismatch. Do not rotate the signing key."
+  rm -f "$keystore"
+  exit 1
+fi
 chmod 600 "$keystore"
-certificate="$(keytool -exportcert -keystore "$keystore" -storepass android -alias passolibero-debug | sha256sum | cut -d' ' -f1)"
-if [[ -f "$fingerprint" ]]; then
-  if [[ "$(cat "$fingerprint")" != "$certificate" ]]; then
-    echo "::error::Certificato diverso dalla firma persistente."
-    exit 1
-  fi
-else
-  printf '%s\n' "$certificate" > "$fingerprint"
-  git config user.name "github-actions[bot]"
-  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-  git add "$encrypted" "$fingerprint"
-  git commit -m "Initialize encrypted stable debug signing certificate"
-  git push origin "HEAD:$GITHUB_REF_NAME"
-fi
-
 echo "PASSOLIBERO_DEBUG_KEYSTORE=$keystore" >> "$GITHUB_ENV"
-echo "PASSOLIBERO_SIGNED=true" >> "$GITHUB_ENV"
+echo "Verified existing signing key without modifying repository files."

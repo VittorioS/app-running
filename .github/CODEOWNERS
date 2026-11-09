@@ -7,3 +7,6 @@
 /app/src/main/java/it/example/passolibero/TrackerDb.java @VittorioS
 /app/src/main/AndroidManifest.xml @VittorioS
 /app/build.gradle @VittorioS
+/ci/ @VittorioS
+/app/src/main/java/it/example/passolibero/UpdateManager.java @VittorioS
+/app/src/main/java/it/example/passolibero/UpdatePolicy.java @VittorioS

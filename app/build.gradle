@@ -5,6 +5,13 @@ plugins {
 
 def ciRun = System.getenv('GITHUB_RUN_NUMBER')
 def debugKeyPath = System.getenv('PASSOLIBERO_DEBUG_KEYSTORE')
+def trustedReleaseCode = System.getenv('PASSOLIBERO_RELEASE_VERSION_CODE')
+def configuredVersionCode = trustedReleaseCode
+        ? Integer.parseInt(trustedReleaseCode)
+        : (ciRun ? 10000 + Integer.parseInt(ciRun) : 2)
+if (configuredVersionCode <= 0) {
+    throw new GradleException('Invalid Android versionCode')
+}
 
 android {
     namespace 'it.example.passolibero'
@@ -16,7 +23,7 @@ android {
         minSdk 30
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         targetSdk 35
-        versionCode ciRun ? 10000 + Integer.parseInt(ciRun) : 2
+        versionCode configuredVersionCode
         versionName '1.0.0'
     }
 

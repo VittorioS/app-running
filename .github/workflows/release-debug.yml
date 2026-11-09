@@ -1,0 +1,189 @@
+name: Publish trusted debug APK
+
+# This workflow is NEVER triggered by pull_request or automatic push.
+# First configure environment "apk-release": main-only deployment,
+# required maintainer approval, and PASSOLIBERO_SIGNING_PASSPHRASE.
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: "Android versionCode > published debug-pr-2/update.json"
+        required: true
+        type: string
+      publish:
+        description: "Upload APK + update.json (false is a signed dry run)"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trusted-debug-apk-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: validate-trusted-source
+    if: github.repository == 'VittorioS/app-running' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+      - name: Validate code and publishing policy
+        run: |
+          sh tests/run-core-tests.sh
+          python3 tests/check-db-migration.py
+          python3 tests/check-architecture.py
+          python3 -m unittest discover -s tests -p 'test_architecture.py'
+          python3 -m unittest discover -s tests -p 'test_release_metadata.py'
+          sh ./gradlew --no-daemon :app:spotlessCheck :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+
+  release:
+    name: release-signed-debug
+    needs: validate
+    if: github.repository == 'VittorioS/app-running' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: apk-release
+    permissions:
+      contents: write
+    env:
+      PASSOLIBERO_RELEASE_VERSION_CODE: ${{ inputs.version_code }}
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+      - name: Validate existing release and monotonic version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          mkdir -p "$RUNNER_TEMP/previous"
+          gh release view debug-pr-2 --repo "$GITHUB_REPOSITORY" >/dev/null
+          gh release download debug-pr-2 --repo "$GITHUB_REPOSITORY" \
+            --pattern update.json --dir "$RUNNER_TEMP/previous"
+          python3 ci/release_metadata.py check \
+            --code "$PASSOLIBERO_RELEASE_VERSION_CODE" \
+            --previous "$RUNNER_TEMP/previous/update.json" \
+            --fingerprint .github/signing/debug-cert.sha256
+      - name: Decrypt existing signing key (no generation)
+        shell: bash
+        env:
+          PASSOLIBERO_SIGNING_PASSPHRASE: ${{ secrets.PASSOLIBERO_SIGNING_PASSPHRASE }}
+        run: bash ci/prepare-debug-signing.sh
+      - name: Compile signed debug APK with explicit versionCode
+        run: sh ./gradlew --no-daemon :app:assembleDebug
+      - name: Verify APK identity, minSdk, signature and metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$apk"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          badging="$("$aapt" dump badging "$apk")"
+          package="$(sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" <<< "$badging")"
+          code="$(sed -n "s/^package: .*versionCode='\\([0-9]*\\)'.*/\\1/p" <<< "$badging")"
+          min_sdk="$(sed -n "s/^sdkVersion:'\\([0-9]*\\)'.*/\\1/p" <<< "$badging")"
+          [[ "$package" == "it.example.passolibero" ]]
+          [[ "$code" == "$PASSOLIBERO_RELEASE_VERSION_CODE" ]]
+          [[ "$min_sdk" =~ ^[0-9]+$ ]] && (( min_sdk <= 30 ))
+          actual="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
+            --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          expected="$(tr -d '\r\n' < .github/signing/debug-cert.sha256)"
+          [[ "$actual" == "$expected" && -n "$actual" ]]
+          mkdir -p "$RUNNER_TEMP/release"
+          file="passolibero-debug-v${PASSOLIBERO_RELEASE_VERSION_CODE}.apk"
+          cp "$apk" "$RUNNER_TEMP/release/$file"
+          python3 ci/release_metadata.py generate \
+            --code "$PASSOLIBERO_RELEASE_VERSION_CODE" \
+            --apk "$RUNNER_TEMP/release/$file" \
+            --fingerprint .github/signing/debug-cert.sha256 \
+            --source-commit "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/release/update.json"
+          echo "Verified: package=$package versionCode=$code minSdk=$min_sdk certificate=$actual"
+      - name: Dry-run artifact (no release upload)
+        if: inputs.publish == false
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-debug-dry-run-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/release/*.apk
+            ${{ runner.temp }}/release/update.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish versioned APK before update.json
+        if: inputs.publish == true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          file="passolibero-debug-v${PASSOLIBERO_RELEASE_VERSION_CODE}.apk"
+          # An existing versioned asset is never overwritten; safe to retry only
+          # if the uploaded APK equals the current verified local artifact.
+          if gh release view debug-pr-2 --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name' | grep -Fxq "$file"; then
+            mkdir -p "$RUNNER_TEMP/existing"
+            gh release download debug-pr-2 --repo "$GITHUB_REPOSITORY" \
+              --pattern "$file" --dir "$RUNNER_TEMP/existing"
+            cmp "$RUNNER_TEMP/existing/$file" "$RUNNER_TEMP/release/$file"
+          else
+            gh release upload debug-pr-2 "$RUNNER_TEMP/release/$file" \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+          # update.json is the channel pointer, replaced only after APK exists.
+          gh release upload debug-pr-2 "$RUNNER_TEMP/release/update.json" \
+            --clobber --repo "$GITHUB_REPOSITORY"
+          gh release edit debug-pr-2 --repo "$GITHUB_REPOSITORY" \
+            --title "PassoLibero trusted debug ${PASSOLIBERO_RELEASE_VERSION_CODE}" \
+            --notes "Signed trusted main build $GITHUB_SHA. Debug prerelease, not stable."
+      - name: Verify published files match the signed outputs
+        if: inputs.publish == true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/published"
+          file="passolibero-debug-v${PASSOLIBERO_RELEASE_VERSION_CODE}.apk"
+          gh release download debug-pr-2 --repo "$GITHUB_REPOSITORY" \
+            --pattern "$file" --pattern update.json --dir "$RUNNER_TEMP/published"
+          cmp "$RUNNER_TEMP/release/$file" "$RUNNER_TEMP/published/$file"
+          cmp "$RUNNER_TEMP/release/update.json" "$RUNNER_TEMP/published/update.json"
+          echo "Verified published APK and JSON against local trusted build."
