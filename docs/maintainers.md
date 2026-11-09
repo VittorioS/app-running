@@ -1,7 +1,7 @@
 # Runbook maintainer — contributi via agenti AI
 
 ## Impostazioni GitHub (operazioni manuali, non modificabili dalla CI)
-In Settings → Rules → Rulesets crea una regola per `main` (o Branch protection rules se preferito). Richiedi pull request, almeno una review approvata indipendente, discussioni risolte e status check `verify` del workflow `Verify Pull Request`. Blocca force push e cancellazione, limita i bypass, non permettere il merge mentre i controlli sono in corso. Verifica i nomi dei check dopo la prima esecuzione.
+In Settings → Rules → Rulesets crea una regola per `main` (o Branch protection rules se preferito). Richiedi pull request, almeno una review approvata indipendente, discussioni risolte e status check `verify` **e `android11`** del workflow `Verify Pull Request`. Entrambi devono essere obbligatori per proteggere Android 11/API 30. Blocca force push e cancellazione, limita i bypass, non permettere il merge mentre i controlli sono in corso. Verifica i nomi dei check dopo la prima esecuzione.
 
 Abilita GitHub Issues, forking pubblico e, se disponibile, segnalazione privata delle vulnerabilità. Invita i contributori a usare issue e template, senza concedere write access. CODEOWNERS richiede review obbligatoria soltanto se la regola GitHub richiede anche il code-owner review.
 
