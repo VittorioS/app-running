@@ -14,7 +14,10 @@ public final class GpsFixPolicy {
 
     /** Uncertain GPS may accrue plausible slow distance, but never confirm RUN or WALK. */
     public static boolean plausibleSlow(
-            boolean uncertain, double pointSpeedKmh, double nativeSpeedMps, double speedAccuracyMps) {
+            boolean uncertain,
+            double pointSpeedKmh,
+            double nativeSpeedMps,
+            double speedAccuracyMps) {
         return uncertain
                 && Double.isFinite(pointSpeedKmh)
                 && pointSpeedKmh >= 1.2
