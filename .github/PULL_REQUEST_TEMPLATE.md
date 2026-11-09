@@ -13,6 +13,7 @@ Closes #
 - [ ] `sh tests/run-core-tests.sh` — esito:
 - [ ] `python3 tests/check-db-migration.py` — esito:
 - [ ] `sh ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug` — esito:
+- [ ] Compatibilità Android 11/API 30 e job CI `android11` verificati:
 - [ ] Test manuale su telefono (se necessario) — dispositivo/API e risultati:
 - [ ] Screenshot/video UI senza informazioni personali (se necessario).
 
