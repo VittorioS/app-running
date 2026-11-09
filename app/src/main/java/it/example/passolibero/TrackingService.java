@@ -28,6 +28,8 @@ import android.util.Log;
 import java.util.ArrayDeque;
 import java.util.Locale;
 
+import it.example.passolibero.domain.SessionRecoveryPolicy;
+
 /** Foreground Service: solo start esplicito, nessun monitoraggio fuori sessione. */
 public final class TrackingService extends Service implements LocationListener, SensorEventListener {
     public static final String START = "it.example.passolibero.START";
@@ -267,11 +269,10 @@ public final class TrackingService extends Service implements LocationListener, 
         boolean restore = prefs.getBoolean("active", false) && prefs.getLong("active_id", 0) > 0;
         if (restore) {
             state = RunState.read(prefs);
-            // elapsedRealtime() si azzera dopo il riavvio del telefono: niente durata negativa.
-            if (state.startedElapsedMs <= 0 || state.startedElapsedMs > SystemClock.elapsedRealtime()) {
-                long elapsedBasedOnWall = Math.max(0, System.currentTimeMillis() - state.startedWallMs);
-                state.startedElapsedMs = Math.max(0, SystemClock.elapsedRealtime() - elapsedBasedOnWall);
-            }
+            // Recover the elapsed clock using the same lazy clock reads as before.
+            state.startedElapsedMs = SessionRecoveryPolicy.recoverStartedElapsedMs(
+                    state.startedElapsedMs, state.startedWallMs,
+                    SystemClock::elapsedRealtime, System::currentTimeMillis);
             state.movement = "UNKNOWN";
             state.gpsStatus = "Ripresa: attesa del GPS";
         } else {
@@ -302,11 +303,10 @@ public final class TrackingService extends Service implements LocationListener, 
         lastAccepted = null; // Non collegare con una linea GPS il tratto perso durante un riavvio.
         distanceAccumulator.reset();
         motionEvidence.reset();
-        // Recover elapsed time not covered by the last durable snapshot as
-        // UNKNOWN. Never infer RUN, WALK or STILL across a service restart.
-        long accounted = state.runMs + state.walkMs + state.movingUnknownMs + state.stillMs + state.unknownMs;
-        long elapsed = Math.max(0, state.lastTickElapsedMs - state.startedElapsedMs);
-        if (restore && elapsed > accounted) state.unknownMs += elapsed - accounted;
+        // An unobserved interval stays UNKNOWN, never inferred movement/stillness.
+        state.unknownMs += SessionRecoveryPolicy.unobservedUnknownMs(restore,
+                state.startedElapsedMs, state.lastTickElapsedMs,
+                state.runMs, state.walkMs, state.movingUnknownMs, state.stillMs, state.unknownMs);
         motionTimeline.restore(state.runMs, state.walkMs, state.stillMs, state.unknownMs, state.movingUnknownMs);
         // Non dedurre pause o riprese precedenti a un riavvio del servizio.
         sessionVoice.reset();

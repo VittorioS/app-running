@@ -22,6 +22,11 @@ java -cp build-test MotionRegressionTest
 # Timestamped, synthetic GPS/step traces: no device or real sensor required.
 javac -cp build-test -d build-test tests/TrackingReplayTest.java
 java -cp build-test TrackingReplayTest
+
+# Pure, reference-equivalent recovery of the monotonic clock and unknown gaps.
+javac -d build-test app/src/main/java/it/example/passolibero/domain/SessionRecoveryPolicy.java \
+  tests/SessionRecoveryPolicyTest.java
+java -cp build-test SessionRecoveryPolicyTest
 javac -cp build-test -d build-test tests/SessionTabStatsTest.java
 java -cp build-test SessionTabStatsTest
 

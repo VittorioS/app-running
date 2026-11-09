@@ -51,4 +51,4 @@ Per una nuova feature:
 - Spotless applica igiene agli Java toccati rispetto a `origin/main`; applica anche google-java-format alle classi nei nuovi package stratificati. Non riformattiamo automaticamente il legacy.
 - Non esiste un controllo statico perfetto: i controlli sugli import non rilevano accesso via reflection, fully-qualified name o logica di business spostata nella UI. La review umana resta essenziale.
 
-Per l'estrazione iniziale di `TrackingService` vedi [issue #6](https://github.com/VittorioS/app-running/issues/6). La PR #2, ancora separata, va rivista dopo il merge di questa base.
+Per l'estrazione iniziale di `TrackingService` vedi [issue #6](https://github.com/VittorioS/app-running/issues/6). La PR #2 è già integrata. Per il refactoring del service seguire il diagramma e il piano in [architettura](architecture.md#responsabilità-attuali-di-trackingservice--issue-6), partendo dalla policy pura di recupero e da test di equivalenza.
