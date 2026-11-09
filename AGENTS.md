@@ -2,6 +2,20 @@
 
 These rules apply to **all** coding agents and contributors. Read `README.md`, `docs/architecture.md`, `docs/clean-architecture.md`, `docs/coding-standards.md`, `docs/invariants.md` and the linked issue before editing. If a task conflicts with an invariant, explain the conflict in the PR instead of silently changing the invariant.
 
+## App-wide refactoring proposal (planning gate)
+
+For any **app-wide architecture refactoring** request, read
+`docs/adr/ADR-002-refactoring-app.md`,
+`docs/refactoring/dependency-map.md`, and
+`docs/refactoring/pr-backlog.md` in addition to ADR-001 and the invariants.
+
+**ADR-002 is currently PROPOSED, not accepted.** Its existence does not authorize
+implementation: until the maintainer explicitly accepts it and approves the
+operational backlog, agents may only review/propose planning documents, not
+begin code refactors or create implementation issues. Later implementation
+still requires a scoped issue, a reviewable PR, passing CI and human review.
+This section adds a planning gate and does not relax any signing/CI policies.
+
 ## Project and boundaries
 - Android native, Java 17, **mandatory Android 11 / API 30 compatibility** (minSdk 30), target/compileSdk 35, Gradle 8.9. Higher compile/target SDK does not raise minimum OS support.
 - Offline-first: GPS, movement, timer, history and speech must not depend on Internet. Map tiles and explicitly enabled online features can require network.
