@@ -62,3 +62,7 @@ Un APK compilato non prova il corretto funzionamento su hardware. Una PR dichiar
 ## Issue #6 — invarianti di ripresa del service
 
 `tests/SessionRecoveryPolicyTest.java` (eseguito in `tests/run-core-tests.sh`) confronta il calcolo puro di recupero con la **formula legacy** per 1000 tracce deterministiche. Verifica anche ordine/numero delle letture clock, fallback dopo reboot, intervalli non osservati classificati esclusivamente come `UNKNOWN` e assenza di doppio conteggio. I test GPS stale/out-of-order sono in `TrackingReplayTest.java`; lo smoke Android API 30 controlla anche manifest e foreground lifecycle nelle PR successive del piano #6.
+
+## Issue #6 — foreground Android e fix GNSS
+
+`tests/ForegroundStartPolicyTest.java` testa permessi/GPS con corto circuito e tipo HEALTH soltanto su API 34+; `Android11CompatibilityTest` verifica su emulatore API 30 che non si leggano permessi HEALTH. `tests/GpsFixPolicyTest.java` confronta le espressioni precedenti di `TrackingService` con la policy pura su tracce fisse e 1000 campioni deterministici (sprint normale 1 Hz, fix fuori ordine, lentezza incerta, jitter, STILL). I test automatici non utilizzano GPS hardware.

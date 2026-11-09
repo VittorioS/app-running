@@ -32,6 +32,11 @@ java -cp build-test SessionRecoveryPolicyTest
 javac -d build-test app/src/main/java/it/example/passolibero/domain/ForegroundStartPolicy.java \
   tests/ForegroundStartPolicyTest.java
 java -cp build-test ForegroundStartPolicyTest
+
+# Pure GNSS path throttling and distance gates with reference-equivalence probes.
+javac -d build-test app/src/main/java/it/example/passolibero/domain/GpsFixPolicy.java \
+  tests/GpsFixPolicyTest.java
+java -cp build-test GpsFixPolicyTest
 javac -cp build-test -d build-test tests/SessionTabStatsTest.java
 java -cp build-test SessionTabStatsTest
 

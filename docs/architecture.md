@@ -66,6 +66,6 @@ flowchart TD
 
 1. **PR 1 — recupero puro del cronometro**: estrazione di `SessionRecoveryPolicy`, test di equivalenza con la vecchia formula, riavvio telefono e tempo `UNKNOWN`; nessuna modifica ai sensori o al database.
 2. **PR 2 — decisioni di avvio/foreground**: `domain/ForegroundStartPolicy` isola le decisioni di permessi e tipo FGS e conserva il corto circuito della verifica GPS e la guardia HEALTH su API 34+; test JVM e instrumentation API 30. L'ordine dei side effect di avvio/STOP resta nel servizio.
-3. **PR 3 — confine GPS/sensori**: spostare una decisione per volta dai callback in adapter/policy puri, con replay dei fix tardivi e dei batch contapassi della suite #5; **solo dopo** valutare un'orchestrazione ulteriore, senza cambiare sampling o stato persistito.
+3. **PR 3 — confine GPS/sensori**: `domain/GpsFixPolicy` isola le decisioni di throttling 1 Hz durante sprint, movimento lento plausibile e gating della distanza in stato STILL. `TrackingService` continua a registrare i callback, applicare la validazione della freschezza, gestire i batch step-counter e mantenere gli stessi snapshot; replay e test di equivalenza preservano le soglie esistenti. Ulteriori adapter si valuteranno in issue separata, senza cambiare sampling.
 
 Ogni PR richiede `verify` e `android11` verdi; sono vietate modifiche di schema, soglie GPS, temporizzazioni, permessi, firma o annunci nella stessa estrazione.

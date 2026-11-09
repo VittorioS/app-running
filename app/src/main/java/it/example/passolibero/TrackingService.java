@@ -30,6 +30,7 @@ import java.util.Locale;
 
 import it.example.passolibero.domain.SessionRecoveryPolicy;
 import it.example.passolibero.domain.ForegroundStartPolicy;
+import it.example.passolibero.domain.GpsFixPolicy;
 
 /** Foreground Service: solo start esplicito, nessun monitoraggio fuori sessione. */
 public final class TrackingService extends Service implements LocationListener, SensorEventListener {
@@ -452,9 +453,7 @@ public final class TrackingService extends Service implements LocationListener, 
         // Il tracciamento generale resta a circa 1 Hz, come prima dello sprint:
         // nessuna nuova pressione sulla classificazione RUN/WALK.
         long normalFixMs = location.getElapsedRealtimeNanos() / 1_000_000L;
-        if (sprint.busy() && lastNormalGpsFixMs >= 0
-                && normalFixMs >= lastNormalGpsFixMs
-                && normalFixMs - lastNormalGpsFixMs < 900L) return;
+        if (GpsFixPolicy.skipNormalFix(sprint.busy(), lastNormalGpsFixMs, normalFixMs)) return;
         lastNormalGpsFixMs = normalFixMs;
         long now = SystemClock.elapsedRealtime();
         long ageMs = Math.abs(now - location.getElapsedRealtimeNanos() / 1_000_000);
@@ -516,13 +515,11 @@ public final class TrackingService extends Service implements LocationListener, 
         boolean moving = evidence == MotionEvidencePolicy.Evidence.MOVING;
         // Uncertainty is not proof of stillness. Permit conservative distance
         // accumulation for plausible slow movement; never force speed to zero.
-        boolean plausibleSlow = evidence == MotionEvidencePolicy.Evidence.UNCERTAIN
-                && Double.isFinite(pointSpeed) && pointSpeed >= 1.2 && pointSpeed < 20
-                && Double.isFinite(nativeSpeed) && nativeSpeed >= 0.4
-                && Double.isFinite(speedUncertainty) && speedUncertainty <= 0.6;
-        boolean countDistance = moving || plausibleSlow;
-        if (motionTimeline.visible() == MovementClassifier.Kind.STILL && !moving)
-            countDistance = false;
+        boolean plausibleSlow = GpsFixPolicy.plausibleSlow(
+                evidence == MotionEvidencePolicy.Evidence.UNCERTAIN,
+                pointSpeed, nativeSpeed, speedUncertainty);
+        boolean countDistance = GpsFixPolicy.countDistance(
+                moving, plausibleSlow, motionTimeline.visible() == MovementClassifier.Kind.STILL);
         if (freshActivityFix) {
             delta = distanceAccumulator.accept(location.getLatitude(), location.getLongitude(),
                     acc, countDistance);
