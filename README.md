@@ -1,6 +1,6 @@
 # PassoLibero 2.0 — Mappa live e statistiche complete
 
-App Android nativa in Java (**Android 11/API 30 obbligatorio**, min SDK 30; compile/target SDK 35). La CI verifica sia il livello API minimo dell'APK sia l'avvio su emulatore Android 11. Tracciamento GPS e sensori passi durante sessioni avviate dall'utente; storico interamente sul dispositivo.
+App Android nativa in Java (**Android 11/API 30 obbligatorio**, minSdk 30, compile/target SDK 35). CI con test strumentali API 30. Tracciamento GPS e sensori passi durante sessioni avviate dall'utente; storico interamente sul dispositivo.
 
 ## Schermate
 
@@ -23,6 +23,7 @@ App Android nativa in Java (**Android 11/API 30 obbligatorio**, min SDK 30; comp
 - **Database migrato da versione 1 a 2 con ALTER TABLE** per aggiungere `goal_m` senza cancellare sessioni e punti precedenti.
 - **SessionDetailActivity** con mappa di una sessione storica e statistiche salvate.
 - **RouteSegmenter** impedisce linee fittizie sulla mappa dopo salti o lunghe perdite di segnale.
+- **Sezioni del percorso:** nella sessione corrente e nello storico i tratti WALK/RUN/SPRINT hanno colori distinti e statistiche dedicate. La lista sotto la mappa permette di selezionare un tratto: solo quello mantiene il proprio colore, gli altri diventano grigi. Toccando un tratto sulla mappa si seleziona la riga corrispondente e si apre il dettaglio GPS. "Mostra tutte" ripristina i colori e, nella sessione live, il seguito della posizione.
 - Se non hai autorizzato Attività fisica, GPS e durata funzionano; passi/cadenza richiedono il sensore compatibile e il permesso ACTIVITY_RECOGNITION.
 
 ## Test
@@ -47,14 +48,13 @@ I test JVM includono 100 m a piccoli incrementi GPS, anti-drift, classificazione
 
 Configurazione Gradle: plugin Android `8.7.3`, Gradle `8.9`, Java `17`, compileSdk `35`.
 
-La build richiede accesso a Google Maven/Maven Central (una volta) per Android Gradle Plugin e dipendenza open source osmdroid. La compilazione APK in questo ambiente non è stata verificata, perché l'Android SDK non è disponibile qui. Il workflow usa Java 17 e `android-actions/setup-android@v3` con solo `platform-tools` (non il vecchio pacchetto `tools`, che non esiste più).
+La build richiede accesso a Google Maven/Maven Central (una volta) per Android Gradle Plugin e dipendenza open source osmdroid. Le pull request sono verificate dal workflow di sola lettura con compilazione, test, lint e test Android 11. Il workflow non pubblica release e non accede a credenziali di firma.
 
 ## Pull request GitHub
 
-La versione 2.0 è proposta tramite una normale pull request dal ramo `feature/passolibero-osm-v2` verso `main` nel repository `VittorioS/app-running`.
-I file sorgente Java, il manifesto, i test e il README sono versionati singolarmente nel repository: non è richiesto caricare ZIP. Il workflow GitHub Actions del repository viene eseguito anche sul ramo della PR, genera `:app:assembleDebug` e pubblica l'artefatto APK se la compilazione riesce.
+Consulta [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md) e [docs/clean-architecture.md](docs/clean-architecture.md). Le PR da fork sono verificate automaticamente; i check `verify` e `android11`, la review umana e il ruleset `protect-main` sono obbligatori.
 
-**Attenzione alla firma:** un APK debug generato da un altro runner può usare una chiave diversa e rifiutare l'aggiornamento. Non disinstallare l'app esistente se vuoi conservarne le sessioni senza aver prima esportato i dati.
+**Firma APK:** un APK debug generato senza la firma persistente può non aggiornare un'installazione già esistente. Conserva un backup dello storico prima di sostituire un'installazione con firma diversa.
 
 ## Verifiche pratiche consigliate
 
@@ -63,3 +63,11 @@ I file sorgente Java, il manifesto, i test e il README sono versionati singolarm
 3. Controllare l'aggiornamento linea/marker in Home. Tornare alla schermata statistiche, cambiare checkpoint e obiettivo chilometrico.
 4. Terminare: il percorso deve sparire dalla Home ed essere consultabile soltanto nello Storico, senza segmenti fittizi sui tratti con GPS perso.
 5. Senza Internet: GPS, conteggio e percorso continuano; tiles OSM non già in cache potrebbero non apparire.
+
+## Firma debug e aggiornamenti APK (V2)
+
+La V2 include la schermata **Aggiornamenti dell'app** e un verificatore di APK che controlla hash, certificato, package e versione prima di richiedere l'installazione. È disponibile il canale preesistente `debug-pr-2`; non è garantito che contenga una versione successiva.
+
+La vecchia pipeline `bootstrap.yml`, che poteva pubblicare release ed eseguire push con permessi di scrittura, **non viene ripristinata** dopo l'integrazione delle regole di contribuzione. La CI delle PR verifica soltanto codice e APK, senza token di pubblicazione o segreti. Per avere nuovi APK firmati, incrementi di versione e update automatici serve una pipeline di release **separata e affidabile**, prevista dalla [issue #7](https://github.com/VittorioS/app-running/issues/7). Non allargare i permessi del workflow che esegue codice di PR esterne.
+
+È possibile generare una build debug locale con `sh ./gradlew :app:assembleDebug`. Per aggiornare senza perdere dati occorre usare la stessa chiave di firma dell'APK già installato; se non coincide, esportare e salvare i dati prima di prendere decisioni sull'installazione. L'aggiornamento in-app non deve interrompere una sessione attiva.
