@@ -1,6 +1,6 @@
-# Backlog progettuale delle PR — ADR-002 (NON ancora issue operative)
+# Backlog operativo delle PR — ADR-002 (lotti in issue separate)
 
-**Stato:** proposta per la revisione del maintainer. Questo documento descrive *lotti candidati*, non autorizza agenti a implementare o pubblicare nulla. Le issue vengono create **solo dopo** che [ADR-002](../adr/ADR-002-refactoring-app.md) è stata accettata.
+**Stato:** roadmap **approvata** dal maintainer il 2026-11-09. I lotti diventano issue operative registrate sotto un'epic GitHub, ma nessun agente può avviare una riscrittura globale: ogni lotto resta vincolato a una issue, a prerequisiti, test e review. Nessuna pubblicazione è autorizzata da questo backlog. Vedi [ADR-002 ACCETTATA](../adr/ADR-002-refactoring-app.md).
 
 ## Regole di pianificazione
 
@@ -14,7 +14,7 @@
 
 | Lotto PR candidata | Deliverable piccolo e concreto | Dipende da | Rischio / gate di uscita |
 | --- | --- | --- | --- |
-| **P0 — questa PR documentale** | ADR-002 proposta, mappa, backlog e link per gli agenti | nessuno | Solo documenti; **review/approvazione esplicita** |
+| **P0 — PR documentale #15** | ADR-002 accettata, mappa, backlog e link per gli agenti | nessuno | Solo documenti; approvazione del maintainer 2026-11-09 |
 | **P1a — test portabili** | Spostare *una* suite algoritmica dallo script `tests/run-core-tests.sh` a Gradle/JUnit senza perdere le asserzioni | ADR accettata | Parità test eseguiti, `verify/android11` verdi |
 | **P1b — regole di dipendenza** | Rafforzare il guardiano sulle nuove sottodirectory senza bloccare il legacy; regression test del guardiano | P1a | Nessun falso positivo sui file esistenti |
 | **P2a — model invariants** | Scegliere una famiglia di regole pure (statistiche/route/sprint), introdurre test contrattuali e migrare nel domain | P1a | JVM parity su precisione, unità, edge cases |
@@ -40,7 +40,7 @@
 
 Le etichette `P#` indicano **ordine logico e dipendenze**, non una richiesta di aprire subito 20 PR. Le fasi P6/P7/P8/P9 possono essere sviluppate indipendentemente in parallelo **dopo i prerequisiti**; non far lavorare agenti contemporaneamente sugli stessi file legacy.
 
-## Template per issue operativa (solo dopo accettazione ADR)
+## Template per issue operativa (ADR accettata)
 
 ```markdown
 ### Obiettivo e confine
@@ -85,10 +85,10 @@ Modifiche funzionali, nuove librerie, firma e workflow di release.
 5. **Battery debug:** evitare static state e reflection silenziosa, conservando il confine `src/debug`.
 6. **Scope/parallelismo:** un solo owner per file legacy coinvolto; PR piccole, rollback per singola PR.
 
-### Decisione attesa dal maintainer
+### Decisione del maintainer — 2026-11-09
 
-- [ ] Confermare modalità *behavior-preserving*, senza redesign UI.
-- [ ] Accettare questa sequenza e i gate, oppure indicare revisioni.
-- [ ] Autorizzare **successivamente** la creazione delle issue operative e l'assegnazione ad agenti.
+- [x] Confermata modalità *behavior-preserving*, senza redesign UI.
+- [x] Accettata la sequenza e i gate di verifica definiti.
+- [x] Autorizzata la creazione dell'epic e delle issue operative, con attuazione per PR indipendenti.
 
-Finché le caselle non vengono approvate, questo rimane un backlog di **progettazione**.
+Le issue tracciano il programma; nessuna issue autorizza da sola un merge o una pubblicazione.

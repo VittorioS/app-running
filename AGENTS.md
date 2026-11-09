@@ -2,19 +2,20 @@
 
 These rules apply to **all** coding agents and contributors. Read `README.md`, `docs/architecture.md`, `docs/clean-architecture.md`, `docs/coding-standards.md`, `docs/invariants.md` and the linked issue before editing. If a task conflicts with an invariant, explain the conflict in the PR instead of silently changing the invariant.
 
-## App-wide refactoring proposal (planning gate)
+## App-wide refactoring — approved architecture and per-issue gate
 
 For any **app-wide architecture refactoring** request, read
 `docs/adr/ADR-002-refactoring-app.md`,
 `docs/refactoring/dependency-map.md`, and
 `docs/refactoring/pr-backlog.md` in addition to ADR-001 and the invariants.
 
-**ADR-002 is currently PROPOSED, not accepted.** Its existence does not authorize
-implementation: until the maintainer explicitly accepts it and approves the
-operational backlog, agents may only review/propose planning documents, not
-begin code refactors or create implementation issues. Later implementation
-still requires a scoped issue, a reviewable PR, passing CI and human review.
-This section adds a planning gate and does not relax any signing/CI policies.
+**ADR-002 was ACCEPTED by the maintainer on 2026-11-09.** The epic and
+operational backlog may be created. This does **not** authorize a mass rewrite,
+unsolicited code changes, autonomous merges, or releases. Every implementation
+must begin with its own scoped issue, observable behavior contract, a small PR,
+passing `verify` and `android11`, and maintainer review. Follow prerequisites
+in the backlog before starting another issue. Signing/CI security policy is
+unchanged.
 
 ## Project and boundaries
 - Android native, Java 17, **mandatory Android 11 / API 30 compatibility** (minSdk 30), target/compileSdk 35, Gradle 8.9. Higher compile/target SDK does not raise minimum OS support.

@@ -1,6 +1,6 @@
 # ADR-002 — Refactoring architetturale progressivo di tutta PassoLibero
 
-- **Stato:** PROPOSTA — in attesa dell'approvazione esplicita del maintainer
+- **Stato:** ACCETTATA — approvata esplicitamente dal maintainer il 2026-11-09 in conversazione, con avvio per issue circoscritte
 - **Data:** 2026-11-09
 - **Owner decisione:** maintainer del repository
 - **Baseline esaminata:** `main` @ `14effdeb6b8909a8e3110c3e432ee25e82d168a4`
@@ -8,7 +8,7 @@
 - **Ambito:** architettura dell'intera app, incluse funzionalità meteo, aggiornamenti, mappe, voce, storico e diagnostica `debug`
 - **Tipo di modifica proposta:** refactoring senza cambiamenti intenzionali di comportamento, UI, API pubbliche dell'APK o formato dei dati
 
-> **Gate di approvazione:** la presenza di questo documento in una PR non autorizza ad avviare refactoring. Finché lo stato è **PROPOSTA**, non creare issue operative, non assegnare agenti per la migrazione e non modificare codice sulla base di questa ADR. Il maintainer deve approvare esplicitamente architettura, sequenza e criteri di accettazione; solo dopo portare lo stato ad **ACCETTATA** e aprire le issue operative.
+> **Decisione registrata:** il maintainer ha approvato architettura, sequenza e gate il 2026-11-09. Questo autorizza la creazione dell'epic e delle issue operative, **non** un refactoring di massa, un merge automatico di codice o pubblicazioni. Ogni implementazione deve partire da una issue circoscritta, avere una PR revisionabile e superare i controlli obbligatori. Le azioni di release e i secret restano fuori scope.
 
 ## 1. Contesto e problema
 
@@ -20,7 +20,7 @@ Le issue #5 e #6 hanno costruito una baseline di regressione e isolato tre polit
 
 **Problema da risolvere:** rendere i cambiamenti degli agenti AI piccoli, prevedibili, testabili e revisionabili senza mettere a rischio i dati locali e il comportamento già verificato sul dispositivo reale. Lo spostamento fisico di file **non è** di per sé una prova di corretta architettura.
 
-## 2. Decisione proposta
+## 2. Decisione approvata
 
 **Adottare un refactoring progressivo guidato dai contratti**, sulla base di ADR-001 e delle dipendenze della Clean Architecture, con un *seam* verificabile alla volta.
 
@@ -119,26 +119,26 @@ La [mappa delle dipendenze](../refactoring/dependency-map.md) contiene i riferim
 | Multi-modulo Gradle immediato | Rinviato | Costo e complessità non giustificati dalla baseline |
 | Framework DI o cambio linguaggio/UI | Fuori scope | Nessun beneficio certo per la migrazione iniziale |
 | Lasciare il legacy com'è | Rifiutata | Continua ad accoppiare UI, Android e persistenza |
-| Refactor iterativo con porte minime e test | **Proposto** | Protegge dati, facilita review e rollback, rende possibile la migrazione per feature |
+| Refactor iterativo con porte minime e test | **Accettato** | Protegge dati, facilita review e rollback, rende possibile la migrazione per feature |
 
 Rischi residui: comportamento batterie/OEM non rappresentato nell'emulatore; bug latenti non coperti dai test; differenze nei side effect di persistenza asincrona; upgrade di schema storico; reflection in `TrackingService` verso la diagnostica debug; perdita di ordering tra callback del worker e UI; residui di accesso diretto da presentation. Mitigazioni nel backlog e review specifiche.
 
-## 7. Governance: da progetto proposto a progetto eseguibile
+## 7. Governance: decisione accettata e avvio controllato
 
-La ADR diventerà **ACCETTATA** solo dopo che il maintainer avrà rivisto e confermato:
+Il 2026-11-09 il maintainer ha approvato espressamente il piano e autorizzato a procedere secondo le fasi definite. I seguenti punti costituiscono il contenuto dell'approvazione:
 
-- [ ] Obiettivo: stesso comportamento e stessa UI, solo riorganizzazione interna.
-- [ ] Direzione delle dipendenze, composition root, criteri delle interfacce e struttura package.
-- [ ] Baseline e rischi di dati, FGS, firma, updater, meteo e codice debug.
-- [ ] Priorità e dipendenze dei piccoli lotti nel backlog; nessun batch di rename.
-- [ ] Gate di test automatici, test sul telefono, privacy e rollback.
-- [ ] Decisione su cosa resta legacy temporaneamente e quando interrompere una migrazione.
+- [x] Obiettivo: stesso comportamento e stessa UI, solo riorganizzazione interna.
+- [x] Direzione delle dipendenze, composition root, criteri delle interfacce e struttura package.
+- [x] Baseline e rischi di dati, FGS, firma, updater, meteo e codice debug.
+- [x] Priorità e dipendenze dei piccoli lotti nel backlog; nessun batch di rename.
+- [x] Gate di test automatici, test sul telefono, privacy e rollback.
+- [x] Decisione su cosa resta legacy temporaneamente e quando interrompere una migrazione.
 
-**Solo dopo l'accettazione:**
-1. aggiornare qui `Stato: ACCETTATA` con data/decisione;
-2. creare una issue *epic* e le issue operative dal backlog, assegnando milestone e dipendenze;
-3. assegnare agli agenti una issue circoscritta alla volta; includere questa ADR, la mappa e `docs/invariants.md` nel contesto;
-4. aprire PR d'implementazione piccole senza merge autonomo degli agenti.
+**Dopo l'accettazione:**
+1. registrare la presente decisione e la data nell'ADR (**completato**);
+2. creare un'issue *epic* e le issue operative dal backlog, con dipendenze esplicite (senza milestone inventate);
+3. avviare una sola issue circoscritta alla volta; fornire ADR, mappa e `docs/invariants.md` agli agenti;
+4. aprire PR piccole, mantenendo il merge umano e i controlli della CI; non toccare signing/release nei refactor.
 
 ### Criteri di completamento dell'intero programma
 
@@ -149,4 +149,4 @@ La ADR diventerà **ACCETTATA** solo dopo che il maintainer avrà rivisto e conf
 - Aggiornamento sopra vecchia installazione, storico conservato, nuova sessione e funzionalità principali collaudati su device reale prima della release.
 - Non serve cancellare dati, cambiare certificato o aumentare minSdk.
 
-**Questa ADR autorizza la progettazione e la discussione, non l'implementazione finché rimane PROPOSTA.**
+**ADR ACCETTATA.** Il programma può essere gestito tramite issue operative. L'implementazione di ciascun lotto è soggetta ai propri criteri di accettazione, a una PR separata, ai controlli `verify` e `android11` e alla revisione del maintainer. Questo documento non autorizza merge automatici, release o cambiamenti funzionali.
