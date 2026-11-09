@@ -29,6 +29,7 @@ import java.util.ArrayDeque;
 import java.util.Locale;
 
 import it.example.passolibero.domain.SessionRecoveryPolicy;
+import it.example.passolibero.domain.ForegroundStartPolicy;
 
 /** Foreground Service: solo start esplicito, nessun monitoraggio fuori sessione. */
 public final class TrackingService extends Service implements LocationListener, SensorEventListener {
@@ -221,18 +222,18 @@ public final class TrackingService extends Service implements LocationListener, 
             return START_STICKY;
         }
         // Avvio esclusivamente mentre MainActivity è visibile (o riavvio del sistema di un servizio già attivo).
-        if (!hasLocationPermission() || !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+        if (!ForegroundStartPolicy.canStart(this::hasLocationPermission,
+                () -> locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))) {
             prefs.edit().putString("error", "Attiva il GPS e consenti la posizione precisa.").apply();
             stopSelf();
             return START_NOT_STICKY;
         }
         try {
-            int type = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION;
-            if (Build.VERSION.SDK_INT >= 34
-                    && checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED) {
-                // HEALTH foreground-service type is unavailable on Android 11 (API 30).
-                type |= ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH;
-            }
+            int type = ForegroundStartPolicy.foregroundServiceType(
+                    Build.VERSION.SDK_INT, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
+                    () -> checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
+                            == PackageManager.PERMISSION_GRANTED);
             startForeground(NOTIFICATION_ID, notification("Tracciamento in corso"), type);
             acquiredForeground = true;
         } catch (RuntimeException failure) {

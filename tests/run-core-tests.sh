@@ -27,6 +27,11 @@ java -cp build-test TrackingReplayTest
 javac -d build-test app/src/main/java/it/example/passolibero/domain/SessionRecoveryPolicy.java \
   tests/SessionRecoveryPolicyTest.java
 java -cp build-test SessionRecoveryPolicyTest
+
+# Pure foreground-service permission/type decisions, including Android 11 fallback.
+javac -d build-test app/src/main/java/it/example/passolibero/domain/ForegroundStartPolicy.java \
+  tests/ForegroundStartPolicyTest.java
+java -cp build-test ForegroundStartPolicyTest
 javac -cp build-test -d build-test tests/SessionTabStatsTest.java
 java -cp build-test SessionTabStatsTest
 

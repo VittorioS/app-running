@@ -23,6 +23,18 @@ public class Android11CompatibilityTest {
         assertTrue(app.getApplicationInfo().minSdkVersion <= 30);
     }
 
+    @Test public void foregroundPolicyNeverRequestsHealthOnAndroid11() {
+        assertEquals(30, Build.VERSION.SDK_INT);
+        assertEquals(android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                it.example.passolibero.domain.ForegroundStartPolicy.foregroundServiceType(
+                        Build.VERSION.SDK_INT,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
+                        () -> { throw new AssertionError("API 30 must not query health permission"); }));
+        assertFalse(it.example.passolibero.domain.ForegroundStartPolicy.canStart(
+                () -> false, () -> { throw new AssertionError("No GPS access after denial"); }));
+    }
+
     @Test public void homeOpens() {
         try (ActivityScenario<MainActivity> scenario =
                      ActivityScenario.launch(MainActivity.class)) {
