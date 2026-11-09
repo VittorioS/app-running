@@ -6,6 +6,14 @@ JDK 17, Android SDK con platforms;android-35 e build-tools;35.0.0, Python 3 e ac
 ## Android 11 — requisito obbligatorio
 La versione minima supportata è Android 11 (API 30). Il job CI `android11` avvia un emulatore API 30, installa l'APK ed esegue smoke test delle schermate Home e Storico. Il job `verify` controlla anche la proprietà minSdk dell'APK. Per riprodurre localmente, avvia un emulatore Android 11 e lancia `sh ./gradlew :app:connectedDebugAndroidTest`. Per modifiche a GPS, permessi, passi e foreground service è obbligatoria anche una verifica manuale su telefono fisico Android 11: un emulatore non riproduce tutti i sensori e il comportamento a schermo spento.
 
+## Verifiche di qualità e architettura
+```sh
+python3 tests/check-architecture.py
+python3 -m unittest discover -s tests -p 'test_architecture.py'
+sh ./gradlew :app:spotlessCheck
+```
+Il guardiano degli import applica la matrice di `docs/clean-architecture.md` ai nuovi package ma non ai file legacy nel package radice. Spotless formatta i nuovi package secondo AOSP e controlla gli script Gradle; non riscrive il codice storico. Per correggere la formattazione: `sh ./gradlew :app:spotlessApply`. Il repository deve essere completo di `origin/main` (`git fetch origin main`; la CI usa `fetch-depth: 0`).
+
 ## Verifica veloce senza Android SDK
 ```sh
 sh tests/run-core-tests.sh
