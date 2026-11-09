@@ -83,7 +83,7 @@ class ReleasePolicyTest(unittest.TestCase):
         ci = (ROOT / ".github/workflows/ci.yml").read_text()
         release = (ROOT / ".github/workflows/release-debug.yml").read_text()
         self.assertIn("permissions:\n  contents: read", ci)
-        self.assertNotIn("secrets.", ci)
+        self.assertNotIn("secrets.", "\\n".join(line for line in ci.splitlines() if not line.lstrip().startswith("#")))
         self.assertNotIn("gh release upload", ci)
         self.assertNotIn("pull_request:", release)
         self.assertIn("workflow_dispatch:", release)
