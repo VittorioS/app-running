@@ -3,6 +3,9 @@
 ## Requisiti
 JDK 17, Android SDK con platforms;android-35 e build-tools;35.0.0, Python 3 e accesso ai repository Gradle/Maven almeno per la prima compilazione. Non sono richiesti token, credenziali di firma o servizi cloud per verificare una PR.
 
+## Android 11 — requisito obbligatorio
+La versione minima supportata è Android 11 (API 30). Il job CI `android11` avvia un emulatore API 30, installa l'APK ed esegue smoke test delle schermate Home e Storico. Il job `verify` controlla anche la proprietà minSdk dell'APK. Per riprodurre localmente, avvia un emulatore Android 11 e lancia `sh ./gradlew :app:connectedDebugAndroidTest`. Per modifiche a GPS, permessi, passi e foreground service è obbligatoria anche una verifica manuale su telefono fisico Android 11: un emulatore non riproduce tutti i sensori e il comportamento a schermo spento.
+
 ## Verifica veloce senza Android SDK
 ```sh
 sh tests/run-core-tests.sh
