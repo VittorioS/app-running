@@ -33,4 +33,7 @@ android {
 dependencies {
     // Libreria open source per OpenStreetMap. Nessuna API a pagamento.
     implementation 'org.osmdroid:osmdroid-android:6.1.20'
+
+    // Test locali Android-free: verificano le invarianti senza dispositivo.
+    testImplementation 'junit:junit:4.13.2'
 }

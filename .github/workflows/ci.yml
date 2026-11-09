@@ -1,0 +1,66 @@
+name: Verify Pull Request
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A fork PR is untrusted. Never grant write permission or expose signing secrets.
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout proposed sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 35
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Prepare Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: JVM regression suite
+        run: sh tests/run-core-tests.sh
+
+      - name: SQLite migration preservation
+        run: python3 tests/check-db-migration.py
+
+      - name: Android unit tests, APK and lint
+        run: sh ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+
+      - name: Verify generated APK
+        run: test -s app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Preserve diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-diagnostics-${{ github.run_id }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
