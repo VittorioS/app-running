@@ -55,6 +55,7 @@ jobs:
         run: |
           python3 tests/check-architecture.py
           python3 -m unittest discover -s tests -p 'test_architecture.py'
+          python3 -m unittest discover -s tests -p 'test_release_metadata.py'
 
       - name: Spotless formatting check
         run: sh ./gradlew --no-daemon :app:spotlessCheck
