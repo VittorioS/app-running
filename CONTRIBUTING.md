@@ -2,12 +2,15 @@
 
 La repository è pubblica: apri una issue (o scegline una esistente), crea un fork, implementa su un ramo e apri una PR verso `main`. Non serve accesso in scrittura al repository originale.
 
-1. Leggi `AGENTS.md`, `docs/architecture.md`, `docs/invariants.md` e `docs/testing.md`.
+1. Leggi `AGENTS.md`, `docs/architecture.md`, `docs/clean-architecture.md`, `docs/coding-standards.md`, `docs/invariants.md` e `docs/testing.md`.
 2. Crea una issue con comportamento atteso, criteri di accettazione misurabili, casi limite, limiti di scope e piano di test. Per le funzionalità grandi concorda prima una suddivisione.
 3. Clona il fork, crea `feature/<nome-issue>` a partire da `main` aggiornato e usa il tuo agent di coding. Non usare branch di rilascio o signing per testare il contributo.
 4. Implementa l'intera funzionalità per quanto possibile (comportamento, eventuale persistenza e UI, test di regressione, documentazione) senza introdurre modifiche non collegate.
 5. Esegui le verifiche in `docs/testing.md`. Se non hai Android SDK o un dispositivo, dichiaralo: la CI può verificare la build, ma non sostituisce prove hardware.
 6. Apri la PR non draft solo quando è revisionabile; compila il template e attendi i controlli automatici e la review del maintainer.
+
+## Clean Architecture e SOLID
+Adottiamo Clean Architecture **pragmatica**, senza imporre un framework DI o una migrazione immediata del codice storico: le regole di dominio restano indipendenti da Android, i casi d'uso usano contratti, e gli adapter espongono SQLite e sensori. I principi SOLID sono linee guida per responsabilità coerenti, dipendenze esplicite e interfacce solo ai confini reali. Eseguire `python3 tests/check-architecture.py` e `sh ./gradlew :app:spotlessCheck`; per nuovi package applicare il formato AOSP. Leggere `docs/clean-architecture.md` e `docs/coding-standards.md`.
 
 ## Convenzioni
 - **Android 11 (API 30) è obbligatorio** per ogni nuova funzionalità. Non aumentare minSdk; API più recenti richiedono un controllo runtime e un fallback su API 30. La CI esegue test strumentali su Android 11.
