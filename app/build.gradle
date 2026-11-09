@@ -8,7 +8,9 @@ android {
 
     defaultConfig {
         applicationId 'it.example.passolibero'
+        // Android 11 / API 30 is the mandatory minimum supported version.
         minSdk 30
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         targetSdk 35
         versionCode 2
         versionName '1.0.0'
@@ -21,6 +23,10 @@ android {
 
     buildFeatures {
         buildConfig true
+    }
+    lint {
+        abortOnError true
+        fatal 'NewApi'
     }
     buildTypes {
         release {
@@ -36,4 +42,7 @@ dependencies {
 
     // Test locali Android-free: verificano le invarianti senza dispositivo.
     testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test:core:1.6.1'
 }
