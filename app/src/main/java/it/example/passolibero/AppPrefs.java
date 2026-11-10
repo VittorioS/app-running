@@ -3,6 +3,9 @@ package it.example.passolibero;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import it.example.passolibero.data.local.PreferencesSnapshotMapper;
+import it.example.passolibero.domain.session.AdaptiveProfileSnapshot;
+
 public final class AppPrefs {
     private static final String NAME = "passolibero";
     private AppPrefs() { }
@@ -14,17 +17,19 @@ public final class AppPrefs {
     public static boolean voiceEnabled(SharedPreferences p) { return p.getBoolean("voice", true); }
 
     public static AdaptiveProfile loadProfile(SharedPreferences p) {
+        AdaptiveProfileSnapshot snapshot = PreferencesSnapshotMapper.readProfile(p);
         AdaptiveProfile model = new AdaptiveProfile();
-        model.walkSamples = p.getInt("model_walk_n", 0);
-        model.runSamples = p.getInt("model_run_n", 0);
-        model.walkMean = Double.longBitsToDouble(p.getLong("model_walk_bits", Double.doubleToLongBits(0)));
-        model.runMean = Double.longBitsToDouble(p.getLong("model_run_bits", Double.doubleToLongBits(0)));
+        model.walkSamples = snapshot.walkSamples;
+        model.runSamples = snapshot.runSamples;
+        model.walkMean = snapshot.walkMean;
+        model.runMean = snapshot.runMean;
         return model;
     }
 
     public static void saveProfile(SharedPreferences p, AdaptiveProfile model) {
-        p.edit().putInt("model_walk_n", model.walkSamples).putInt("model_run_n", model.runSamples)
-                .putLong("model_walk_bits", Double.doubleToLongBits(model.walkMean))
-                .putLong("model_run_bits", Double.doubleToLongBits(model.runMean)).apply();
+        PreferencesSnapshotMapper.saveProfile(
+                p,
+                new AdaptiveProfileSnapshot(
+                        model.walkSamples, model.runSamples, model.walkMean, model.runMean));
     }
 }

@@ -142,6 +142,29 @@ public final class RunStatePrefsCharacterizationTest {
         assertEquals(bits(Double.POSITIVE_INFINITY), bits(restored.walkM));
         assertEquals(bits(Double.NaN), bits(restored.maxRunSpeedKmh));
         assertEquals(s.id, restored.id);
+        assertEquals(s.startedWallMs, restored.startedWallMs);
+        assertEquals(s.startedElapsedMs, restored.startedElapsedMs);
+        assertEquals(bits(s.runM), bits(restored.runM));
+        assertEquals(s.walkMs, restored.walkMs);
+        assertEquals(s.runMs, restored.runMs);
+        assertEquals(s.stillMs, restored.stillMs);
+        assertEquals(s.unknownMs, restored.unknownMs);
+        assertEquals(s.movingUnknownMs, restored.movingUnknownMs);
+        assertEquals(s.movingMs, restored.movingMs);
+        assertEquals(s.steps, restored.steps);
+        assertEquals(s.runSteps, restored.runSteps);
+        assertEquals(s.walkSteps, restored.walkSteps);
+        assertEquals(s.cadenceSpm, restored.cadenceSpm);
+        assertEquals(s.goalM, restored.goalM);
+        assertEquals(s.lastLocationValid, restored.lastLocationValid);
+        assertEquals(bits(s.lastLatitude), bits(restored.lastLatitude));
+        assertEquals(bits(s.lastLongitude), bits(restored.lastLongitude));
+        assertEquals(s.checkpointIndex, restored.checkpointIndex);
+        assertEquals(s.checkpointInterval, restored.checkpointInterval);
+        assertEquals(s.movement, restored.movement);
+        assertEquals(s.gpsStatus, restored.gpsStatus);
+        assertEquals(bits(s.speedKmh), bits(restored.speedKmh));
+        assertEquals(bits(s.gpsAccuracy), bits(restored.gpsAccuracy));
         assertEquals(s.movingUnknownMs, restored.movingUnknownMs);
         assertEquals(s.checkpointInterval, restored.checkpointInterval);
         assertEquals(s.movement, restored.movement);
@@ -171,6 +194,39 @@ public final class RunStatePrefsCharacterizationTest {
         // Characterize that legacy distinction without changing the production contract.
         assertEquals(0, p.getInt("checkpoint_interval", -1));
         assertEquals(0, RunState.read(p).checkpointInterval);
+    }
+
+    @Test public void olderPartialPreferencesReadWithoutAnyImplicitMigration() {
+        SharedPreferences p = isolatedPrefs();
+        p.edit()
+                .putLong("active_id", 901L)
+                .putLong("distance_bits", bits(-0.0))
+                .putLong("run_max_speed_bits", bits(Double.POSITIVE_INFINITY))
+                .putInt("checkpoint_interval", 0)
+                .putString("movement", "")
+                .putString("other_feature", "keep")
+                .commit();
+        Map<String, ?> before = new HashMap<>(p.getAll());
+        RunState restored = RunState.read(p);
+        assertEquals(901L, restored.id);
+        assertEquals(bits(-0.0), bits(restored.distanceM));
+        assertEquals(bits(Double.POSITIVE_INFINITY), bits(restored.maxRunSpeedKmh));
+        assertEquals(0, restored.checkpointInterval);
+        assertEquals("", restored.movement);
+        assertEquals("In attesa del GPS", restored.gpsStatus);
+        assertEquals(0, restored.steps);
+        assertEquals(before, p.getAll());
+    }
+
+    @Test public void wrongStoredTypeStillRaisesClassCastInsteadOfLosingData() {
+        SharedPreferences p = isolatedPrefs();
+        p.edit().putString("active_id", "invalid").commit();
+        try {
+            RunState.read(p);
+            fail("the legacy typed accessor must reject the wrong on-disk type");
+        } catch (ClassCastException expected) {
+            assertEquals("invalid", p.getString("active_id", null));
+        }
     }
 
     @Test public void profileUsesTheOriginalKeysAndExactBitEncoding() {

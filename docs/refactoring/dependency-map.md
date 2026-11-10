@@ -91,3 +91,16 @@ composition root (livello esterno) --> presentation, application, data, platform
 ## 6. Criteri della mappa
 
 Questa pagina fotografa i confini visibili alla data della baseline, non promette che ogni riferimento dinamico sia stato ispezionato. Ogni issue operativa deve raccogliere un diagramma locale delle chiamate, indicare accessi diretti rilevati e aggiornare questa mappa prima di passare da facade a implementazione definitiva.
+
+## 7. Seam P3a (issue #21): snapshot persistito di sessione
+
+```text
+TrackingService / Activity (legacy) -> RunState.read/save (facade mutabile)
+                                   -> data/local/PreferencesSnapshotMapper -> SharedPreferences
+                                   -> domain/session/RunSnapshot (valore puro)
+AppPrefs.loadProfile/saveProfile (legacy) -> PreferencesSnapshotMapper
+                                        -> domain/session/AdaptiveProfileSnapshot
+```
+
+L'adapter conosce solo `SharedPreferences` e snapshot di dominio; il Domain non importa classi Android, DB né package legacy. La facade `RunState` mantiene i suoi campi pubblici per non cambiare `TrackingService`, `TrackerDb` o la UI prima delle issue dedicate. La persistenza dei campi di runtime esclusi resta invariata: `lastTickElapsedMs` e `lastStepElapsedMs` non sono chiavi. Il marker `active` e il clock heartbeat appartengono all'adapter, non alla logica pura. Eccezione temporanea: i client legacy possono ancora importare `RunState` e `AppPrefs`; rimuovere solo quando i loro use case saranno migrati, con PR separata e equivalenza testata.
+

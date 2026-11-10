@@ -33,6 +33,10 @@ Leggere [Clean Architecture](clean-architecture.md) e [Coding Standards](coding-
 `app/src/main/java/it/example/passolibero/` codice app; `app/src/debug/` diagnostica solo debug; `tests/` regression test indipendenti da Android e verifiche SQLite; `app/src/test/` test locali eseguiti da Gradle; `.github/workflows/` build/verifica; `docs/` contratti e runbook.
 
 
+## ADR-002 / Issue #21 — Snapshot sessione e adapter SharedPreferences
+
+`domain/session/RunSnapshot` e `AdaptiveProfileSnapshot` sono valori Java immutabili e Android-free. `data/local/PreferencesSnapshotMapper` è l'unico adapter per la lettura/scrittura dei rispettivi campi persistiti: valori `double` su chiavi `*_bits` come `long`, default originali e stessa sequenza di `SharedPreferences.Editor.put*`, `heartbeat_wall` e singola `apply()`. `RunState.read/save` e `AppPrefs.loadProfile/saveProfile` conservano API e comportamento per `TrackingService`, Activity e altri client legacy, senza modificarne chiamate o frequenza di salvataggio. I campi runtime `lastTickElapsedMs` e `lastStepElapsedMs` restano non persistiti come prima. Il port di lettura SQLite è separato nella issue #22.
+
 ## ADR-002 / Issue #20 — Conto alla rovescia sprint nel Domain
 
 `domain/sprint/SprintCountdownVoicePlan` definisce in Java puro le frasi del countdown 5–10 secondi, le scadenze sul clock monotono e il filtro degli annunci in ritardo oltre 650 ms. La facciata legacy `SprintCountdownVoicePlan` conserva costruttore e API usati dal tracking, delegando al Domain. Non cambia la schedulazione Android/TTS, non modifica il campionamento GPS, né la durata o la lingua degli annunci. Il test indipendente `SprintCountdownCharacterizationTest` confronta formula originale, facciata e Domain su limiti, overflow e 3.000 fixture seedate.
