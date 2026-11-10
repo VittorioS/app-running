@@ -1,7 +1,6 @@
 package it.example.passolibero.data.local;
 
 import android.content.SharedPreferences;
-
 import it.example.passolibero.domain.session.AdaptiveProfileSnapshot;
 import it.example.passolibero.domain.session.RunSnapshot;
 
@@ -20,7 +19,8 @@ public final class PreferencesSnapshotMapper {
                 p.getLong("active_wall", 0),
                 p.getLong("active_elapsed", 0),
                 Double.longBitsToDouble(p.getLong("distance_bits", Double.doubleToLongBits(0))),
-                Double.longBitsToDouble(p.getLong("walk_distance_bits", Double.doubleToLongBits(0))),
+                Double.longBitsToDouble(
+                        p.getLong("walk_distance_bits", Double.doubleToLongBits(0))),
                 Double.longBitsToDouble(p.getLong("run_distance_bits", Double.doubleToLongBits(0))),
                 p.getLong("walk_ms", 0),
                 p.getLong("run_ms", 0),
@@ -34,14 +34,17 @@ public final class PreferencesSnapshotMapper {
                 p.getInt("cadence_spm", 0),
                 p.getInt("active_goal_m", 0),
                 p.getBoolean("last_location_valid", false),
-                Double.longBitsToDouble(p.getLong("last_latitude_bits", Double.doubleToLongBits(0))),
-                Double.longBitsToDouble(p.getLong("last_longitude_bits", Double.doubleToLongBits(0))),
+                Double.longBitsToDouble(
+                        p.getLong("last_latitude_bits", Double.doubleToLongBits(0))),
+                Double.longBitsToDouble(
+                        p.getLong("last_longitude_bits", Double.doubleToLongBits(0))),
                 p.getInt("checkpoint_index", 0),
                 p.getInt("checkpoint_interval", 1000),
                 p.getString("movement", "UNKNOWN"),
                 p.getString("gps_status", "In attesa del GPS"),
                 Double.longBitsToDouble(p.getLong("speed_bits", Double.doubleToLongBits(0))),
-                Double.longBitsToDouble(p.getLong("run_max_speed_bits", Double.doubleToLongBits(Double.NaN))),
+                Double.longBitsToDouble(
+                        p.getLong("run_max_speed_bits", Double.doubleToLongBits(Double.NaN))),
                 Double.longBitsToDouble(p.getLong("accuracy_bits", Double.doubleToLongBits(0))));
     }
 
@@ -75,7 +78,8 @@ public final class PreferencesSnapshotMapper {
                 .putString("gps_status", s.gpsStatus)
                 .putLong("speed_bits", Double.doubleToLongBits(s.speedKmh))
                 .putLong("run_max_speed_bits", Double.doubleToLongBits(s.maxRunSpeedKmh))
-                .putLong("accuracy_bits", Double.doubleToLongBits(s.gpsAccuracy)).apply();
+                .putLong("accuracy_bits", Double.doubleToLongBits(s.gpsAccuracy))
+                .apply();
     }
 
     public static AdaptiveProfileSnapshot readProfile(SharedPreferences p) {
