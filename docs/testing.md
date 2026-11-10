@@ -72,3 +72,7 @@ Un APK compilato non prova il corretto funzionamento su hardware. Una PR dichiar
 ## Issue #6 — foreground Android e fix GNSS
 
 `tests/ForegroundStartPolicyTest.java` testa permessi/GPS con corto circuito e tipo HEALTH soltanto su API 34+; `Android11CompatibilityTest` verifica su emulatore API 30 che non si leggano permessi HEALTH. `tests/GpsFixPolicyTest.java` confronta le espressioni precedenti di `TrackingService` con la policy pura su tracce fisse e 1000 campioni deterministici (sprint normale 1 Hz, fix fuori ordine, lentezza incerta, jitter, STILL). I test automatici non utilizzano GPS hardware.
+
+## ADR-002 / Issue #19 — Policy massima velocità corsa
+
+`domain/tracking/RunPeakSpeedPolicy` è la regola Java pura; la facciata legacy continua a offrire `RunPeakSpeedPolicy.update` a `TrackingService`. Unità km/h, stessa gestione di `NaN`, limiti GPS e movimento. `tests/run-core-tests.sh` esegue il test originale `RunPeakSpeedPolicyTest` e la caratterizzazione indipendente `RunPeakSpeedCharacterizationTest`, che confronta formula originale, facciata e dominio **bit per bit** (boundary, 5.000 input seedati, sequenza di aggiornamenti). I job `verify` e `android11` restano obbligatori; nessuna modifica funzionale, a SQLite, permessi, GPS o firma.
