@@ -5,8 +5,8 @@ import android.database.sqlite.SQLiteOpenHelper;
 import it.example.passolibero.application.session.PointWritePort;
 
 /**
- * Preserves the eight legacy point columns, their insertion order and insertOrThrow semantics.
- * No new transaction, clock read, validation or additional write is introduced.
+ * Preserves the eight legacy point columns, their insertion order and insertOrThrow semantics. No
+ * new transaction, clock read, validation or additional write is introduced.
  */
 public final class SqlitePointWriteAdapter implements PointWritePort {
     private final SQLiteOpenHelper helper;
