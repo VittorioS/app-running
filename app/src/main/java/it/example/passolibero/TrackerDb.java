@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 import it.example.passolibero.application.history.SessionReadPort;
 import it.example.passolibero.data.local.SqliteSessionReadAdapter;
+import it.example.passolibero.data.local.SqliteSessionCreationAdapter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,10 +67,9 @@ public final class TrackerDb extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX IF NOT EXISTS sprints_session ON sprints(session_id)");
     }
 
+    /** Legacy facade; the single insert is now owned by data/local. */
     public long newSession(long wall) {
-        ContentValues v = new ContentValues();
-        v.put("started_at", wall);
-        return getWritableDatabase().insertOrThrow("sessions", null, v);
+        return new SqliteSessionCreationAdapter(this).createSession(wall);
     }
 
     public void snapshot(RunState s, long elapsedMs, boolean finished) {

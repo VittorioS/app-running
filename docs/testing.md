@@ -97,3 +97,10 @@ La facciata legacy continua a leggere/salvare le stesse chiavi. `domain/session/
 
 La caratterizzazione è stata acquisita **prima** dell'estrazione: [CI baseline #42909192999](https://github.com/VittorioS/app-running/actions/runs/42909192999), `verify` e `android11` success. L'estrazione non cambia schema, query, filtri, transazioni, writer, cancellazioni o UI. Gli esiti finali della CI sulla PR vanno registrati separatamente; i test su telefono reale/aggiornamento in-place con backup non sono ancora eseguiti.
 
+
+## ADR-002 / Issue #23 — Caratterizzazione prima del primo writer SQLite
+
+`TrackerDbSessionInsertCharacterizationTest` è stato introdotto **prima** dell'estrazione: test strumentali reali su database v7 isolati, senza accesso a sessioni utente, che verificano ID, campi default/`NULL`, `started_at` 0/negativo, comportamento `AUTOINCREMENT` su storico preesistente, partecipazione a transazioni del chiamante e rollback, eccezione da `insertOrThrow`, nessuna scrittura implicita in punti/sprint. La [CI baseline #42912444912](https://github.com/VittorioS/app-running/actions/runs/42912444912) ha passato `verify` e `android11` **prima** del codice di produzione. Dopo l'estrazione viene confrontato il port con l'espressione SQL originale e con la facciata legacy sul medesimo database di test.
+
+L'estrazione riguarda **solo** `newSession`: schema SQLite v7, query di lettura, snapshot periodici, punti GPS, sprint, transazioni e cancellazioni non cambiano. La validazione finale CI e il collaudo con upgrade sopra un'installazione reale/backup restano passi distinti, non sostituiti dalla caratterizzazione API30.
+
