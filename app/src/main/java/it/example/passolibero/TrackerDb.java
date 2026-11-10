@@ -6,9 +6,11 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 import it.example.passolibero.application.history.SessionReadPort;
+import it.example.passolibero.application.session.SessionSnapshotWritePort;
 import it.example.passolibero.data.local.SqliteSessionReadAdapter;
 import it.example.passolibero.data.local.SqliteSessionCreationAdapter;
 import it.example.passolibero.data.local.SqlitePointWriteAdapter;
+import it.example.passolibero.data.local.SqliteSessionSnapshotAdapter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,32 +75,28 @@ public final class TrackerDb extends SQLiteOpenHelper {
         return new SqliteSessionCreationAdapter(this).createSession(wall);
     }
 
+    /** Legacy mutable facade; this snapshot is written by data/local. */
     public void snapshot(RunState s, long elapsedMs, boolean finished) {
-        ContentValues v = new ContentValues();
-        v.put("distance_m", s.distanceM);
-        v.put("elapsed_ms", elapsedMs);
-        v.put("moving_ms", s.movingMs);
-        v.put("steps", s.steps);
-        v.put("run_steps", s.runSteps);
-        v.put("walk_steps", s.walkSteps);
-        if (Double.isFinite(s.maxRunSpeedKmh) && s.maxRunSpeedKmh > 0)
-            v.put("run_max_speed_kmh", s.maxRunSpeedKmh);
-        else v.putNull("run_max_speed_kmh");
-        v.put("walk_ms", s.walkMs);
-        v.put("run_ms", s.runMs);
-        v.put("still_ms", s.stillMs);
-        v.put("unknown_ms", s.unknownMs);
-        v.put("moving_unknown_ms", s.movingUnknownMs);
-        v.put("walk_m", s.walkM);
-        v.put("run_m", s.runM);
-        v.put("goal_m", s.goalM);
-        if (s.checkpointInterval > 0) v.put("checkpoint_interval_m", s.checkpointInterval);
-        else v.putNull("checkpoint_interval_m");
-        if (finished) {
-            v.put("ended_at", System.currentTimeMillis());
-            v.put("status", "COMPLETED");
-        }
-        getWritableDatabase().update("sessions", v, "id=?", new String[]{Long.toString(s.id)});
+        new SqliteSessionSnapshotAdapter(this).updateSnapshot(
+                new SessionSnapshotWritePort.Values(
+                        s.distanceM,
+                        elapsedMs,
+                        s.movingMs,
+                        s.steps,
+                        s.runSteps,
+                        s.walkSteps,
+                        s.maxRunSpeedKmh,
+                        s.walkMs,
+                        s.runMs,
+                        s.stillMs,
+                        s.unknownMs,
+                        s.movingUnknownMs,
+                        s.walkM,
+                        s.runM,
+                        s.goalM,
+                        s.checkpointInterval,
+                        s.id),
+                finished);
     }
 
     public void point(long id, long wall, double lat, double lon, double acc,

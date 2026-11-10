@@ -98,3 +98,8 @@ Ogni PR richiede `verify` e `android11` verdi; sono vietate modifiche di schema,
 
 `application/session/PointWritePort` espone il solo comando di inserimento di un punto GPS, senza tipi Android o SQLite. `data/local/SqlitePointWriteAdapter` conserva gli otto campi `session_id`, `t_wall`, `lat`, `lon`, `accuracy_m`, `speed_kmh`, `delta_m`, `movement` e una singola `insertOrThrow("points")` sul DB writable. Le due firme legacy di `TrackerDb.point` rimangono identiche; l'overload enum continua a delegare a quello stringa con `kind.name()`. Non cambiano né la frequenza del GPS né i writer `snapshot` e `recordSprint`.
 
+
+## ADR-002 / Issue #23 — Terzo writer P3c: snapshot SQLite
+
+`application/session/SessionSnapshotWritePort` espone un valore immutabile Android-free con i campi dello snapshot SQLite. `data/local/SqliteSessionSnapshotAdapter` conserva i sedici campi aggiornati, i rami `NULL` per velocità massima e intervallo checkpoint non validi, e l'ordine legacy delle operazioni `ContentValues.put*`. Solo `finished=true` inserisce `ended_at=System.currentTimeMillis()` e `COMPLETED` prima di `getWritableDatabase().update("sessions", ..., "id=?")`. La facade `TrackerDb.snapshot(RunState,long,boolean)` preserva la firma; i chiamanti e la cadenza di salvataggio rimangono invariati. Nessuna transazione aggiuntiva o schema migration. Rimane fuori scope il writer `recordSprint`.
+

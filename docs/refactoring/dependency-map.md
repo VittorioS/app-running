@@ -142,3 +142,15 @@ TrackingService (legacy) -> TrackerDb.point(id, ..., Kind/String) (facade)
 
 L'overload enum resta nel legacy; `kind.name()` e le etichette `SPRINT:<id>` sono mantenute. Il nuovo adapter non aggiunge transazioni, controlli, clock, scritture o aperture persistenti. Il writer `newSession` del primo seam P3c resta invariato; `snapshot`, `recordSprint` e delete rimangono responsabilità di `TrackerDb` fino a PR dedicate. Nessun cambiamento dello schema v7 o dei client GPS.
 
+
+## 11. Terzo seam P3c (issue #23): snapshot sessione SQLite
+
+```text
+TrackingService (legacy) -> TrackerDb.snapshot(RunState, elapsedMs, finished)
+    -> application/session/SessionSnapshotWritePort.Values (Android-free)
+    -> data/local/SqliteSessionSnapshotAdapter
+        -> SQLiteOpenHelper.getWritableDatabase().update("sessions", ..., "id=?")
+```
+
+Il mapper nella facade copia solo i campi persistiti in un valore immutabile per il port. La conversione `NULL`, il wall clock alla chiusura e la singola `update` restano proprietà dell'adapter. Il layer application non importa Android/legacy, mentre `TrackerDb` è ancora la facade temporanea. Il numero e il timing dei trigger degli snapshot non cambiano. La scrittura sprint `recordSprint` rimane nel legacy fino a una PR indipendente, con propri test prima dell'estrazione.
+
