@@ -52,6 +52,10 @@ java -cp build-test UpdateMetadataReaderTest
 javac -d build-test app/src/main/java/it/example/passolibero/RunPeakSpeedPolicy.java tests/RunPeakSpeedPolicyTest.java
 java -cp build-test RunPeakSpeedPolicyTest
 
+# Pre-extraction reference: bit-exact peak-speed statistics against the legacy expression.
+javac -cp build-test -d build-test tests/RunPeakSpeedCharacterizationTest.java
+java -cp build-test RunPeakSpeedCharacterizationTest
+
 javac -d build-test app/src/main/java/it/example/passolibero/WeatherLocations.java tests/WeatherLocationsTest.java
 java -cp build-test WeatherLocationsTest
 
