@@ -1,11 +1,16 @@
 package it.example.passolibero;
 
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.database.Cursor;
 import android.database.DatabaseErrorHandler;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
+
+import it.example.passolibero.application.session.SessionSnapshotWritePort;
+import it.example.passolibero.data.local.SqliteSessionSnapshotAdapter;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -316,4 +321,96 @@ public final class TrackerDbSnapshotCharacterizationTest {
             sandbox.cleanUp();
         }
     }
+    @Test public void portAndFacadeMatchExactLegacySqlUpdateColumns() {
+        SandboxContext sandbox = sandbox();
+        try {
+            try (TrackerDb db = new TrackerDb(sandbox)) {
+                long originalId = db.newSession(10);
+                long portId = db.newSession(10);
+                long facadeId = db.newSession(10);
+                SQLiteDatabase sql = db.getWritableDatabase();
+                ContentValues original = new ContentValues();
+                original.put("distance_m", 56.75);
+                original.put("elapsed_ms", 1234L);
+                original.put("moving_ms", 111L);
+                original.put("steps", 12);
+                original.put("run_steps", 7);
+                original.put("walk_steps", 5);
+                original.put("run_max_speed_kmh", 19.25);
+                original.put("walk_ms", 112L);
+                original.put("run_ms", 113L);
+                original.put("still_ms", 114L);
+                original.put("unknown_ms", 115L);
+                original.put("moving_unknown_ms", 116L);
+                original.put("walk_m", 6.25);
+                original.put("run_m", 50.5);
+                original.put("goal_m", 5000);
+                original.put("checkpoint_interval_m", 250);
+                assertEquals(1, sql.update(
+                        "sessions", original, "id=?", new String[] {Long.toString(originalId)}));
+
+                SessionSnapshotWritePort port = new SqliteSessionSnapshotAdapter(db);
+                port.updateSnapshot(
+                        new SessionSnapshotWritePort.Values(
+                                56.75, 1234L, 111L, 12, 7, 5, 19.25, 112L, 113L,
+                                114L, 115L, 116L, 6.25, 50.5, 5000, 250, portId),
+                        false);
+                RunState state = new RunState();
+                state.id = facadeId;
+                state.distanceM = 56.75;
+                state.movingMs = 111L;
+                state.steps = 12;
+                state.runSteps = 7;
+                state.walkSteps = 5;
+                state.maxRunSpeedKmh = 19.25;
+                state.walkMs = 112L;
+                state.runMs = 113L;
+                state.stillMs = 114L;
+                state.unknownMs = 115L;
+                state.movingUnknownMs = 116L;
+                state.walkM = 6.25;
+                state.runM = 50.5;
+                state.goalM = 5000;
+                state.checkpointInterval = 250;
+                db.snapshot(state, 1234L, false);
+
+                String columns = "distance_m, elapsed_ms, moving_ms, steps, run_steps, "
+                        + "walk_steps, run_max_speed_kmh, walk_ms, run_ms, still_ms, "
+                        + "unknown_ms, moving_unknown_ms, walk_m, run_m, goal_m, "
+                        + "checkpoint_interval_m, ended_at, status";
+                try (Cursor expected = sql.rawQuery(
+                        "SELECT " + columns + " FROM sessions WHERE id=?",
+                        new String[] {Long.toString(originalId)});
+                     Cursor direct = sql.rawQuery(
+                        "SELECT " + columns + " FROM sessions WHERE id=?",
+                        new String[] {Long.toString(portId)});
+                     Cursor legacy = sql.rawQuery(
+                        "SELECT " + columns + " FROM sessions WHERE id=?",
+                        new String[] {Long.toString(facadeId)})) {
+                    assertTrue(expected.moveToFirst());
+                    assertTrue(direct.moveToFirst());
+                    assertTrue(legacy.moveToFirst());
+                    for (int index = 0; index < expected.getColumnCount(); index++) {
+                        assertEquals("port column type " + index,
+                                expected.getType(index), direct.getType(index));
+                        assertEquals("facade column type " + index,
+                                expected.getType(index), legacy.getType(index));
+                        if (expected.getType(index) != Cursor.FIELD_TYPE_NULL) {
+                            assertEquals("port column value " + index,
+                                    expected.getString(index), direct.getString(index));
+                            assertEquals("facade column value " + index,
+                                    expected.getString(index), legacy.getString(index));
+                        }
+                    }
+                }
+                assertEquals(3L, count(sql, "sessions"));
+                assertEquals(0L, count(sql, "points"));
+                assertEquals(0L, count(sql, "sprints"));
+            }
+        } finally {
+            sandbox.cleanUp();
+        }
+    }
+
+
 }
