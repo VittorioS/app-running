@@ -49,7 +49,8 @@ java -cp build-test UpdatePolicyTest
 javac -d build-test app/src/main/java/it/example/passolibero/UpdateMetadataReader.java tests/UpdateMetadataReaderTest.java
 java -cp build-test UpdateMetadataReaderTest
 
-javac -d build-test app/src/main/java/it/example/passolibero/RunPeakSpeedPolicy.java tests/RunPeakSpeedPolicyTest.java
+javac -d build-test app/src/main/java/it/example/passolibero/domain/tracking/RunPeakSpeedPolicy.java \
+  app/src/main/java/it/example/passolibero/RunPeakSpeedPolicy.java tests/RunPeakSpeedPolicyTest.java
 java -cp build-test RunPeakSpeedPolicyTest
 
 # Pre-extraction reference: bit-exact peak-speed statistics against the legacy expression.

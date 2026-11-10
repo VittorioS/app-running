@@ -33,6 +33,12 @@ Leggere [Clean Architecture](clean-architecture.md) e [Coding Standards](coding-
 `app/src/main/java/it/example/passolibero/` codice app; `app/src/debug/` diagnostica solo debug; `tests/` regression test indipendenti da Android e verifiche SQLite; `app/src/test/` test locali eseguiti da Gradle; `.github/workflows/` build/verifica; `docs/` contratti e runbook.
 
 
+## ADR-002 / Issue #19 — Statistica pura di velocità massima
+
+La nuova `domain/tracking/RunPeakSpeedPolicy` calcola il massimo **solo sui fix già classificati RUN** con movimento corroborato, GPS fresco, accuratezza valida (0–15 m), distanza ammessa >0 e velocità fra 0 e 40 km/h. La facciata legacy `it.example.passolibero.RunPeakSpeedPolicy.update(...)` mantiene firma e comportamento, delegando alla policy pura. `TrackingService`, il rilevamento movimento, i dati SQLite e la UI non sono stati modificati.
+
+La suite `tests/RunPeakSpeedCharacterizationTest.java` confronta bit per bit la vecchia formula indipendente, la facciata e la nuova classe domain su casi limite e input seedati. La facciata potrà essere rimossa solo in una successiva PR, quando tutti i chiamanti saranno migrati.
+
 ## Responsabilità attuali di TrackingService — issue #6
 
 ```mermaid

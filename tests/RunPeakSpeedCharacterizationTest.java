@@ -27,9 +27,12 @@ public final class RunPeakSpeedCharacterizationTest {
 
     private static void check(double currentMax, String movement, boolean moving, boolean fresh,
             double accuracyM, double acceptedMeters, double speedKmh) {
-        same(legacy(currentMax, movement, moving, fresh, accuracyM, acceptedMeters, speedKmh),
-                RunPeakSpeedPolicy.update(currentMax, movement, moving, fresh,
-                        accuracyM, acceptedMeters, speedKmh), "legacy parity");
+        double expected = legacy(currentMax, movement, moving, fresh, accuracyM, acceptedMeters, speedKmh);
+        same(expected, RunPeakSpeedPolicy.update(currentMax, movement, moving, fresh,
+                accuracyM, acceptedMeters, speedKmh), "legacy facade parity");
+        same(expected, it.example.passolibero.domain.tracking.RunPeakSpeedPolicy.update(
+                currentMax, movement, moving, fresh, accuracyM, acceptedMeters, speedKmh),
+                "domain parity");
     }
 
     public static void main(String[] args) {
