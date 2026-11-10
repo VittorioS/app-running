@@ -6,6 +6,9 @@ import android.content.ContextWrapper;
 import android.database.DatabaseErrorHandler;
 import android.database.sqlite.SQLiteDatabase;
 
+import it.example.passolibero.application.history.SessionReadPort;
+import it.example.passolibero.data.local.SqliteSessionReadAdapter;
+
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
@@ -266,4 +269,58 @@ public final class TrackerDbReadCharacterizationTest {
             sandbox.cleanUp();
         }
     }
+    @Test public void newReadPortMatchesLegacyFacadeOnRealIsolatedSQLite() {
+        SandboxContext sandbox = sandbox();
+        try {
+            try (TrackerDb db = new TrackerDb(sandbox)) {
+                long id = db.newSession(100);
+                long other = db.newSession(200);
+                RunState state = new RunState();
+                state.id = id;
+                state.distanceM = 10.75;
+                state.runMs = 4500;
+                state.runSteps = 2;
+                state.checkpointInterval = 250;
+                db.snapshot(state, 6000, false);
+                db.point(id, 301, 40.0, 14.0, 3.0, 5.0, 1.0, "RUN");
+                db.point(id, 302, 40.1, 14.1, 4.0, 6.0, 2.0, "SPRINT:1");
+                sprintRow(db, id, 302, "DISTANCE", 2, 50, 10000, null, 99999);
+
+                SessionReadPort reader = new SqliteSessionReadAdapter(db.getReadableDatabase());
+                SessionReadPort.SessionRow portSession = reader.session(id);
+                TrackerDb.Entry oldSession = db.session(id);
+                assertNotNull(portSession);
+                assertEquals(oldSession.id, portSession.id);
+                assertEquals(oldSession.distance, portSession.distance, 0);
+                assertEquals(oldSession.runMs, portSession.runMs);
+                assertEquals(oldSession.runSteps, portSession.runSteps);
+                assertEquals(oldSession.checkpointIntervalM, portSession.checkpointIntervalM);
+                assertEquals(oldSession.maxRunSpeedKmh, portSession.maxRunSpeedKmh);
+                assertEquals(other, reader.recent(1).get(0).id);
+                assertEquals(db.recent(2).get(1).id, reader.recent(2).get(1).id);
+                assertNull(reader.session(-1));
+
+                List<SessionReadPort.PointRow> points = reader.pointsAfter(id, 0, 1);
+                assertEquals(1, points.size());
+                assertEquals(db.pointsAfter(id, 0, 1).get(0).id, points.get(0).id);
+                assertEquals(40.0, points.get(0).lat, 0);
+                assertEquals(db.pointsAfter(id, points.get(0).id, 1).get(0).id,
+                        reader.pointsAfter(id, points.get(0).id, 1).get(0).id);
+                assertEquals(db.hasTaggedSprintPoints(id, 300, 303),
+                        reader.hasTaggedSprintPoints(id, 300, 303));
+
+                List<SessionReadPort.SprintRow> sprints = reader.sprints(id);
+                assertEquals(1, sprints.size());
+                assertEquals(db.sprints(id).get(0).id, sprints.get(0).id);
+                assertEquals(db.sprints(id).get(0).distanceM, sprints.get(0).distanceM, 0);
+                assertEquals(2, sprints.get(0).samples);
+                assertEquals(Double.valueOf(18.0), db.sprints(id).get(0).averageKmh);
+                assertTrue(reader.sprints(0).isEmpty());
+            }
+        } finally {
+            sandbox.cleanUp();
+        }
+    }
+
+
 }

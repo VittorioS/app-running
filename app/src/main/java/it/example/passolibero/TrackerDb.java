@@ -2,9 +2,11 @@ package it.example.passolibero;
 
 import android.content.ContentValues;
 import android.content.Context;
-import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+
+import it.example.passolibero.application.history.SessionReadPort;
+import it.example.passolibero.data.local.SqliteSessionReadAdapter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -152,37 +154,37 @@ public final class TrackerDb extends SQLiteOpenHelper {
         public String mode, outcome;
     }
 
-    /** Ordine cronologico, massimo 500 prove per sessione. */
+
+    /** Ordine cronologico per id, massimo 500 prove per sessione. */
     public List<SprintRecord> sprints(long sessionId) {
         ArrayList<SprintRecord> results = new ArrayList<>();
         if (sessionId <= 0) return results;
-        String[] columns = {"id", "recorded_at", "mode", "target", "countdown_s",
-                "elapsed_ms", "distance_m", "peak_kmh", "average_kmh", "samples", "outcome"};
-        try (Cursor c = getReadableDatabase().query("sprints", columns, "session_id=?",
-                new String[]{Long.toString(sessionId)}, null, null,
-                "id ASC", "500")) {
-            while (c.moveToNext()) {
-                SprintRecord sprint = new SprintRecord();
-                sprint.id = c.getLong(0);
-                sprint.recordedAt = c.getLong(1);
-                sprint.mode = c.getString(2);
-                sprint.target = c.getInt(3);
-                sprint.countdownSeconds = c.getInt(4);
-                sprint.elapsedMs = c.getLong(5);
-                sprint.distanceM = c.getDouble(6);
-                sprint.peakKmh = c.isNull(7) ? null : c.getDouble(7);
-                // Le vecchie build salvavano la velocità media 1000x troppo alta.
-                // Ricalcolala dai dati originali per correggere anche lo storico.
-                double corrected = SprintTrial.averageSpeedKmh(
-                        sprint.distanceM, sprint.elapsedMs, c.getInt(9));
-                sprint.averageKmh = Double.isFinite(corrected) ? corrected : null;
-                sprint.samples = c.getInt(9);
-                sprint.outcome = c.getString(10);
-                results.add(sprint);
-            }
+        for (SessionReadPort.SprintRow row : sessionReader().sprints(sessionId)) {
+            SprintRecord sprint = legacySprintRecord(row);
+            // Historical builds saved an average 1000x too high: retain the correction.
+            double corrected = SprintTrial.averageSpeedKmh(
+                    sprint.distanceM, sprint.elapsedMs, sprint.samples);
+            sprint.averageKmh = Double.isFinite(corrected) ? corrected : null;
+            results.add(sprint);
         }
         return results;
     }
+
+    private static SprintRecord legacySprintRecord(SessionReadPort.SprintRow row) {
+        SprintRecord result = new SprintRecord();
+        result.id = row.id;
+        result.recordedAt = row.recordedAt;
+        result.mode = row.mode;
+        result.target = row.target;
+        result.countdownSeconds = row.countdownSeconds;
+        result.elapsedMs = row.elapsedMs;
+        result.distanceM = row.distanceM;
+        result.peakKmh = row.peakKmh;
+        result.samples = row.samples;
+        result.outcome = row.outcome;
+        return result;
+    }
+
 
     public static final class Entry {
         public long id, startedAt, elapsedMs, movingMs, runMs, walkMs, stillMs, unknownMs, movingUnknownMs;
@@ -195,52 +197,48 @@ public final class TrackerDb extends SQLiteOpenHelper {
         public String status;
     }
 
-    private static Entry readEntry(Cursor c) {
-        Entry e = new Entry();
-        e.id = c.getLong(0);
-        e.startedAt = c.getLong(1);
-        e.elapsedMs = c.getLong(2);
-        e.distance = c.getDouble(3);
-        e.steps = c.getInt(4);
-        e.runM = c.getDouble(5);
-        e.walkM = c.getDouble(6);
-        e.status = c.getString(7);
-        e.movingMs = c.getLong(8);
-        e.walkMs = c.getLong(9);
-        e.runMs = c.getLong(10);
-        e.stillMs = c.getLong(11);
-        e.goalM = c.getInt(12);
-        e.unknownMs = c.getLong(13);
-        e.movingUnknownMs = c.getLong(14);
-        e.runSteps = c.isNull(15) ? null : c.getInt(15);
-        e.walkSteps = c.isNull(16) ? null : c.getInt(16);
-        e.endedAt = c.isNull(17) ? null : c.getLong(17);
-        e.maxRunSpeedKmh = c.isNull(18) ? null : c.getDouble(18);
-        e.checkpointIntervalM = c.isNull(19) ? null : c.getInt(19);
-        return e;
+    /** Keeps existing mutable Entry API while SQL lives behind the read port. */
+    private SessionReadPort sessionReader() {
+        return new SqliteSessionReadAdapter(getReadableDatabase());
     }
 
-    private static final String[] ENTRY_COLUMNS = {
-            "id", "started_at", "elapsed_ms", "distance_m", "steps", "run_m", "walk_m", "status",
-            "moving_ms", "walk_ms", "run_ms", "still_ms", "goal_m", "unknown_ms", "moving_unknown_ms",
-            "run_steps", "walk_steps", "ended_at", "run_max_speed_kmh",
-            "checkpoint_interval_m"
-    };
+    private static Entry legacyEntry(SessionReadPort.SessionRow row) {
+        Entry result = new Entry();
+        result.id = row.id;
+        result.startedAt = row.startedAt;
+        result.elapsedMs = row.elapsedMs;
+        result.distance = row.distance;
+        result.steps = row.steps;
+        result.runM = row.runM;
+        result.walkM = row.walkM;
+        result.status = row.status;
+        result.movingMs = row.movingMs;
+        result.walkMs = row.walkMs;
+        result.runMs = row.runMs;
+        result.stillMs = row.stillMs;
+        result.goalM = row.goalM;
+        result.unknownMs = row.unknownMs;
+        result.movingUnknownMs = row.movingUnknownMs;
+        result.runSteps = row.runSteps;
+        result.walkSteps = row.walkSteps;
+        result.endedAt = row.endedAt;
+        result.maxRunSpeedKmh = row.maxRunSpeedKmh;
+        result.checkpointIntervalM = row.checkpointIntervalM;
+        return result;
+    }
+
 
     public List<Entry> recent(int count) {
         ArrayList<Entry> entries = new ArrayList<>();
-        try (Cursor c = getReadableDatabase().query("sessions", ENTRY_COLUMNS,
-                null, null, null, null, "started_at DESC", Integer.toString(count))) {
-            while (c.moveToNext()) entries.add(readEntry(c));
+        for (SessionReadPort.SessionRow row : sessionReader().recent(count)) {
+            entries.add(legacyEntry(row));
         }
         return entries;
     }
 
     public Entry session(long id) {
-        try (Cursor c = getReadableDatabase().query("sessions", ENTRY_COLUMNS,
-                "id=?", new String[]{Long.toString(id)}, null, null, null, "1")) {
-            return c.moveToFirst() ? readEntry(c) : null;
-        }
+        SessionReadPort.SessionRow row = sessionReader().session(id);
+        return row == null ? null : legacyEntry(row);
     }
 
     /**
@@ -285,13 +283,7 @@ public final class TrackerDb extends SQLiteOpenHelper {
      */
     public boolean hasTaggedSprintPoints(long sessionId, long fromWallMs, long untilWallMs) {
         if (sessionId <= 0 || fromWallMs > untilWallMs) return false;
-        try (Cursor c = getReadableDatabase().rawQuery(
-                "SELECT 1 FROM points WHERE session_id=? AND t_wall>=? AND t_wall<=?"
-                        + " AND movement LIKE 'SPRINT%' LIMIT 1",
-                new String[]{Long.toString(sessionId), Long.toString(fromWallMs),
-                        Long.toString(untilWallMs)})) {
-            return c.moveToFirst();
-        }
+        return sessionReader().hasTaggedSprintPoints(sessionId, fromWallMs, untilWallMs);
     }
 
     public static final class TrackPoint {
@@ -300,27 +292,26 @@ public final class TrackerDb extends SQLiteOpenHelper {
         public String movement;
     }
 
-    /** Recupero incrementale, per non ricaricare il percorso intero a ogni refresh della Home. */
+    /** Incremental points page, preserving ascending row ID and 1–2000 SQL limit. */
     public List<TrackPoint> pointsAfter(long sessionId, long afterId, int limit) {
         ArrayList<TrackPoint> points = new ArrayList<>();
-        try (Cursor c = getReadableDatabase().query("points",
-                new String[]{"id", "t_wall", "lat", "lon", "movement",
-                        "delta_m", "speed_kmh", "accuracy_m"},
-                "session_id=? AND id>?", new String[]{Long.toString(sessionId), Long.toString(afterId)},
-                null, null, "id ASC", Integer.toString(Math.min(Math.max(limit, 1), 2000)))) {
-            while (c.moveToNext()) {
-                TrackPoint p = new TrackPoint();
-                p.id = c.getLong(0);
-                p.time = c.getLong(1);
-                p.lat = c.getDouble(2);
-                p.lon = c.getDouble(3);
-                p.movement = c.getString(4);
-                p.deltaM = c.getDouble(5);
-                p.speedKmh = c.getDouble(6);
-                p.accuracyM = c.getDouble(7);
-                points.add(p);
-            }
+        for (SessionReadPort.PointRow row : sessionReader().pointsAfter(sessionId, afterId, limit)) {
+            points.add(legacyTrackPoint(row));
         }
         return points;
     }
+
+    private static TrackPoint legacyTrackPoint(SessionReadPort.PointRow row) {
+        TrackPoint result = new TrackPoint();
+        result.id = row.id;
+        result.time = row.time;
+        result.lat = row.lat;
+        result.lon = row.lon;
+        result.movement = row.movement;
+        result.deltaM = row.deltaM;
+        result.speedKmh = row.speedKmh;
+        result.accuracyM = row.accuracyM;
+        return result;
+    }
+
 }
