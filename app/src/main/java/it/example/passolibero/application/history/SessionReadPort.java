@@ -151,5 +151,4 @@ public interface SessionReadPort {
             this.outcome = outcome;
         }
     }
-
 }
