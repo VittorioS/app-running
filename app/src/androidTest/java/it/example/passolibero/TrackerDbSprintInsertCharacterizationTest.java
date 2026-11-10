@@ -1,5 +1,6 @@
 package it.example.passolibero;
 
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.database.Cursor;
@@ -7,6 +8,9 @@ import android.database.DatabaseErrorHandler;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
+
+import it.example.passolibero.application.session.SessionSprintWritePort;
+import it.example.passolibero.data.local.SqliteSprintWriteAdapter;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -297,4 +301,91 @@ public final class TrackerDbSprintInsertCharacterizationTest {
             sandbox.cleanUp();
         }
     }
+    @Test public void portAndFacadePersistTheSameFieldsAsOriginalSql() {
+        SandboxContext sandbox = sandbox();
+        try {
+            try (TrackerDb db = new TrackerDb(sandbox)) {
+                long sessionId = db.newSession(100);
+                SprintTrial sprint = finishedTimeSprintWithSamples();
+                SQLiteDatabase sql = db.getWritableDatabase();
+
+                long originalWall = System.currentTimeMillis();
+                ContentValues original = new ContentValues();
+                original.put("session_id", sessionId);
+                original.put("recorded_at", originalWall);
+                original.put("mode", sprint.mode().name());
+                original.put("target", sprint.target());
+                original.put("countdown_s", sprint.countdownSeconds());
+                original.put("elapsed_ms", sprint.elapsedMs(12000L));
+                original.put("distance_m", sprint.distanceM());
+                original.put("peak_kmh", sprint.peakSpeedKmh());
+                original.put("average_kmh", sprint.averageSpeedKmh(12000L));
+                original.put("samples", sprint.samples());
+                original.put("outcome", sprint.finishReason());
+                long originalId = sql.insertOrThrow("sprints", null, original);
+                assertTrue(originalId > 0);
+
+                long directWall = System.currentTimeMillis();
+                SessionSprintWritePort port = new SqliteSprintWriteAdapter(db);
+                port.insertSprint(
+                        new SessionSprintWritePort.Values(
+                                sessionId,
+                                directWall,
+                                sprint.mode().name(),
+                                sprint.target(),
+                                sprint.countdownSeconds(),
+                                sprint.elapsedMs(12000L),
+                                sprint.distanceM(),
+                                sprint.peakSpeedKmh(),
+                                sprint.averageSpeedKmh(12000L),
+                                sprint.samples(),
+                                sprint.finishReason()));
+                long beforeFacade = System.currentTimeMillis();
+                db.recordSprint(sessionId, sprint, 12000L);
+                long afterFacade = System.currentTimeMillis();
+
+                try (Cursor rows = sql.rawQuery(
+                        "SELECT id, session_id, recorded_at, mode, target, countdown_s, "
+                                + "elapsed_ms, distance_m, peak_kmh, average_kmh, samples, outcome "
+                                + "FROM sprints ORDER BY id ASC", null)) {
+                    assertTrue(rows.moveToFirst());
+                    assertEquals(originalId, rows.getLong(0));
+                    assertEquals(originalWall, rows.getLong(2));
+                    String[] expected = new String[9];
+                    int[] types = new int[9];
+                    for (int column = 3; column <= 11; column++) {
+                        expected[column - 3] = rows.getString(column);
+                        types[column - 3] = rows.getType(column);
+                    }
+                    assertTrue(rows.moveToNext());
+                    long directId = rows.getLong(0);
+                    assertTrue(directId > originalId);
+                    assertEquals(sessionId, rows.getLong(1));
+                    assertEquals(directWall, rows.getLong(2));
+                    for (int column = 3; column <= 11; column++) {
+                        assertEquals(types[column - 3], rows.getType(column));
+                        assertEquals(expected[column - 3], rows.getString(column));
+                    }
+                    assertTrue(rows.moveToNext());
+                    assertTrue(rows.getLong(0) > directId);
+                    assertEquals(sessionId, rows.getLong(1));
+                    assertTrue(rows.getLong(2) >= beforeFacade);
+                    assertTrue(rows.getLong(2) <= afterFacade);
+                    for (int column = 3; column <= 11; column++) {
+                        assertEquals(types[column - 3], rows.getType(column));
+                        assertEquals(expected[column - 3], rows.getString(column));
+                    }
+                    assertFalse(rows.moveToNext());
+                }
+                assertEquals(3L, count(sql, "sprints"));
+                assertEquals(1L, count(sql, "sessions"));
+                assertEquals(0L, count(sql, "points"));
+                assertEquals(3, db.sprints(sessionId).size());
+            }
+        } finally {
+            sandbox.cleanUp();
+        }
+    }
+
+
 }

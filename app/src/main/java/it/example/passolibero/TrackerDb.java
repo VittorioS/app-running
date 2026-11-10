@@ -1,16 +1,17 @@
 package it.example.passolibero;
 
-import android.content.ContentValues;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 import it.example.passolibero.application.history.SessionReadPort;
 import it.example.passolibero.application.session.SessionSnapshotWritePort;
+import it.example.passolibero.application.session.SessionSprintWritePort;
 import it.example.passolibero.data.local.SqliteSessionReadAdapter;
 import it.example.passolibero.data.local.SqliteSessionCreationAdapter;
 import it.example.passolibero.data.local.SqlitePointWriteAdapter;
 import it.example.passolibero.data.local.SqliteSessionSnapshotAdapter;
+import it.example.passolibero.data.local.SqliteSprintWriteAdapter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -113,28 +114,27 @@ public final class TrackerDb extends SQLiteOpenHelper {
     }
 
     /** Salva una prova completa solo per la sessione indicata. */
+    /** Legacy facade: validation and sprint readings stay outside the SQLite adapter. */
     public void recordSprint(long sessionId, SprintTrial sprint, long elapsedRealtimeMs) {
         if (sessionId <= 0 || sprint == null
                 || (sprint.phase() != SprintTrial.Phase.FINISHED
                 && sprint.phase() != SprintTrial.Phase.CANCELLED)) return;
-        ContentValues v = new ContentValues();
-        v.put("session_id", sessionId);
-        v.put("recorded_at", System.currentTimeMillis());
-        v.put("mode", sprint.mode().name());
-        v.put("target", sprint.target());
-        v.put("countdown_s", sprint.countdownSeconds());
-        v.put("elapsed_ms", sprint.elapsedMs(elapsedRealtimeMs));
-        v.put("distance_m", sprint.distanceM());
-        if (Double.isFinite(sprint.peakSpeedKmh()) && sprint.peakSpeedKmh() > 0)
-            v.put("peak_kmh", sprint.peakSpeedKmh());
-        else v.putNull("peak_kmh");
-        double average = sprint.averageSpeedKmh(elapsedRealtimeMs);
-        if (Double.isFinite(average) && average > 0) v.put("average_kmh", average);
-        else v.putNull("average_kmh");
-        v.put("samples", sprint.samples());
-        v.put("outcome", sprint.phase() == SprintTrial.Phase.CANCELLED
-                ? "CANCELLED" : sprint.finishReason());
-        getWritableDatabase().insertOrThrow("sprints", null, v);
+        // Capture wall time before reading the sprint fields, as in the original writer.
+        long recordedAtWallMs = System.currentTimeMillis();
+        new SqliteSprintWriteAdapter(this).insertSprint(
+                new SessionSprintWritePort.Values(
+                        sessionId,
+                        recordedAtWallMs,
+                        sprint.mode().name(),
+                        sprint.target(),
+                        sprint.countdownSeconds(),
+                        sprint.elapsedMs(elapsedRealtimeMs),
+                        sprint.distanceM(),
+                        sprint.peakSpeedKmh(),
+                        sprint.averageSpeedKmh(elapsedRealtimeMs),
+                        sprint.samples(),
+                        sprint.phase() == SprintTrial.Phase.CANCELLED
+                                ? "CANCELLED" : sprint.finishReason()));
     }
 
     public static final class SprintRecord {
