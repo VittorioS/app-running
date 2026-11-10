@@ -104,3 +104,8 @@ La caratterizzazione è stata acquisita **prima** dell'estrazione: [CI baseline 
 
 L'estrazione riguarda **solo** `newSession`: schema SQLite v7, query di lettura, snapshot periodici, punti GPS, sprint, transazioni e cancellazioni non cambiano. La validazione finale CI e il collaudo con upgrade sopra un'installazione reale/backup restano passi distinti, non sostituiti dalla caratterizzazione API30.
 
+
+## ADR-002 / Issue #23 — Secondo writer P3c: caratterizzazione punti
+
+`TrackerDbPointInsertCharacterizationTest` è stato introdotto **prima** dell'estrazione in una PR draft separata e ha superato [CI baseline #42916190123](https://github.com/VittorioS/app-running/actions/runs/42916190123) (`verify` e `android11` success). Verifica su SQLite v7 isolato gli otto valori persistiti, gli ID con tempi uguali, gli overload enum/stringa, le etichette sprint, l'assenza di scritture collaterali, il rollback in transazione esterna, la sessione assente, il vincolo `movement NOT NULL` e gli errori propagati. Il test post-estrazione confronta riga per riga una chiamata SQL originale, il port diretto e la facciata legacy. I risultati della CI **post-estrazione** devono essere registrati separatamente; non è un test di aggiornamento in-place su telefono reale con dati storici.
+
