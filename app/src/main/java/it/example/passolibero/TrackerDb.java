@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import it.example.passolibero.application.history.SessionReadPort;
 import it.example.passolibero.data.local.SqliteSessionReadAdapter;
 import it.example.passolibero.data.local.SqliteSessionCreationAdapter;
+import it.example.passolibero.data.local.SqlitePointWriteAdapter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -109,16 +110,8 @@ public final class TrackerDb extends SQLiteOpenHelper {
      * indipendente dal classificatore RUN/WALK. Nessuna migrazione necessaria. */
     public void point(long id, long wall, double lat, double lon, double acc,
                       double speed, double delta, String movement) {
-        ContentValues v = new ContentValues();
-        v.put("session_id", id);
-        v.put("t_wall", wall);
-        v.put("lat", lat);
-        v.put("lon", lon);
-        v.put("accuracy_m", acc);
-        v.put("speed_kmh", speed);
-        v.put("delta_m", delta);
-        v.put("movement", movement);
-        getWritableDatabase().insertOrThrow("points", null, v);
+        new SqlitePointWriteAdapter(this).writePoint(
+                id, wall, lat, lon, acc, speed, delta, movement);
     }
 
     /** Salva una prova completa solo per la sessione indicata. */

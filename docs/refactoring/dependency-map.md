@@ -130,3 +130,15 @@ TrackingService (legacy) -> TrackerDb.newSession(wall) (facade)
 
 `SessionCreationPort` è Java puro e non dipende da SQLite o Android; l'adapter `data/local` preserva la costruzione `ContentValues` prima dell'apertura del DB, la singola chiamata `insertOrThrow` e l'eventuale transazione del chiamante senza crearne una nuova. Il legacy `TrackerDb` continua a possedere schema v7, helper, reader ed altri writer. I successivi `snapshot`, `point` e `recordSprint` sono fuori scope fino a PR autonome nella #23. Nessun nuovo nodo di rete o permesso.
 
+
+## 10. Secondo seam P3c (issue #23): inserimento punti GPS
+
+```text
+TrackingService (legacy) -> TrackerDb.point(id, ..., Kind/String) (facade)
+    -> data/local/SqlitePointWriteAdapter
+        -> implements application/session/PointWritePort (Android-free)
+        -> SQLiteOpenHelper.getWritableDatabase().insertOrThrow("points")
+```
+
+L'overload enum resta nel legacy; `kind.name()` e le etichette `SPRINT:<id>` sono mantenute. Il nuovo adapter non aggiunge transazioni, controlli, clock, scritture o aperture persistenti. Il writer `newSession` del primo seam P3c resta invariato; `snapshot`, `recordSprint` e delete rimangono responsabilità di `TrackerDb` fino a PR dedicate. Nessun cambiamento dello schema v7 o dei client GPS.
+

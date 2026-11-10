@@ -1,5 +1,6 @@
 package it.example.passolibero;
 
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.database.Cursor;
@@ -7,6 +8,9 @@ import android.database.DatabaseErrorHandler;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
+
+import it.example.passolibero.application.session.PointWritePort;
+import it.example.passolibero.data.local.SqlitePointWriteAdapter;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -209,4 +213,61 @@ public final class TrackerDbPointInsertCharacterizationTest {
             sandbox.cleanUp();
         }
     }
+    @Test public void portAndLegacyPointWritesMatchOriginalSqlRowForRow() {
+        SandboxContext sandbox = sandbox();
+        try {
+            try (TrackerDb db = new TrackerDb(sandbox)) {
+                long sessionId = db.newSession(1);
+                SQLiteDatabase sql = db.getWritableDatabase();
+
+                // Reference: execute the exact original ContentValues + insertOrThrow.
+                ContentValues original = new ContentValues();
+                original.put("session_id", sessionId);
+                original.put("t_wall", 234L);
+                original.put("lat", 40.25);
+                original.put("lon", 14.5);
+                original.put("accuracy_m", 3.25);
+                original.put("speed_kmh", 8.75);
+                original.put("delta_m", 1.125);
+                original.put("movement", "SPRINT:9");
+                long firstId = sql.insertOrThrow("points", null, original);
+
+                PointWritePort port = new SqlitePointWriteAdapter(db);
+                port.writePoint(
+                        sessionId, 234L, 40.25, 14.5, 3.25, 8.75, 1.125, "SPRINT:9");
+                db.point(sessionId, 234L, 40.25, 14.5, 3.25, 8.75, 1.125, "SPRINT:9");
+
+                assertTrue(firstId > 0);
+                try (Cursor cursor = sql.rawQuery(
+                        "SELECT id, session_id, t_wall, lat, lon, accuracy_m, speed_kmh, "
+                                + "delta_m, movement FROM points ORDER BY id ASC", null)) {
+                    long previous = 0;
+                    for (int i = 0; i < 3; i++) {
+                        assertTrue(cursor.moveToNext());
+                        long current = cursor.getLong(0);
+                        assertTrue(current > previous);
+                        if (i == 0) assertEquals(firstId, current);
+                        previous = current;
+                        assertEquals(sessionId, cursor.getLong(1));
+                        assertEquals(234L, cursor.getLong(2));
+                        assertEquals(40.25, cursor.getDouble(3), 0);
+                        assertEquals(14.5, cursor.getDouble(4), 0);
+                        assertEquals(3.25, cursor.getDouble(5), 0);
+                        assertEquals(8.75, cursor.getDouble(6), 0);
+                        assertEquals(1.125, cursor.getDouble(7), 0);
+                        assertEquals("SPRINT:9", cursor.getString(8));
+                    }
+                    assertFalse(cursor.moveToNext());
+                }
+                assertEquals(3L, count(sql, "points"));
+                assertEquals(1L, count(sql, "sessions"));
+                assertEquals(0L, count(sql, "sprints"));
+                assertEquals(3, db.pointsAfter(sessionId, 0, 10).size());
+            }
+        } finally {
+            sandbox.cleanUp();
+        }
+    }
+
+
 }
