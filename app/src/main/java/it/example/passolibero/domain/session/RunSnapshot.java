@@ -1,12 +1,6 @@
 package it.example.passolibero.domain.session;
 
-/**
- * Immutable Android-free view of the fields persisted by the legacy RunState.
- *
- * <p>No range or null normalization: historical preferences (including non-finite values) must
- * round-trip exactly. The active marker and heartbeat belong to the preferences adapter.
- * The transient lastTickElapsedMs/lastStepElapsedMs are intentionally not persisted.
- */
+/** Immutable Android-free view of the legacy session preferences payload. */
 public final class RunSnapshot {
     public final long id;
     public final long startedWallMs;
