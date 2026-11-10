@@ -46,9 +46,9 @@ Per una nuova feature:
 
 ## Controlli reali (e limiti)
 
-- `python3 tests/check-architecture.py` verifica package e import dei **nuovi package stratificati** su tutte le source set Java (main, debug, test, androidTest). Il package radice legacy è esplicitamente escluso.
+- `python3 tests/check-architecture.py` verifica dichiarazioni `package`, import e **riferimenti Java fully-qualified nel codice** dei nuovi package stratificati, inclusi sottopackage e tutte le source set Java (main, debug, test, androidTest). Commenti, stringhe, caratteri e text block vengono esclusi dal controllo per evitare falsi positivi. Il package radice legacy è esplicitamente escluso.
 - `python3 -m unittest discover -s tests -p 'test_architecture.py'` testa il guardiano architetturale con file di esempio.
 - Spotless applica igiene agli Java toccati rispetto a `origin/main`; applica anche google-java-format alle classi nei nuovi package stratificati. Non riformattiamo automaticamente il legacy.
-- Non esiste un controllo statico perfetto: i controlli sugli import non rilevano accesso via reflection, fully-qualified name o logica di business spostata nella UI. La review umana resta essenziale.
+- Il guardiano è una verifica statica di import e riferimenti espliciti, **non un parser Java completo**: non può dimostrare dipendenze tramite reflection, nomi di classe costruiti a runtime, classloader o comportamenti di business mascherati nella UI. Gli adapter legacy restano esenti fino alla migrazione e la review umana resta essenziale.
 
 Per l'estrazione iniziale di `TrackingService` vedi [issue #6](https://github.com/VittorioS/app-running/issues/6). La PR #2 è già integrata. Per il refactoring del service seguire il diagramma e il piano in [architettura](architecture.md#responsabilità-attuali-di-trackingservice--issue-6), partendo dalla policy pura di recupero e da test di equivalenza.
