@@ -76,3 +76,9 @@ Un APK compilato non prova il corretto funzionamento su hardware. Una PR dichiar
 ## ADR-002 / Issue #19 — Policy massima velocità corsa
 
 `domain/tracking/RunPeakSpeedPolicy` è la regola Java pura; la facciata legacy continua a offrire `RunPeakSpeedPolicy.update` a `TrackingService`. Unità km/h, stessa gestione di `NaN`, limiti GPS e movimento. `tests/run-core-tests.sh` esegue il test originale `RunPeakSpeedPolicyTest` e la caratterizzazione indipendente `RunPeakSpeedCharacterizationTest`, che confronta formula originale, facciata e dominio **bit per bit** (boundary, 5.000 input seedati, sequenza di aggiornamenti). I job `verify` e `android11` restano obbligatori; nessuna modifica funzionale, a SQLite, permessi, GPS o firma.
+
+## ADR-002 / Issue #20 — Countdown vocale sprint
+
+La policy `domain/sprint/SprintCountdownVoicePlan` mantiene l'orologio monotono, i countdown fra 5 e 10 secondi, le frasi originali `10`–`1` e `Via, sprint` e il limite di ritardo di 650 ms. La classe legacy rimane una facciata della stessa API usata da `TrackingService`; `VoiceCoach` e `TrackingService` non vengono modificati.
+
+`sh tests/run-core-tests.sh` esegue il test `SprintCountdownVoicePlanTest` e `SprintCountdownCharacterizationTest`: quest'ultimo confronta il comportamento precedente con facciata e Domain per casi di invalidità, limiti di overflow, scadenze e 3.000 tracciati seedati. Validazione iniziale: [CI #42788887534](https://github.com/VittorioS/app-running/actions/runs/42788887534), `verify` e `android11` verdi. Non serve collaudo su sensore reale per la sola estrazione deterministica.

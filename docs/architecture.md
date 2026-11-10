@@ -33,6 +33,10 @@ Leggere [Clean Architecture](clean-architecture.md) e [Coding Standards](coding-
 `app/src/main/java/it/example/passolibero/` codice app; `app/src/debug/` diagnostica solo debug; `tests/` regression test indipendenti da Android e verifiche SQLite; `app/src/test/` test locali eseguiti da Gradle; `.github/workflows/` build/verifica; `docs/` contratti e runbook.
 
 
+## ADR-002 / Issue #20 — Conto alla rovescia sprint nel Domain
+
+`domain/sprint/SprintCountdownVoicePlan` definisce in Java puro le frasi del countdown 5–10 secondi, le scadenze sul clock monotono e il filtro degli annunci in ritardo oltre 650 ms. La facciata legacy `SprintCountdownVoicePlan` conserva costruttore e API usati dal tracking, delegando al Domain. Non cambia la schedulazione Android/TTS, non modifica il campionamento GPS, né la durata o la lingua degli annunci. Il test indipendente `SprintCountdownCharacterizationTest` confronta formula originale, facciata e Domain su limiti, overflow e 3.000 fixture seedate.
+
 ## ADR-002 / Issue #19 — Statistica pura di velocità massima
 
 La nuova `domain/tracking/RunPeakSpeedPolicy` calcola il massimo **solo sui fix già classificati RUN** con movimento corroborato, GPS fresco, accuratezza valida (0–15 m), distanza ammessa >0 e velocità fra 0 e 40 km/h. La facciata legacy `it.example.passolibero.RunPeakSpeedPolicy.update(...)` mantiene firma e comportamento, delegando alla policy pura. `TrackingService`, il rilevamento movimento, i dati SQLite e la UI non sono stati modificati.
