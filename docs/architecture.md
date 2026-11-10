@@ -83,3 +83,8 @@ flowchart TD
 3. **PR 3 — confine GPS/sensori**: `domain/GpsFixPolicy` isola le decisioni di throttling 1 Hz durante sprint, movimento lento plausibile e gating della distanza in stato STILL. `TrackingService` continua a registrare i callback, applicare la validazione della freschezza, gestire i batch step-counter e mantenere gli stessi snapshot; replay e test di equivalenza preservano le soglie esistenti. Ulteriori adapter si valuteranno in issue separata, senza cambiare sampling.
 
 Ogni PR richiede `verify` e `android11` verdi; sono vietate modifiche di schema, soglie GPS, temporizzazioni, permessi, firma o annunci nella stessa estrazione.
+
+## ADR-002 / Issue #22 — Lettura SQLite via port
+
+`application/history/SessionReadPort` espone modelli Java Android-free per sessioni, punti e sprint; `data/local/SqliteSessionReadAdapter` implementa le query SQLite v7 di sola lettura. La facade legacy `TrackerDb` converte i risultati nei modelli mutabili esistenti `Entry`, `TrackPoint` e `SprintRecord` senza cambiare le firme dei chiamanti; mantiene il ricalcolo della media sprint storica. Il reader riceve il database leggibile dal helper: non lo chiude, non apre transazioni e non implementa alcun writer o cancellazione. HistoryActivity, TrackMap e gli altri client rimangono legacy, migrabili nelle issue dedicate.
+
