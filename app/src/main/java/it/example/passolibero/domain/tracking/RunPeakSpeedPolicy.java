@@ -3,8 +3,8 @@ package it.example.passolibero.domain.tracking;
 /**
  * Passive run peak-speed aggregation. Does not decide gait or modify accepted GPS distance.
  *
- * <p>Only pre-classified RUN fixes with corroborated movement and fresh, reliable GPS contribute
- * to the peak. Unit: km/h. Double.NaN denotes no accepted sample.
+ * <p>Only pre-classified RUN fixes with corroborated movement and fresh, reliable GPS contribute to
+ * the peak. Unit: km/h. Double.NaN denotes no accepted sample.
  */
 public final class RunPeakSpeedPolicy {
     private RunPeakSpeedPolicy() {}
