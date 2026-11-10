@@ -167,7 +167,10 @@ public final class RunStatePrefsCharacterizationTest {
         assertEquals("retained", p.getString("other_feature", null));
         assertEquals(0L, p.getLong("active_id", -1));
         assertTrue(p.getBoolean("active", false));
-        assertEquals(1000, RunState.read(p).checkpointInterval);
+        // Missing preferences default to 1000; a newly saved RunState explicitly writes 0.
+        // Characterize that legacy distinction without changing the production contract.
+        assertEquals(0, p.getInt("checkpoint_interval", -1));
+        assertEquals(0, RunState.read(p).checkpointInterval);
     }
 
     @Test public void profileUsesTheOriginalKeysAndExactBitEncoding() {
