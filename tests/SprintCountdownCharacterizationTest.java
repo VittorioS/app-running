@@ -19,23 +19,36 @@ public final class SprintCountdownCharacterizationTest {
             rejected = true;
         }
         check(rejected, "invalid constructor must throw");
+        boolean domainRejected = false;
+        try {
+            new it.example.passolibero.domain.sprint.SprintCountdownVoicePlan(startMs, seconds);
+        } catch (IllegalArgumentException expected) {
+            domainRejected = true;
+        }
+        check(domainRejected, "domain invalid constructor must throw");
     }
 
     private static void verify(long startMs, int seconds, long[] sampleOffsets) {
         SprintCountdownVoicePlan plan = new SprintCountdownVoicePlan(startMs, seconds);
+        it.example.passolibero.domain.sprint.SprintCountdownVoicePlan core =
+                new it.example.passolibero.domain.sprint.SprintCountdownVoicePlan(startMs, seconds);
         check(plan.steps() == seconds + 1, "number of announcements");
+        check(core.steps() == seconds + 1, "domain number of announcements");
 
         for (int step = 0; step <= seconds; step++) {
             String phrase = step == seconds ? "Via, sprint" : Integer.toString(seconds - step);
             long due = startMs + step * 1000L;
             check(phrase.equals(plan.phrase(step)), "exact original Italian phrase");
+            check(phrase.equals(core.phrase(step)), "domain Italian phrase parity");
             check(due == plan.dueAt(step), "scheduled monotonic instant");
+            check(due == core.dueAt(step), "domain monotonic instant parity");
             for (long offset : sampleOffsets) {
                 if ((offset < 0 && due < -offset) || (offset > 0 && due > Long.MAX_VALUE - offset))
                     continue;
                 long now = due + offset;
                 boolean stale = now < due || now - due > 650L;
                 check(stale == plan.isStale(step, now), "legacy 650ms lateness gate");
+                check(stale == core.isStale(step, now), "domain 650ms lateness gate");
             }
         }
         for (int step : new int[] {-1, seconds + 1, Integer.MAX_VALUE}) {
@@ -44,6 +57,11 @@ public final class SprintCountdownCharacterizationTest {
             try { plan.phrase(step); } catch (IllegalArgumentException e) { phraseRejected = true; }
             try { plan.dueAt(step); } catch (IllegalArgumentException e) { timeRejected = true; }
             check(phraseRejected && timeRejected, "step must be rejected");
+            boolean corePhraseRejected = false;
+            boolean coreTimeRejected = false;
+            try { core.phrase(step); } catch (IllegalArgumentException e) { corePhraseRejected = true; }
+            try { core.dueAt(step); } catch (IllegalArgumentException e) { coreTimeRejected = true; }
+            check(corePhraseRejected && coreTimeRejected, "domain step must be rejected");
         }
     }
 
