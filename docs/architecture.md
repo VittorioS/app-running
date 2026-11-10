@@ -88,3 +88,8 @@ Ogni PR richiede `verify` e `android11` verdi; sono vietate modifiche di schema,
 
 `application/history/SessionReadPort` espone modelli Java Android-free per sessioni, punti e sprint; `data/local/SqliteSessionReadAdapter` implementa le query SQLite v7 di sola lettura. La facade legacy `TrackerDb` converte i risultati nei modelli mutabili esistenti `Entry`, `TrackPoint` e `SprintRecord` senza cambiare le firme dei chiamanti; mantiene il ricalcolo della media sprint storica. Il reader riceve il database leggibile dal helper: non lo chiude, non apre transazioni e non implementa alcun writer o cancellazione. HistoryActivity, TrackMap e gli altri client rimangono legacy, migrabili nelle issue dedicate.
 
+
+## ADR-002 / Issue #23 — Primo writer P3c: inserimento della sessione
+
+`application/session/SessionCreationPort` espone il solo comando di creazione di una sessione con assegnazione ID. `data/local/SqliteSessionCreationAdapter` implementa `insertOrThrow("sessions")` su `SQLiteOpenHelper`, con `ContentValues` e `started_at` invariati. `TrackerDb.newSession` conserva la firma pubblica e delega, senza aggiungere transazioni, commit, validazione di timestamp o nuovi campi. Gli altri writer `snapshot`, `point`, `recordSprint` e il delete rimangono in `TrackerDb` in attesa di PR successive; la issue #23 non è completata da questo primo seam.
+

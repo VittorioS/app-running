@@ -1,11 +1,15 @@
 package it.example.passolibero;
 
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.database.DatabaseErrorHandler;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
+
+import it.example.passolibero.application.session.SessionCreationPort;
+import it.example.passolibero.data.local.SqliteSessionCreationAdapter;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -187,4 +191,35 @@ public final class TrackerDbSessionInsertCharacterizationTest {
             sandbox.cleanUp();
         }
     }
+    @Test public void portAndLegacyFacadeMatchOriginalInsertOrThrowExactly() {
+        SandboxContext sandbox = sandbox();
+        try {
+            try (TrackerDb db = new TrackerDb(sandbox)) {
+                SQLiteDatabase sql = db.getWritableDatabase();
+                // Reproduce the original expression independently of the new adapter.
+                ContentValues original = new ContentValues();
+                original.put("started_at", 10L);
+                long reference = sql.insertOrThrow("sessions", null, original);
+
+                SessionCreationPort port = new SqliteSessionCreationAdapter(db);
+                long direct = port.createSession(20L);
+                long viaFacade = db.newSession(30L);
+                assertTrue(reference > 0);
+                assertEquals(reference + 1, direct);
+                assertEquals(direct + 1, viaFacade);
+                assertEquals(10L, db.session(reference).startedAt);
+                assertEquals(20L, db.session(direct).startedAt);
+                assertEquals(30L, db.session(viaFacade).startedAt);
+                assertEquals("IN_PROGRESS", db.session(direct).status);
+                assertNull(db.session(direct).endedAt);
+                assertEquals(3L, count(sql, "sessions"));
+                assertEquals(0L, count(sql, "points"));
+                assertEquals(0L, count(sql, "sprints"));
+            }
+        } finally {
+            sandbox.cleanUp();
+        }
+    }
+
+
 }

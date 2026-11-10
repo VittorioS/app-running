@@ -118,3 +118,15 @@ HistoryActivity / SessionDetailActivity / TrackMap (legacy)
 
 `TrackerDb` possiede ancora helper/versione v7, scritture, delete e le API legacy; il reader prende un `SQLiteDatabase` già aperto senza chiuderlo e senza transazioni. I DTO nella port non dipendono dal legacy, Android o da `data`. Il ricalcolo di `averageKmh` per sprint vecchi resta nella facade per equivalenza e sarà riesaminato alla migrazione dei client. Eccezioni temporanee: UI e Service legacy continuano a usare `TrackerDb` direttamente fino alle issue #28–#30; `TrackerDb` delega al data adapter; scritture rimangono nel helper fino alla #23. Non cambiare schema, ordine, limiti o gestione dei `NULL`.
 
+
+## 9. Primo seam P3c (issue #23): inserimento sessione
+
+```text
+TrackingService (legacy) -> TrackerDb.newSession(wall) (facade)
+                            -> data/local/SqliteSessionCreationAdapter
+                                  -> implements application/session/SessionCreationPort
+                                  -> SQLiteOpenHelper.getWritableDatabase().insertOrThrow
+```
+
+`SessionCreationPort` è Java puro e non dipende da SQLite o Android; l'adapter `data/local` preserva la costruzione `ContentValues` prima dell'apertura del DB, la singola chiamata `insertOrThrow` e l'eventuale transazione del chiamante senza crearne una nuova. Il legacy `TrackerDb` continua a possedere schema v7, helper, reader ed altri writer. I successivi `snapshot`, `point` e `recordSprint` sono fuori scope fino a PR autonome nella #23. Nessun nuovo nodo di rete o permesso.
+
