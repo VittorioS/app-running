@@ -154,3 +154,15 @@ TrackingService (legacy) -> TrackerDb.snapshot(RunState, elapsedMs, finished)
 
 Il mapper nella facade copia solo i campi persistiti in un valore immutabile per il port. La conversione `NULL`, il wall clock alla chiusura e la singola `update` restano proprietà dell'adapter. Il layer application non importa Android/legacy, mentre `TrackerDb` è ancora la facade temporanea. Il numero e il timing dei trigger degli snapshot non cambiano. La scrittura sprint `recordSprint` rimane nel legacy fino a una PR indipendente, con propri test prima dell'estrazione.
 
+
+## 12. Quarto seam P3c (issue #23): writer sprint SQLite
+
+```text
+TrackingService (legacy) -> TrackerDb.recordSprint(sessionId, SprintTrial, monotonicMs)
+    -> SessionSprintWritePort.Values (application/session, Android-free)
+    -> data/local/SqliteSprintWriteAdapter
+        -> SQLiteOpenHelper.getWritableDatabase().insertOrThrow("sprints")
+```
+
+La facade conserva la verifica delle fasi FINISHED/CANCELLED e le chiamate al `SprintTrial`; il wall clock viene acquisito prima dei dati sprint. La conversione dei valori medi/peak in `NULL` e gli 11 campi di `ContentValues` risiedono nell'adapter. Nessun nuovo thread, transazione, cambiamento del DB o chiamante. I seam P3c `newSession`, `point`, `snapshot` sono rimasti invariati. La cancellazione in `TrackerDb.deleteSession` resta legacy e sarà trattata nel lotto UI/history pertinente, non nel writer sprint.
+

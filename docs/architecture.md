@@ -103,3 +103,8 @@ Ogni PR richiede `verify` e `android11` verdi; sono vietate modifiche di schema,
 
 `application/session/SessionSnapshotWritePort` espone un valore immutabile Android-free con i campi dello snapshot SQLite. `data/local/SqliteSessionSnapshotAdapter` conserva i sedici campi aggiornati, i rami `NULL` per velocità massima e intervallo checkpoint non validi, e l'ordine legacy delle operazioni `ContentValues.put*`. Solo `finished=true` inserisce `ended_at=System.currentTimeMillis()` e `COMPLETED` prima di `getWritableDatabase().update("sessions", ..., "id=?")`. La facade `TrackerDb.snapshot(RunState,long,boolean)` preserva la firma; i chiamanti e la cadenza di salvataggio rimangono invariati. Nessuna transazione aggiuntiva o schema migration. Rimane fuori scope il writer `recordSprint`.
 
+
+## ADR-002 / Issue #23 — Quarto writer P3c: sprint SQLite
+
+`application/session/SessionSprintWritePort` contiene un payload immutabile Java Android-free per i dati di uno sprint chiuso o annullato. Le guardie sui valori ID/null e sulle fasi `SprintTrial` rimangono in `TrackerDb.recordSprint`, che preserva la firma pubblica e cattura il wall clock **prima** di leggere le misure. `data/local/SqliteSprintWriteAdapter` esegue nello stesso ordine gli 11 `ContentValues.put*`, incluso `NULL` per peak e media non finite/non positive, e una sola `insertOrThrow("sprints")`. Nessuna nuova transazione o deduplicazione, nessuna modifica a schema v7, GPS, voice, UI, writer rimanenti o durata degli annunci.
+
