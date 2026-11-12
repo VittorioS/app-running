@@ -3,7 +3,7 @@ package it.example.passolibero;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assume.assumeFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
 import android.Manifest;
@@ -59,12 +59,12 @@ public final class TrackingServiceDeniedStartInstrumentedTest {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         SharedPreferences prefs = AppPrefs.get(context);
 
-        assumeTrue(
+        assertTrue(
                 "Location must be denied by the existing emulator configuration",
                 context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                         != PackageManager.PERMISSION_GRANTED);
-        assumeFalse("Must not disturb an active session", prefs.getBoolean("active", false));
-        assumeFalse("Must not disturb a running Service", trackingServiceRunning(context));
+        assertFalse("The disposable emulator must not already have an active session", prefs.getBoolean("active", false));
+        assertFalse("The disposable emulator must not have a running Service", trackingServiceRunning(context));
 
         boolean hadId = prefs.contains("active_id");
         long originalId = hadId ? prefs.getLong("active_id", 0L) : 0L;
