@@ -133,4 +133,91 @@ public final class TrackingServiceDeniedStartInstrumentedTest {
             restore.commit();
         }
     }
+
+    @Test
+    public void rapidStartThenStopWithDeniedLocationNeverCreatesSession() {
+        assumeTrue("Requires Android 11/API 30", Build.VERSION.SDK_INT == 30);
+        assumeTrue(
+                "Never exercise this test on a personal phone",
+                Build.FINGERPRINT.contains("generic")
+                        || Build.HARDWARE.contains("ranchu")
+                        || Build.HARDWARE.contains("goldfish"));
+
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SharedPreferences prefs = AppPrefs.get(context);
+        assertTrue(
+                "The disposable CI emulator must have precise location denied",
+                context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                        != PackageManager.PERMISSION_GRANTED);
+        assertFalse("The emulator must have no active session", prefs.getBoolean("active", false));
+        assertFalse("The emulator must have no running service", trackingServiceRunning(context));
+
+        boolean hadId = prefs.contains("active_id");
+        long originalId = hadId ? prefs.getLong("active_id", 0L) : 0L;
+        boolean hadDatabase = context.getDatabasePath("sessions.db").exists();
+        boolean hadError = prefs.contains("error");
+        String originalError = hadError ? prefs.getString("error", null) : null;
+
+        // Observe that the rejected START actually reached onStartCommand.
+        prefs.edit().remove("error").commit();
+        try {
+            try (ActivityScenario<MainActivity> foreground =
+                    ActivityScenario.launch(MainActivity.class)) {
+                foreground.onActivity(
+                        activity -> {
+                            ComponentName started = activity.startService(
+                                    new Intent(activity, TrackingService.class)
+                                            .setAction(TrackingService.START));
+                            ComponentName stopped = activity.startService(
+                                    new Intent(activity, TrackingService.class)
+                                            .setAction(TrackingService.STOP));
+                            assertNotNull("START Intent must be accepted", started);
+                            assertNotNull("STOP Intent must be accepted", stopped);
+                            assertEquals(TrackingService.class.getName(), started.getClassName());
+                            assertEquals(TrackingService.class.getName(), stopped.getClassName());
+                        });
+
+                long deadline = SystemClock.uptimeMillis() + 8_000L;
+                while (!LOCATION_ERROR.equals(prefs.getString("error", null))
+                        && SystemClock.uptimeMillis() < deadline) {
+                    SystemClock.sleep(50L);
+                }
+                assertEquals(
+                        "The denied START path must still report its existing error",
+                        LOCATION_ERROR,
+                        prefs.getString("error", null));
+
+                while (trackingServiceRunning(context)
+                        && SystemClock.uptimeMillis() < deadline) {
+                    SystemClock.sleep(50L);
+                }
+                assertFalse(
+                        "Rapid STOP after a denied START must leave no service running",
+                        trackingServiceRunning(context));
+            }
+
+            assertFalse(
+                    "Rapid START/STOP must not activate a session",
+                    prefs.getBoolean("active", false));
+            assertEquals(
+                    "Rapid START/STOP must preserve the saved active ID presence",
+                    hadId,
+                    prefs.contains("active_id"));
+            if (hadId) {
+                assertEquals(originalId, prefs.getLong("active_id", 0L));
+            }
+            assertEquals(
+                    "Rapid START/STOP must not create a SQLite history database",
+                    hadDatabase,
+                    context.getDatabasePath("sessions.db").exists());
+        } finally {
+            SharedPreferences.Editor restore = prefs.edit();
+            if (hadError) {
+                restore.putString("error", originalError);
+            } else {
+                restore.remove("error");
+            }
+            restore.commit();
+        }
+    }
 }
