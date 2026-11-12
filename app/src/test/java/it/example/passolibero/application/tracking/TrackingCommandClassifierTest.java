@@ -19,8 +19,7 @@ public final class TrackingCommandClassifierTest {
                 TrackingCommandClassifier.classify("it.example.passolibero.LABEL_RUN"));
         assertEquals(
                 TrackingCommandClassifier.Command.SPRINT_PREPARE_VOICE,
-                TrackingCommandClassifier.classify(
-                        "it.example.passolibero.SPRINT_PREPARE_VOICE"));
+                TrackingCommandClassifier.classify("it.example.passolibero.SPRINT_PREPARE_VOICE"));
         assertEquals(
                 TrackingCommandClassifier.Command.SPRINT_START,
                 TrackingCommandClassifier.classify("it.example.passolibero.SPRINT_START"));

@@ -3,8 +3,8 @@ package it.example.passolibero.application.tracking;
 /**
  * Pure classification of existing TrackingService action strings.
  *
- * <p>START, null, and unknown actions intentionally share the legacy foreground-start path.
- * This class does not schedule work, check permissions or acquire the foreground service.
+ * <p>START, null, and unknown actions intentionally share the legacy foreground-start path. This
+ * class does not schedule work, check permissions or acquire the foreground service.
  */
 public final class TrackingCommandClassifier {
     private TrackingCommandClassifier() {}
