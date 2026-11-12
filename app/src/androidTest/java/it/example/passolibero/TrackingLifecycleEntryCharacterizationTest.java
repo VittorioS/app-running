@@ -254,9 +254,20 @@ public final class TrackingLifecycleEntryCharacterizationTest {
             wallReads.incrementAndGet();
             return 110_000L;
         };
+        // Invalid (<= 0) start short-circuits before reading elapsed for the check.
         long recovered = SessionRecoveryPolicy.recoverStartedElapsedMs(
                 -1L, 100_000L, elapsed, wall);
-        assertEquals(10_001L, recovered);
+        assertEquals(10_000L, recovered);
+        assertEquals(1, elapsedReads.get());
+        assertEquals(1, wallReads.get());
+
+        // A future saved start evaluates elapsed for the guard, then reads it again
+        // after the wall clock; two monotonic reads are part of the old contract.
+        elapsedReads.set(0);
+        wallReads.set(0);
+        long recoveredFuture = SessionRecoveryPolicy.recoverStartedElapsedMs(
+                30_000L, 100_000L, elapsed, wall);
+        assertEquals(10_001L, recoveredFuture);
         assertEquals(2, elapsedReads.get());
         assertEquals(1, wallReads.get());
 
