@@ -83,6 +83,19 @@ public final class TrackingServiceEarlyActiveStopInstrumentedTest {
 
     @Test
     public void stopBeforeInitializeHydratesAndFinishesPersistedSessionWithoutNewSession() {
+        characterizeEarlyStop(false);
+    }
+
+    /**
+     * An accidental duplicate STOP must not complete the persisted session twice
+     * or create another SQLite row, even when both Intents arrive before init.
+     */
+    @Test
+    public void twoEarlyStopIntentsFinishPersistedSessionExactlyOnce() {
+        characterizeEarlyStop(true);
+    }
+
+    private static void characterizeEarlyStop(boolean sendDuplicateStop) {
         assumeTrue("API 30 emulator only", Build.VERSION.SDK_INT == 30);
         assumeTrue(
                 "Never touch a personal handset",
@@ -124,6 +137,13 @@ public final class TrackingServiceEarlyActiveStopInstrumentedTest {
                                 assertEquals(
                                         TrackingService.class.getName(),
                                         started.getClassName());
+                                if (sendDuplicateStop) {
+                                    ComponentName repeated = activity.startService(stop);
+                                    assertNotNull("Second STOP Intent must be accepted", repeated);
+                                    assertEquals(
+                                            TrackingService.class.getName(),
+                                            repeated.getClassName());
+                                }
                             });
 
                     long deadline = SystemClock.uptimeMillis() + 7_000L;
