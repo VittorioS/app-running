@@ -5,8 +5,8 @@ import java.util.Objects;
 /**
  * Delete one saved history session without coupling the UI to SQLite or Android.
  *
- * <p>Invalid IDs are rejected before storage access. An active session and a missing
- * row remain distinguishable from success through the existing boolean result.
+ * <p>Invalid IDs are rejected before storage access. An active session and a missing row remain
+ * distinguishable from success through the existing boolean result.
  */
 public final class DeleteHistorySession {
     private final SessionDeletePort deletePort;
