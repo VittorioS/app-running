@@ -270,4 +270,80 @@ public final class TrackingServiceEarlyActiveStopInstrumentedTest {
                     context.deleteDatabase("sessions.db"));
         }
     }
+
+
+    /**
+     * A legacy active flag with zero active_id still takes the early-STOP
+     * hydration path. No valid SQLite session must be invented or completed.
+     */
+    @Test
+    public void earlyStopWithActiveFlagAndZeroIdClearsFlagWithoutCreatingSession() {
+        assumeTrue("API 30 emulator only", Build.VERSION.SDK_INT == 30);
+        assumeTrue(
+                "Never exercise lifecycle tests on a personal handset",
+                Build.FINGERPRINT.contains("generic")
+                        || Build.HARDWARE.contains("ranchu")
+                        || Build.HARDWARE.contains("goldfish"));
+
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SharedPreferences prefs = AppPrefs.get(context);
+        assertFalse("Fixture requires no active session", prefs.getBoolean("active", false));
+        assertFalse("Fixture requires a stopped Service", serviceRunning(context));
+        Map<String, ?> originalPreferences = new HashMap<>(prefs.getAll());
+        boolean originalDatabaseExists = context.getDatabasePath("sessions.db").exists();
+
+        try (TrackerDb db = new TrackerDb(context)) {
+            long originalRows = sessionRows(db);
+            try {
+                RunState invalid = new RunState();
+                invalid.id = 0L;
+                invalid.startedWallMs = System.currentTimeMillis() - 2_000L;
+                invalid.startedElapsedMs = SystemClock.elapsedRealtime() - 1_000L;
+                invalid.checkpointInterval = 1_000;
+                invalid.save(prefs, true);
+                assertTrue("Invalid legacy marker starts as active", prefs.getBoolean("active", false));
+                assertEquals(0L, prefs.getLong("active_id", -1L));
+
+                Intent stop = new Intent(context, TrackingService.class)
+                        .setAction(TrackingService.STOP);
+                try (ActivityScenario<MainActivity> foreground =
+                        ActivityScenario.launch(MainActivity.class)) {
+                    foreground.onActivity(
+                            activity -> {
+                                ComponentName started = activity.startService(stop);
+                                assertNotNull(started);
+                                assertEquals(TrackingService.class.getName(), started.getClassName());
+                            });
+
+                    long deadline = SystemClock.uptimeMillis() + 7_000L;
+                    while ((prefs.getBoolean("active", true) || serviceRunning(context))
+                            && SystemClock.uptimeMillis() < deadline) {
+                        SystemClock.sleep(50L);
+                    }
+                    assertFalse("Early STOP must clear the invalid active marker",
+                            prefs.getBoolean("active", true));
+                    assertFalse("STOP must stop the real Service", serviceRunning(context));
+                }
+
+                assertEquals("No positive session ID may be invented", 0L,
+                        prefs.getLong("active_id", -1L));
+                assertEquals("No SQLite session may be created or completed",
+                        originalRows, sessionRows(db));
+            } finally {
+                if (serviceRunning(context)) {
+                    context.stopService(new Intent(context, TrackingService.class));
+                    long deadline = SystemClock.uptimeMillis() + 5_000L;
+                    while (serviceRunning(context)
+                            && SystemClock.uptimeMillis() < deadline) {
+                        SystemClock.sleep(50L);
+                    }
+                }
+                restorePreferences(prefs, originalPreferences);
+            }
+        }
+        if (!originalDatabaseExists) {
+            assertTrue("Delete the synthetic-only SQLite file",
+                    context.deleteDatabase("sessions.db"));
+        }
+    }
 }
