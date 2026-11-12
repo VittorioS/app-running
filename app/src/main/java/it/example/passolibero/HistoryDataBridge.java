@@ -11,8 +11,8 @@ import java.util.List;
 /**
  * Legacy composition boundary for the History screen.
  *
- * <p>Keeps SQLite ownership and lifetime outside HistoryActivity while the rest
- * of that legacy screen (including deletion) is migrated in later small PRs.
+ * <p>Owns SQLite helper lifetimes outside HistoryActivity while the screen
+ * delegates reading and deletion to the application use cases.
  */
 public final class HistoryDataBridge {
     private HistoryDataBridge() {}
