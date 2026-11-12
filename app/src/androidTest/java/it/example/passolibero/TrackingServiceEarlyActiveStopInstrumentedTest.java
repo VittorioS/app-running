@@ -6,11 +6,13 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
+import android.Manifest;
 import android.app.ActivityManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.DatabaseUtils;
 import android.os.Build;
 import android.os.SystemClock;
@@ -161,6 +163,111 @@ public final class TrackingServiceEarlyActiveStopInstrumentedTest {
         }
         if (!originalDatabaseExists) {
             assertTrue("Delete the synthetic-only SQLite file", context.deleteDatabase("sessions.db"));
+        }
+    }
+
+
+    /**
+     * A persisted active session must remain recoverable when a real START
+     * is rejected before foreground acquisition due to missing location access.
+     * This does not simulate OS process death or successful Service recovery.
+     */
+    @Test
+    public void deniedRestartPreservesPersistedActiveSessionForLaterRecovery() {
+        assumeTrue("API 30 emulator only", Build.VERSION.SDK_INT == 30);
+        assumeTrue(
+                "Never touch a personal handset",
+                Build.FINGERPRINT.contains("generic")
+                        || Build.HARDWARE.contains("ranchu")
+                        || Build.HARDWARE.contains("goldfish"));
+
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SharedPreferences prefs = AppPrefs.get(context);
+        assertTrue(
+                "Disposable emulator must already have precise location denied",
+                context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                        != PackageManager.PERMISSION_GRANTED);
+        assertFalse("Fixture requires no active session", prefs.getBoolean("active", false));
+        assertFalse("Fixture requires a stopped Service", serviceRunning(context));
+
+        Map<String, ?> originalPreferences = new HashMap<>(prefs.getAll());
+        boolean originalDatabaseExists = context.getDatabasePath("sessions.db").exists();
+        long startedWall = System.currentTimeMillis() - 5_000L;
+
+        try (TrackerDb db = new TrackerDb(context)) {
+            long before = sessionRows(db);
+            long syntheticId = db.newSession(startedWall);
+            try {
+                RunState saved = new RunState();
+                saved.id = syntheticId;
+                saved.startedWallMs = startedWall;
+                saved.startedElapsedMs = SystemClock.elapsedRealtime() - 4_000L;
+                saved.distanceM = 24.75;
+                saved.checkpointInterval = 1_000;
+                saved.save(prefs, true);
+                prefs.edit().remove("error").commit();
+
+                Intent start = new Intent(context, TrackingService.class)
+                        .setAction(TrackingService.START);
+                try (ActivityScenario<MainActivity> foreground =
+                        ActivityScenario.launch(MainActivity.class)) {
+                    foreground.onActivity(
+                            activity -> {
+                                ComponentName launched = activity.startService(start);
+                                assertNotNull("START must reach the real Service", launched);
+                                assertEquals(
+                                        TrackingService.class.getName(),
+                                        launched.getClassName());
+                            });
+
+                    long deadline = SystemClock.uptimeMillis() + 7_000L;
+                    while (!"Attiva il GPS e consenti la posizione precisa."
+                                    .equals(prefs.getString("error", null))
+                            && SystemClock.uptimeMillis() < deadline) {
+                        SystemClock.sleep(50L);
+                    }
+                    assertEquals(
+                            "Rejected restart must report the original permission error",
+                            "Attiva il GPS e consenti la posizione precisa.",
+                            prefs.getString("error", null));
+                    while (serviceRunning(context)
+                            && SystemClock.uptimeMillis() < deadline) {
+                        SystemClock.sleep(50L);
+                    }
+                    assertFalse("Rejected restart must stop the Service", serviceRunning(context));
+                }
+
+                assertTrue("A failed restart must not finish an active session",
+                        prefs.getBoolean("active", false));
+                assertEquals("A failed restart must preserve the session ID",
+                        syntheticId, prefs.getLong("active_id", 0L));
+                RunState recovered = RunState.read(prefs);
+                assertEquals(syntheticId, recovered.id);
+                assertEquals(24.75, recovered.distanceM, 0.000001);
+
+                TrackerDb.Entry entry = db.session(syntheticId);
+                assertNotNull("Persisted session must survive rejected restart", entry);
+                assertEquals("IN_PROGRESS", entry.status);
+                assertEquals("No duplicate session may be inserted", before + 1,
+                        sessionRows(db));
+            } finally {
+                if (serviceRunning(context)) {
+                    context.stopService(new Intent(context, TrackingService.class));
+                    long deadline = SystemClock.uptimeMillis() + 5_000L;
+                    while (serviceRunning(context)
+                            && SystemClock.uptimeMillis() < deadline) {
+                        SystemClock.sleep(50L);
+                    }
+                }
+                prefs.edit().putBoolean("active", false).commit();
+                boolean removedSyntheticRow = db.deleteSession(syntheticId);
+                restorePreferences(prefs, originalPreferences);
+                assertTrue("Remove only the synthetic session row", removedSyntheticRow);
+            }
+        }
+        if (!originalDatabaseExists) {
+            assertTrue("Delete synthetic-only SQLite file",
+                    context.deleteDatabase("sessions.db"));
         }
     }
 }
