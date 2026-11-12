@@ -5,6 +5,8 @@ import android.content.Intent;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
+import it.example.passolibero.application.tracking.TrackingCommandClassifier;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -196,4 +198,21 @@ public final class TrackingCommandDispatchCharacterizationTest {
         assertTrue(trace.effects.indexOf("startForeground")
                 < trace.effects.indexOf("post:initialize"));
     }
+    @Test public void extractedClassifierMatchesLegacyDispatchForEveryOriginalAction() {
+        String[] actions = {
+                null, "", TrackingService.START, TrackingService.STOP,
+                TrackingService.LABEL_WALK, TrackingService.LABEL_RUN,
+                TrackingService.SPRINT_PREPARE_VOICE, TrackingService.SPRINT_START,
+                TrackingService.SPRINT_CANCEL, "it.example.passolibero.OTHER",
+                "it.example.passolibero.stop", "it.example.passolibero.STOP "
+        };
+        for (String action : actions) {
+            assertEquals(
+                    "Command branch differs for " + action,
+                    legacyCommand(action).name(),
+                    TrackingCommandClassifier.classify(action).name());
+        }
+    }
+
+
 }

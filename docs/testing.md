@@ -126,3 +126,8 @@ L'estrazione riguarda **solo** `newSession`: schema SQLite v7, query di lettura,
 
 Dopo l'estrazione, `SessionEntryCoordinatorTest` usa fake deterministici e il test Android confronta la nuova decisione con il predicato originale su preferenze isolate (ID zero/negativi/positivi, marker inattivo, errore typed). Questi test **non eseguono** il worker reale, `onStartCommand`, FGS, registrazioni sensori, permessi o process death. Restano obbligatori collaudi reali Android 11/telefono: START esplicito, STOP durante init, riavvio processo, schermo bloccato, GPS negato/spento, durata e recupero, oltre ai test su sessioni utente con backup prima di release.
 
+
+## ADR-002 / Issue #24 — Baseline e parità dei comandi di servizio
+
+`TrackingCommandDispatchCharacterizationTest` è stato aggiunto **prima** della classificazione di produzione: [CI G1 #43291994935](https://github.com/VittorioS/app-running/actions/runs/43291994935) `verify` e `android11` success. I test definiscono una traccia di riferimento degli effetti immediati di `onStartCommand`: STOP non sticky e prioritario, etichette/sprint sticky prima del gate, START/Intent nullo/azione sconosciuta al gate, errore permessi e fallimento acquisizione FGS senza inizializzazione, ordine del foreground prima dell'enqueue. Dopo l'estrazione il test verifica la parità di selezione con il classificatore e test JVM verificano matching esatto, valori nulli e maiuscole. **La traccia è simulata**, non esercita `onStartCommand` o l'FGS reale: test di servizio su API30 e collaudo fisico restano gate separati.
+

@@ -113,3 +113,8 @@ Ogni PR richiede `verify` e `android11` verdi; sono vietate modifiche di schema,
 
 `application/tracking/SessionEntryCoordinator` è un collaboratore Android-free che decide solo i predicati di ingresso `START`/ripristino e `STOP` prima dell'inizializzazione. Utilizza `BooleanSupplier` e `LongSupplier` affinché il marker `active_id` sia letto soltanto se `active=true`, senza introdurre nuove letture o side effect. `TrackingService` (facade legacy) continua a possedere la registrazione dei sensori, `startForeground`, permessi, worker/Handler, lettura/scrittura `RunState`, SQLite, ripristino di `UNKNOWN`, stop e distruzione. Il primo seam non cambia il dispatch degli Intent, l'ordine dei side effect, gli orologi o il timing foreground. Le successive estrazioni di orchestrazione lifecycle sono fuori scope da questa PR.
 
+
+## ADR-002 / Issue #24 — Secondo seam P4a: classificazione dei comandi
+
+`application/tracking/TrackingCommandClassifier` è un classificatore puro dei sette token pubblici di `TrackingService` (STOP, RUN/WALK, sprint e START). START esplicito, `Intent` nullo e azione sconosciuta conservano intenzionalmente il percorso legacy di controllo GPS/permessi e acquisizione FGS. `TrackingService.onStartCommand` usa il risultato per scegliere lo stesso branch, senza spostare worker, side effect, extra degli intent, return `START_STICKY`/`START_NOT_STICKY` o tempi delle chiamate. I token restano pubblici nel Service per compatibilità; il test Android confronta ogni token esistente con il nuovo classificatore, rilevando eventuali divergenze future. È un seam di selezione, non l'orchestrazione completa del lifecycle.
+
