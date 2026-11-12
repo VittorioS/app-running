@@ -29,6 +29,7 @@ import java.util.ArrayDeque;
 import java.util.Locale;
 
 import it.example.passolibero.application.tracking.SessionEntryCoordinator;
+import it.example.passolibero.application.tracking.TrackingCommandClassifier;
 import it.example.passolibero.domain.SessionRecoveryPolicy;
 import it.example.passolibero.domain.ForegroundStartPolicy;
 import it.example.passolibero.domain.GpsFixPolicy;
@@ -108,12 +109,14 @@ public final class TrackingService extends Service implements LocationListener, 
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
-        if (STOP.equals(action)) {
+        TrackingCommandClassifier.Command command = TrackingCommandClassifier.classify(action);
+        if (command == TrackingCommandClassifier.Command.STOP) {
             work.post(this::finish);
             return START_NOT_STICKY;
         }
-        if (LABEL_WALK.equals(action) || LABEL_RUN.equals(action)) {
-            MovementClassifier.Kind label = LABEL_RUN.equals(action)
+        if (command == TrackingCommandClassifier.Command.LABEL_WALK
+                || command == TrackingCommandClassifier.Command.LABEL_RUN) {
+            MovementClassifier.Kind label = command == TrackingCommandClassifier.Command.LABEL_RUN
                     ? MovementClassifier.Kind.RUN : MovementClassifier.Kind.WALK;
             work.post(() -> {
                 if (state == null) return;
@@ -124,7 +127,7 @@ public final class TrackingService extends Service implements LocationListener, 
             });
             return START_STICKY;
         }
-        if (SPRINT_PREPARE_VOICE.equals(action)) {
+        if (command == TrackingCommandClassifier.Command.SPRINT_PREPARE_VOICE) {
             work.post(() -> {
                 if (state != null && initialized && prefs.getBoolean("active", false)) {
                     sprintVoicePrepared = true;
@@ -133,7 +136,7 @@ public final class TrackingService extends Service implements LocationListener, 
             });
             return START_STICKY;
         }
-        if (SPRINT_START.equals(action)) {
+        if (command == TrackingCommandClassifier.Command.SPRINT_START) {
             final int countdown = intent.getIntExtra(EXTRA_SPRINT_COUNTDOWN, 5);
             final int target = intent.getIntExtra(EXTRA_SPRINT_TARGET, 10);
             final String modeName = intent.getStringExtra(EXTRA_SPRINT_MODE);
@@ -202,7 +205,7 @@ public final class TrackingService extends Service implements LocationListener, 
             });
             return START_STICKY;
         }
-        if (SPRINT_CANCEL.equals(action)) {
+        if (command == TrackingCommandClassifier.Command.SPRINT_CANCEL) {
             work.post(() -> {
                 ++sprintVoiceGeneration;
                 sprintProgressVoice = null;

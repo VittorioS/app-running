@@ -178,3 +178,15 @@ Android Intent / FGS -> TrackingService (legacy; worker, sensors, prefs and SQLi
 
 Il coordinator possiede soltanto il predicato `active && active_id>0` per scegliere ripristino/nuova sessione e la lettura di `active` per STOP-before-init. Le lambda preservano la valutazione pigra delle preferenze e propagano le eccezioni tipizzate preesistenti. `TrackingService` mantiene l'ordine `startForeground` prima di `initializeTracking`, la creazione e il salvataggio dei dati sul worker, e `stopSelf` su STOP inattivo. Non sono spostati il ripristino dei clock, il teardown, FGS, GPS, TTS, notifiche o i checkpoint. L'estrazione futura richiede fake di orchestrazione/side effect, instrumentation e prove fisiche, senza anticipare il successivo lotto #25.
 
+
+## 14. Secondo seam P4a (issue #24): dispatch azioni Android
+
+```text
+Intent(action) -> TrackingService.onStartCommand (legacy)
+                    -> application/tracking/TrackingCommandClassifier.classify
+                    -> branch legacy STOP / label / sprint / foreground START
+                    -> handler / sensors / preferences / SQLite (invariati)
+```
+
+`TrackingCommandClassifier` dipende solo da `String` e Java; non importa `Intent`, `Service`, `TrackingService` né platform. Il Service conserva firme, token e return code, la lettura degli extra sprint soltanto nel branch pertinente, il controllo GPS/permessi e l'ordine `startForeground` → enqueue `initializeTracking`. FGS, worker, recovery e STOP non sono stati spostati né testati end-to-end in questo seam.
+
