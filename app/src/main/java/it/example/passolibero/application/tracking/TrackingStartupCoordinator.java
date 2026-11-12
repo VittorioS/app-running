@@ -8,9 +8,9 @@ import java.util.function.Consumer;
  * Coordinates the existing foreground START attempt without owning Android side effects.
  *
  * <p>The platform Service supplies lazy permission/GPS checks and effects. Permission denial
- * happens before foreground acquisition; successful foreground acquisition happens
- * synchronously before the initialization task is posted. Only RuntimeException from
- * foreground acquisition is handled here, as in the legacy Service.
+ * happens before foreground acquisition; successful foreground acquisition happens synchronously
+ * before the initialization task is posted. Only RuntimeException from foreground acquisition is
+ * handled here, as in the legacy Service.
  */
 public final class TrackingStartupCoordinator {
     private TrackingStartupCoordinator() {}
