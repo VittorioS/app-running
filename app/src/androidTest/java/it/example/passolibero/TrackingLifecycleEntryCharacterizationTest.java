@@ -10,6 +10,7 @@ import android.database.sqlite.SQLiteDatabase;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import it.example.passolibero.application.tracking.SessionEntryCoordinator;
 import it.example.passolibero.domain.SessionRecoveryPolicy;
 
 import org.junit.Test;
@@ -276,4 +277,37 @@ public final class TrackingLifecycleEntryCharacterizationTest {
         assertEquals(1_000L, SessionRecoveryPolicy.unobservedUnknownMs(
                 true, 1_000L, 5_000L, 1_000L, 1_000L, 500L, 500L, 0));
     }
+    @Test public void extractedEntryCoordinatorMatchesLegacyAgainstPersistedMarkers() {
+        SandboxContext sandbox = sandbox();
+        try {
+            SharedPreferences prefs = AppPrefs.get(sandbox);
+            long[] ids = {-1L, 0L, 1L, 99L};
+            for (boolean active : new boolean[] {false, true}) {
+                for (long id : ids) {
+                    prefs.edit().putBoolean("active", active)
+                            .putLong("active_id", id).commit();
+                    assertEquals(
+                            legacyShouldRecover(prefs),
+                            SessionEntryCoordinator.shouldRestore(
+                                    () -> prefs.getBoolean("active", false),
+                                    () -> prefs.getLong("active_id", 0)));
+                    assertEquals(
+                            legacyShouldLoadForEarlyStop(
+                                    () -> prefs.getBoolean("active", false)),
+                            SessionEntryCoordinator.shouldHydrateForEarlyStop(
+                                    () -> prefs.getBoolean("active", false)));
+                }
+            }
+            // The inactive branch must not observe a corrupt persisted ID.
+            prefs.edit().putBoolean("active", false)
+                    .putString("active_id", "legacy corrupt type").commit();
+            assertFalse(SessionEntryCoordinator.shouldRestore(
+                    () -> prefs.getBoolean("active", false),
+                    () -> prefs.getLong("active_id", 0)));
+        } finally {
+            sandbox.cleanUp();
+        }
+    }
+
+
 }

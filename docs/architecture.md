@@ -108,3 +108,8 @@ Ogni PR richiede `verify` e `android11` verdi; sono vietate modifiche di schema,
 
 `application/session/SessionSprintWritePort` contiene un payload immutabile Java Android-free per i dati di uno sprint chiuso o annullato. Le guardie sui valori ID/null e sulle fasi `SprintTrial` rimangono in `TrackerDb.recordSprint`, che preserva la firma pubblica e cattura il wall clock **prima** di leggere le misure. `data/local/SqliteSprintWriteAdapter` esegue nello stesso ordine gli 11 `ContentValues.put*`, incluso `NULL` per peak e media non finite/non positive, e una sola `insertOrThrow("sprints")`. Nessuna nuova transazione o deduplicazione, nessuna modifica a schema v7, GPS, voice, UI, writer rimanenti o durata degli annunci.
 
+
+## ADR-002 / Issue #24 — Primo seam P4a: decisione di ingresso sessione
+
+`application/tracking/SessionEntryCoordinator` è un collaboratore Android-free che decide solo i predicati di ingresso `START`/ripristino e `STOP` prima dell'inizializzazione. Utilizza `BooleanSupplier` e `LongSupplier` affinché il marker `active_id` sia letto soltanto se `active=true`, senza introdurre nuove letture o side effect. `TrackingService` (facade legacy) continua a possedere la registrazione dei sensori, `startForeground`, permessi, worker/Handler, lettura/scrittura `RunState`, SQLite, ripristino di `UNKNOWN`, stop e distruzione. Il primo seam non cambia il dispatch degli Intent, l'ordine dei side effect, gli orologi o il timing foreground. Le successive estrazioni di orchestrazione lifecycle sono fuori scope da questa PR.
+

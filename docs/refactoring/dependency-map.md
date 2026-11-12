@@ -166,3 +166,15 @@ TrackingService (legacy) -> TrackerDb.recordSprint(sessionId, SprintTrial, monot
 
 La facade conserva la verifica delle fasi FINISHED/CANCELLED e le chiamate al `SprintTrial`; il wall clock viene acquisito prima dei dati sprint. La conversione dei valori medi/peak in `NULL` e gli 11 campi di `ContentValues` risiedono nell'adapter. Nessun nuovo thread, transazione, cambiamento del DB o chiamante. I seam P3c `newSession`, `point`, `snapshot` sono rimasti invariati. La cancellazione in `TrackerDb.deleteSession` resta legacy e sarà trattata nel lotto UI/history pertinente, non nel writer sprint.
 
+
+## 13. Primo seam P4a (issue #24): ingresso START/ripristino e STOP anticipato
+
+```text
+Android Intent / FGS -> TrackingService (legacy; worker, sensors, prefs and SQLite)
+                           -> application/tracking/SessionEntryCoordinator
+                                 (BooleanSupplier active, LongSupplier activeId)
+                           -> legacy RunState / TrackerDb (solo dopo la decisione)
+```
+
+Il coordinator possiede soltanto il predicato `active && active_id>0` per scegliere ripristino/nuova sessione e la lettura di `active` per STOP-before-init. Le lambda preservano la valutazione pigra delle preferenze e propagano le eccezioni tipizzate preesistenti. `TrackingService` mantiene l'ordine `startForeground` prima di `initializeTracking`, la creazione e il salvataggio dei dati sul worker, e `stopSelf` su STOP inattivo. Non sono spostati il ripristino dei clock, il teardown, FGS, GPS, TTS, notifiche o i checkpoint. L'estrazione futura richiede fake di orchestrazione/side effect, instrumentation e prove fisiche, senza anticipare il successivo lotto #25.
+

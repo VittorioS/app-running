@@ -28,6 +28,7 @@ import android.util.Log;
 import java.util.ArrayDeque;
 import java.util.Locale;
 
+import it.example.passolibero.application.tracking.SessionEntryCoordinator;
 import it.example.passolibero.domain.SessionRecoveryPolicy;
 import it.example.passolibero.domain.ForegroundStartPolicy;
 import it.example.passolibero.domain.GpsFixPolicy;
@@ -268,7 +269,9 @@ public final class TrackingService extends Service implements LocationListener, 
     private void initializeTracking() {
         if (initialized) return;
         initialized = true;
-        boolean restore = prefs.getBoolean("active", false) && prefs.getLong("active_id", 0) > 0;
+        boolean restore = SessionEntryCoordinator.shouldRestore(
+                () -> prefs.getBoolean("active", false),
+                () -> prefs.getLong("active_id", 0));
         if (restore) {
             state = RunState.read(prefs);
             // Recover the elapsed clock using the same lazy clock reads as before.
@@ -898,7 +901,8 @@ public final class TrackingService extends Service implements LocationListener, 
     private void finish() {
         if (state == null) {
             // STOP arrivato prima che il worker abbia creato la sessione.
-            if (prefs.getBoolean("active", false)) {
+            if (SessionEntryCoordinator.shouldHydrateForEarlyStop(
+                    () -> prefs.getBoolean("active", false))) {
                 state = RunState.read(prefs);
             } else { stopSelf(); return; }
         }
