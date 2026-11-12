@@ -9,6 +9,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Toast;
 
+import it.example.passolibero.application.history.SessionReadPort;
+
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.HashSet;
@@ -52,9 +54,9 @@ public final class HistoryActivity extends Activity {
     private void showSessions() {
         if (list == null) return;
         list.removeAllViews();
-        List<TrackerDb.Entry> entries;
-        try (TrackerDb db = new TrackerDb(this)) {
-            entries = db.recent(200);
+        List<SessionReadPort.SessionRow> entries;
+        try {
+            entries = HistoryDataBridge.listRecent(this);
         } catch (RuntimeException error) {
             android.util.Log.e("PassoLiberoHistory", "Lettura dello storico non riuscita", error);
             Ui.marginBottom(this, list, Ui.text(this,
@@ -70,7 +72,7 @@ public final class HistoryActivity extends Activity {
         DateFormat dates = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT);
         boolean active = AppPrefs.get(this).getBoolean("active", false);
         long activeId = AppPrefs.get(this).getLong("active_id", 0);
-        for (TrackerDb.Entry session : entries) {
+        for (SessionReadPort.SessionRow session : entries) {
             LinearLayout card = Ui.card(this);
             String date = dates.format(new Date(session.startedAt));
             Ui.marginBottom(this, card, Ui.text(this, date, 16, true, Ui.INK), 6);

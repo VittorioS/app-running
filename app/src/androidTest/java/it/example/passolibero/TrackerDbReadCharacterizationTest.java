@@ -323,4 +323,52 @@ public final class TrackerDbReadCharacterizationTest {
     }
 
 
+
+
+    @Test public void historyListUseCaseMatchesLegacySqliteOrderAndNullColumns() {
+        SandboxContext sandbox = sandbox();
+        try {
+            try (TrackerDb db = new TrackerDb(sandbox)) {
+                long oldest = db.newSession(100);
+                long newest = db.newSession(300);
+                long middle = db.newSession(200);
+                RunState saved = new RunState();
+                saved.id = newest;
+                saved.distanceM = 123.75;
+                saved.steps = 23;
+                saved.checkpointInterval = 500;
+                db.snapshot(saved, 12_345L, true);
+
+                List<TrackerDb.Entry> legacy = db.recent(200);
+                List<SessionReadPort.SessionRow> migrated = HistoryDataBridge.listRecent(sandbox);
+                assertEquals(legacy.size(), migrated.size());
+                assertEquals(3, migrated.size());
+                for (int i = 0; i < legacy.size(); i++) {
+                    TrackerDb.Entry before = legacy.get(i);
+                    SessionReadPort.SessionRow after = migrated.get(i);
+                    assertEquals(before.id, after.id);
+                    assertEquals(before.startedAt, after.startedAt);
+                    assertEquals(before.elapsedMs, after.elapsedMs);
+                    assertEquals(before.distance, after.distance, 0);
+                    assertEquals(before.steps, after.steps);
+                    assertEquals(before.status, after.status);
+                    assertEquals(before.endedAt, after.endedAt);
+                    assertEquals(before.checkpointIntervalM, after.checkpointIntervalM);
+                }
+                assertEquals(newest, migrated.get(0).id);
+                assertEquals(middle, migrated.get(1).id);
+                assertEquals(oldest, migrated.get(2).id);
+                assertNull("Legacy null checkpoint column must remain null",
+                        migrated.get(1).checkpointIntervalM);
+                assertNotNull("Completed row has an end timestamp",
+                        migrated.get(0).endedAt);
+
+                // List refresh must be read-only; no session is inserted, edited or deleted.
+                assertEquals(3, db.recent(200).size());
+                assertEquals("IN_PROGRESS", db.session(oldest).status);
+            }
+        } finally {
+            sandbox.cleanUp();
+        }
+    }
 }
