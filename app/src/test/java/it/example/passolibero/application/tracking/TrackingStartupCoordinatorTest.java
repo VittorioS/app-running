@@ -12,8 +12,8 @@ import org.junit.Test;
 /**
  * ADR-002/#24 G2: deterministic characterization of the legacy foreground-start ordering.
  *
- * <p>These tests use fake Android effects. They supplement, but cannot replace, the
- * instrumented TrackingService and physical-device lifecycle checks.
+ * <p>These tests use fake Android effects. They supplement, but cannot replace, the instrumented
+ * TrackingService and physical-device lifecycle checks.
  */
 public final class TrackingStartupCoordinatorTest {
     @Test
