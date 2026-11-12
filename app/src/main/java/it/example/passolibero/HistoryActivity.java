@@ -124,8 +124,8 @@ public final class HistoryActivity extends Activity {
         showSessions(); // Disabilita subito il tasto della sessione selezionata.
         new Thread(() -> {
             boolean deleted = false;
-            try (TrackerDb db = new TrackerDb(getApplicationContext())) {
-                deleted = db.deleteSession(sessionId);
+            try {
+                deleted = HistoryDataBridge.deleteSession(getApplicationContext(), sessionId);
             } catch (RuntimeException error) {
                 android.util.Log.e("PassoLiberoHistory", "Eliminazione sessione fallita", error);
             }
