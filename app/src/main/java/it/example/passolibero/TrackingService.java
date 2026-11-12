@@ -30,6 +30,7 @@ import java.util.Locale;
 
 import it.example.passolibero.application.tracking.SessionEntryCoordinator;
 import it.example.passolibero.application.tracking.TrackingCommandClassifier;
+import it.example.passolibero.application.tracking.TrackingStartupCoordinator;
 import it.example.passolibero.domain.SessionRecoveryPolicy;
 import it.example.passolibero.domain.ForegroundStartPolicy;
 import it.example.passolibero.domain.GpsFixPolicy;
@@ -227,30 +228,32 @@ public final class TrackingService extends Service implements LocationListener, 
             return START_STICKY;
         }
         // Avvio esclusivamente mentre MainActivity è visibile (o riavvio del sistema di un servizio già attivo).
-        if (!ForegroundStartPolicy.canStart(this::hasLocationPermission,
-                () -> locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))) {
-            prefs.edit().putString("error", "Attiva il GPS e consenti la posizione precisa.").apply();
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-        try {
-            int type = ForegroundStartPolicy.foregroundServiceType(
-                    Build.VERSION.SDK_INT, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
-                    () -> checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
-                            == PackageManager.PERMISSION_GRANTED);
-            startForeground(NOTIFICATION_ID, notification("Tracciamento in corso"), type);
-            acquiredForeground = true;
-        } catch (RuntimeException failure) {
-            Log.e(TAG, "Foreground Service non avviabile", failure);
-            prefs.edit().putString("error", "Impossibile avviare il servizio: controlla i permessi.").apply();
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-        work.post(() -> {
-            if (!initialized) initializeTracking();
-        });
-        return START_STICKY;
+        TrackingStartupCoordinator.StartResult startResult = TrackingStartupCoordinator.start(
+                this::hasLocationPermission,
+                () -> locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER),
+                () -> {
+                    prefs.edit().putString("error", "Attiva il GPS e consenti la posizione precisa.").apply();
+                    stopSelf();
+                },
+                () -> {
+                    int type = ForegroundStartPolicy.foregroundServiceType(
+                            Build.VERSION.SDK_INT, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
+                            () -> checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
+                                    == PackageManager.PERMISSION_GRANTED);
+                    startForeground(NOTIFICATION_ID, notification("Tracciamento in corso"), type);
+                    acquiredForeground = true;
+                },
+                failure -> {
+                    Log.e(TAG, "Foreground Service non avviabile", failure);
+                    prefs.edit().putString("error", "Impossibile avviare il servizio: controlla i permessi.").apply();
+                    stopSelf();
+                },
+                () -> work.post(() -> {
+                    if (!initialized) initializeTracking();
+                }));
+        return startResult == TrackingStartupCoordinator.StartResult.STARTED
+                ? START_STICKY : START_NOT_STICKY;
     }
 
     private boolean hasLocationPermission() {
