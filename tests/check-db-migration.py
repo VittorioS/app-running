@@ -26,7 +26,25 @@ sprint_body = source.split("private static void createSprintTable", 1)[1].split(
 sprint_statements = ["".join(re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', part))
                      for part in re.findall(r"db\.execSQL\((.*?)\);", sprint_body, re.S)]
 assert len(sprint_statements) == 2
-assert 'database.delete("sprints", "session_id=?", args)' in source
+# History deletion moved from the legacy helper to the data/local adapter.
+# Keep checking the same schema-v7 child cleanup and transactional ordering.
+delete_source = Path(
+    "app/src/main/java/it/example/passolibero/data/local/SqliteSessionDeleteAdapter.java"
+).read_text()
+assert "new SqliteSessionDeleteAdapter(this, AppPrefs.get(getContextForHistory()))" in source
+delete_sql = [
+    'database.delete("sessions", "id=?", args)',
+    'database.delete("points", "session_id=?", args)',
+    'database.delete("sprints", "session_id=?", args)',
+]
+assert all(statement in delete_source for statement in delete_sql)
+assert [delete_source.index(statement) for statement in delete_sql] == sorted(
+    delete_source.index(statement) for statement in delete_sql
+)
+assert "database.beginTransaction();" in delete_source
+assert "database.setTransactionSuccessful();" in delete_source
+assert "database.endTransaction();" in delete_source
+assert delete_source.count("isCurrentSession(sessionId)") >= 2
 
 with sqlite3.connect(":memory:") as db:
     for sql in statements + sprint_statements:
