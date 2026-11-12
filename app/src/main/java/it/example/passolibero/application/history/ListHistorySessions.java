@@ -6,8 +6,8 @@ import java.util.Objects;
 /**
  * Read the bounded history list without coupling UI rendering to SQLite.
  *
- * <p>Ordering, nullable historic columns, and the 200-session limit are delegated
- * unchanged to the existing read port. The caller handles display and errors.
+ * <p>Ordering, nullable historic columns, and the 200-session limit are delegated unchanged to the
+ * existing read port. The caller handles display and errors.
  */
 public final class ListHistorySessions {
     private static final int HISTORY_SCREEN_LIMIT = 200;
