@@ -6,12 +6,15 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
 
+import android.app.ActivityManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.os.SystemClock;
 
-import androidx.test.core.app.ServiceScenario;
+import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
@@ -27,6 +30,17 @@ import org.junit.runner.RunWith;
  */
 @RunWith(AndroidJUnit4.class)
 public final class TrackingServiceEarlyStopInstrumentedTest {
+    @SuppressWarnings("deprecation")
+    private static boolean trackingServiceRunning(Context context) {
+        ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo running : manager.getRunningServices(50)) {
+            if (TrackingService.class.getName().equals(running.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Test
     public void stopWithoutAnActiveSessionDoesNotCreateTrackingOrPersistedHistory() {
         assumeTrue("This test is scoped to Android 11/API 30", Build.VERSION.SDK_INT == 30);
@@ -47,9 +61,23 @@ public final class TrackingServiceEarlyStopInstrumentedTest {
         long originalActiveId = hadActiveId ? prefs.getLong("active_id", 0L) : 0L;
 
         Intent stop = new Intent(context, TrackingService.class).setAction(TrackingService.STOP);
-        try (ServiceScenario<TrackingService> scenario = ServiceScenario.launchService(stop)) {
-            assertNotNull(scenario);
+        // Keep the target app in the foreground: API 30 disallows background service
+        // starts. Starting STOP must still run the real Service.onStartCommand/worker.
+        try (ActivityScenario<MainActivity> foreground = ActivityScenario.launch(MainActivity.class)) {
+            foreground.onActivity(
+                    activity -> {
+                        ComponentName launched = activity.startService(stop);
+                        assertNotNull("Android must accept the explicit STOP service intent", launched);
+                        assertEquals(TrackingService.class.getName(), launched.getClassName());
+                    });
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+
+            // STOP is posted to a HandlerThread, not executed synchronously.
+            long deadline = SystemClock.uptimeMillis() + 5_000L;
+            while (trackingServiceRunning(context) && SystemClock.uptimeMillis() < deadline) {
+                SystemClock.sleep(50L);
+            }
+            assertFalse("STOP must stop the Service", trackingServiceRunning(context));
         }
 
         assertFalse("STOP without a session must not start tracking", prefs.getBoolean("active", false));
