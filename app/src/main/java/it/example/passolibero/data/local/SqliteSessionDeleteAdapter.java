@@ -8,8 +8,8 @@ import it.example.passolibero.application.history.SessionDeletePort;
 /**
  * SQLite v7 history deletion adapter, retaining the original guarded transaction.
  *
- * <p>The active-session preference is checked before and inside the transaction.
- * A failed child-table delete rolls back removal of the parent session.
+ * <p>The active-session preference is checked before and inside the transaction. A failed
+ * child-table delete rolls back removal of the parent session.
  */
 public final class SqliteSessionDeleteAdapter implements SessionDeletePort {
     private final SQLiteOpenHelper helper;
