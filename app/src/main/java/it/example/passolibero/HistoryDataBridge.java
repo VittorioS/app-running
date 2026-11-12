@@ -24,4 +24,10 @@ public final class HistoryDataBridge {
                     .execute();
         }
     }
+
+    public static boolean deleteSession(Context context, long sessionId) {
+        try (TrackerDb database = new TrackerDb(context)) {
+            return database.deleteSession(sessionId);
+        }
+    }
 }
