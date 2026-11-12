@@ -153,10 +153,10 @@ public final class TrackingServiceEarlyActiveStopInstrumentedTest {
                     }
                 }
                 prefs.edit().putBoolean("active", false).commit();
-                assertTrue(
-                        "Remove only the synthetic session row",
-                        db.deleteSession(syntheticId));
+                boolean removedSyntheticRow = db.deleteSession(syntheticId);
+                // Always restore the original preferences even if cleanup reports a failure.
                 restorePreferences(prefs, originalPreferences);
+                assertTrue("Remove only the synthetic session row", removedSyntheticRow);
             }
         }
         if (!originalDatabaseExists) {
