@@ -10,8 +10,8 @@ import java.util.Objects;
 /**
  * Adapt the unchanged Open-Meteo geocoding client to an application read port.
  *
- * <p>The injectable source allows offline mapping tests; production still uses the exact
- * same WeatherApi.findCities HTTPS request, timeouts and six-result limit.
+ * <p>The injectable source allows offline mapping tests; production still uses the exact same
+ * WeatherApi.findCities HTTPS request, timeouts and six-result limit.
  */
 public final class OpenMeteoCitySearchAdapter implements WeatherCitySearchPort {
     @FunctionalInterface
