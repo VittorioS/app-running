@@ -12,8 +12,8 @@ import java.util.Objects;
 /**
  * Stream the exact APK bytes to SHA-256 using the legacy 64-KiB buffer.
  *
- * <p>File size and expected hash are validated by UpdateManager before and after this read.
- * No APK is downloaded, trusted, or installed by this adapter.
+ * <p>File size and expected hash are validated by UpdateManager before and after this read. No APK
+ * is downloaded, trusted, or installed by this adapter.
  */
 public final class StreamingApkSha256Adapter implements ApkSha256Port {
     @FunctionalInterface
