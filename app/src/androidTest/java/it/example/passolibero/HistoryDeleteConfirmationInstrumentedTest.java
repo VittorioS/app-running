@@ -12,6 +12,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
@@ -75,6 +76,21 @@ public final class HistoryDeleteConfirmationInstrumentedTest {
                 activity.getWindow().getDecorView(), "Elimina la sessione del " + date);
     }
 
+    /** Uses the same SQLite v7 sprint schema as the existing delete characterization. */
+    private static void addSyntheticSprint(TrackerDb database, long sessionId, long recordedAt) {
+        ContentValues sprint = new ContentValues();
+        sprint.put("session_id", sessionId);
+        sprint.put("recorded_at", recordedAt);
+        sprint.put("mode", "TIME");
+        sprint.put("target", 30);
+        sprint.put("countdown_s", 3);
+        sprint.put("elapsed_ms", 10_000L);
+        sprint.put("distance_m", 20.0);
+        sprint.put("samples", 2);
+        sprint.put("outcome", "COMPLETED");
+        database.getWritableDatabase().insertOrThrow("sprints", null, sprint);
+    }
+
     @Test
     public void cancelPreservesHistoryThenConfirmDeletesOnlySelectedSessionAndRefreshesUi() {
         requireDisposableEmulator();
@@ -95,8 +111,14 @@ public final class HistoryDeleteConfirmationInstrumentedTest {
                 database.point(
                         targetId, TARGET_WALL + 1_000L,
                         40.0, 14.0, 4.0, 6.0, 2.0, "RUN");
+                addSyntheticSprint(database, preservedId, PRESERVED_WALL + 2_000L);
+                addSyntheticSprint(database, targetId, TARGET_WALL + 2_000L);
                 assertNotNull(database.session(preservedId));
                 assertNotNull(database.session(targetId));
+                assertEquals("Fixture must have a sprint for the preserved session",
+                        1, database.sprints(preservedId).size());
+                assertEquals("Fixture must have a sprint for the target session",
+                        1, database.sprints(targetId).size());
 
                 try (ActivityScenario<HistoryActivity> scenario =
                         ActivityScenario.launch(HistoryActivity.class)) {
@@ -116,6 +138,8 @@ public final class HistoryDeleteConfirmationInstrumentedTest {
                             database.session(targetId));
                     assertEquals("Cancel must preserve the target GPS point",
                             1, database.pointsAfter(targetId, 0, 10).size());
+                    assertEquals("Cancel must preserve the target sprint",
+                            1, database.sprints(targetId).size());
                     scenario.onActivity(
                             activity -> {
                                 Button button = deleteButtonFor(activity, TARGET_WALL);
@@ -139,6 +163,8 @@ public final class HistoryDeleteConfirmationInstrumentedTest {
                             database.session(targetId));
                     assertEquals("Confirmation must delete its GPS points",
                             0, database.pointsAfter(targetId, 0, 10).size());
+                    assertEquals("Confirmation must delete only its sprint rows",
+                            0, database.sprints(targetId).size());
 
                     AtomicBoolean refreshed = new AtomicBoolean(false);
                     while (!refreshed.get() && SystemClock.uptimeMillis() < deadline) {
@@ -155,10 +181,23 @@ public final class HistoryDeleteConfirmationInstrumentedTest {
                             refreshed.get());
                 }
 
+                // Reopening the Activity must not resurrect the removed row.
+                try (ActivityScenario<HistoryActivity> reopened =
+                        ActivityScenario.launch(HistoryActivity.class)) {
+                    reopened.onActivity(
+                            activity -> {
+                                assertNull("Deleted row must stay absent after reopening",
+                                        deleteButtonFor(activity, TARGET_WALL));
+                                assertNotNull("Preserved row must reappear after reopening",
+                                        deleteButtonFor(activity, PRESERVED_WALL));
+                            });
+                }
                 assertNotNull("Unselected session must remain in SQLite",
                         database.session(preservedId));
                 assertEquals("Unselected GPS point must remain",
                         1, database.pointsAfter(preservedId, 0, 10).size());
+                assertEquals("Unselected sprint must remain",
+                        1, database.sprints(preservedId).size());
             } finally {
                 // Only synthetic IDs allocated by this test may be removed.
                 if (database.session(targetId) != null) {
