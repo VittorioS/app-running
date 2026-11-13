@@ -19,8 +19,7 @@ public final class DownloadPollingViewStateTest {
         assertTrue(result.actionEnabled);
         assertFalse(result.clearSavedDownload);
         assertEquals(
-                "Download terminato. Tocca per verificare firma e integrità.",
-                result.statusText);
+                "Download terminato. Tocca per verificare firma e integrità.", result.statusText);
         assertEquals(0L, result.nextPollDelayMillis);
     }
 
