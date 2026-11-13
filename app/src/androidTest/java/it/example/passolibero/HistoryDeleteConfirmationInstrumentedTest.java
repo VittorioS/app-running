@@ -91,6 +91,109 @@ public final class HistoryDeleteConfirmationInstrumentedTest {
         database.getWritableDatabase().insertOrThrow("sprints", null, sprint);
     }
 
+    /**
+     * Test-only synchronization: wait for the worker's completion callback, not merely the
+     * immediately disabled delete button. That button also disables while work is pending.
+     */
+    private static boolean deleteInFlight(Activity activity, long sessionId) {
+        try {
+            java.lang.reflect.Field field = HistoryActivity.class.getDeclaredField("deleting");
+            field.setAccessible(true);
+            return ((java.util.Set<?>) field.get(activity)).contains(sessionId);
+        } catch (ReflectiveOperationException error) {
+            throw new AssertionError("Unable to observe deletion completion", error);
+        }
+    }
+
+    @Test
+    public void sessionBecomingActiveWhileDialogIsOpenCannotBeDeleted() {
+        requireDisposableEmulator();
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SharedPreferences prefs = AppPrefs.get(context);
+        assertFalse("Disposable emulator must have no active session",
+                prefs.getBoolean("active", false));
+        boolean hadActive = prefs.contains("active");
+        boolean hadActiveId = prefs.contains("active_id");
+        long previousId = hadActiveId ? prefs.getLong("active_id", 0L) : 0L;
+        boolean databaseExisted = context.getDatabasePath("sessions.db").exists();
+        long startedAt = TARGET_WALL + 86_400_000L;
+
+        try (TrackerDb database = new TrackerDb(context)) {
+            long sessionId = database.newSession(startedAt);
+            try {
+                database.point(sessionId, startedAt + 1_000L,
+                        40.0, 14.0, 4.0, 6.0, 2.0, "RUN");
+                addSyntheticSprint(database, sessionId, startedAt + 2_000L);
+                assertNotNull(database.session(sessionId));
+                assertEquals(1, database.pointsAfter(sessionId, 0, 10).size());
+                assertEquals(1, database.sprints(sessionId).size());
+
+                try (ActivityScenario<HistoryActivity> scenario =
+                        ActivityScenario.launch(HistoryActivity.class)) {
+                    scenario.onActivity(
+                            activity -> {
+                                Button button = deleteButtonFor(activity, startedAt);
+                                assertNotNull("Inactive row must initially be deletable", button);
+                                assertTrue(button.isEnabled());
+                                assertTrue("Open confirmation before changing activity state",
+                                        button.performClick());
+                            });
+
+                    // A session can start after the UI has rendered the delete control
+                    // and before the user confirms. The persistence guard, not a stale
+                    // button state, must prevent deletion of that newly active ID.
+                    assertTrue("Set synthetic active marker on disposable emulator",
+                            prefs.edit().putBoolean("active", true)
+                                    .putLong("active_id", sessionId).commit());
+                    onView(withText("Elimina")).inRoot(isDialog()).perform(click());
+
+                    long deadline = SystemClock.uptimeMillis() + 10_000L;
+                    AtomicBoolean completedAndProtected = new AtomicBoolean(false);
+                    while (!completedAndProtected.get()
+                            && SystemClock.uptimeMillis() < deadline) {
+                        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                        scenario.onActivity(
+                                activity -> {
+                                    Button button = deleteButtonFor(activity, startedAt);
+                                    completedAndProtected.set(
+                                            !deleteInFlight(activity, sessionId)
+                                                    && button != null
+                                                    && !button.isEnabled()
+                                                    && "Sessione attiva: non eliminabile"
+                                                            .equals(button.getText().toString()));
+                                });
+                        if (!completedAndProtected.get()) SystemClock.sleep(50L);
+                    }
+                    assertTrue("Worker must finish and active-row protection must refresh",
+                            completedAndProtected.get());
+                }
+
+                assertNotNull("Newly active session must survive confirmed delete",
+                        database.session(sessionId));
+                assertEquals("Newly active session GPS must survive",
+                        1, database.pointsAfter(sessionId, 0, 10).size());
+                assertEquals("Newly active session sprint must survive",
+                        1, database.sprints(sessionId).size());
+            } finally {
+                // Restore every original key before deleting the test fixture.
+                SharedPreferences.Editor restore = prefs.edit();
+                if (hadActive) restore.putBoolean("active", false);
+                else restore.remove("active");
+                if (hadActiveId) restore.putLong("active_id", previousId);
+                else restore.remove("active_id");
+                assertTrue("Restore original tracking preferences", restore.commit());
+                if (database.session(sessionId) != null) {
+                    assertTrue("Only the synthetic session may be cleaned up",
+                            database.deleteSession(sessionId));
+                }
+            }
+        }
+        if (!databaseExisted) {
+            assertTrue("Remove only the test-created database",
+                    context.deleteDatabase("sessions.db"));
+        }
+    }
+
     @Test
     public void cancelPreservesHistoryThenConfirmDeletesOnlySelectedSessionAndRefreshesUi() {
         requireDisposableEmulator();
