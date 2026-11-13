@@ -62,28 +62,28 @@ public final class UpdateManager {
         String json = manifest.read(BASE + tag + "/update.json");
         if (json == null) return null; // HTTP 404, nessuna release per il canale.
         JSONObject data = new JSONObject(json);
-            if (data.optInt("schema", -1) != 1
-                    || !("it.example.passolibero").equals(data.optString("packageName"))
-                    || !packageName.equals(data.optString("packageName"))
-                    || !tag.equals(data.optString("channel"))) {
-                throw new IOException("Canale o pacchetto dell'aggiornamento non validi");
-            }
-            long offered = data.optLong("versionCode", -1);
-            if (!UpdatePolicy.newer(installedCode, offered)) return null;
-            String filename = UpdatePolicy.assetName(channel, offered);
-            if (!filename.equals(data.optString("apk"))) {
-                throw new IOException("Il nome dell'APK non corrisponde alla versione");
-            }
-            String digest = data.optString("sha256");
-            String cert = data.optString("certificateSha256");
-            if (!UpdatePolicy.validSha256(digest) || !UpdatePolicy.validSha256(cert)) {
-                throw new IOException("Hash dell'APK o del certificato non valido");
-            }
-            String url = BASE + tag + "/" + filename;
-            if (!UpdatePolicy.trustedAssetUrl(url, tag, filename)) {
-                throw new IOException("Origine aggiornamento non attendibile");
-            }
-            return new Offer(channel, tag, filename, digest, cert, offered, -1);
+        if (data.optInt("schema", -1) != 1
+                || !("it.example.passolibero").equals(data.optString("packageName"))
+                || !packageName.equals(data.optString("packageName"))
+                || !tag.equals(data.optString("channel"))) {
+            throw new IOException("Canale o pacchetto dell'aggiornamento non validi");
+        }
+        long offered = data.optLong("versionCode", -1);
+        if (!UpdatePolicy.newer(installedCode, offered)) return null;
+        String filename = UpdatePolicy.assetName(channel, offered);
+        if (!filename.equals(data.optString("apk"))) {
+            throw new IOException("Il nome dell'APK non corrisponde alla versione");
+        }
+        String digest = data.optString("sha256");
+        String cert = data.optString("certificateSha256");
+        if (!UpdatePolicy.validSha256(digest) || !UpdatePolicy.validSha256(cert)) {
+            throw new IOException("Hash dell'APK o del certificato non valido");
+        }
+        String url = BASE + tag + "/" + filename;
+        if (!UpdatePolicy.trustedAssetUrl(url, tag, filename)) {
+            throw new IOException("Origine aggiornamento non attendibile");
+        }
+        return new Offer(channel, tag, filename, digest, cert, offered, -1);
     }
 
     public static long enqueue(Context context, Offer offer) throws IOException {
