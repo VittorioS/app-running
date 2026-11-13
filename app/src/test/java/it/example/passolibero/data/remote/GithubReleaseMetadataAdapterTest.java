@@ -1,7 +1,6 @@
 package it.example.passolibero.data.remote;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -102,8 +101,7 @@ public final class GithubReleaseMetadataAdapterTest {
     }
 
     @Test
-    public void nonSuccessHttpPreservesExactLegacyErrorAndClosesConnection()
-            throws IOException {
+    public void nonSuccessHttpPreservesExactLegacyErrorAndClosesConnection() throws IOException {
         FakeConnection connection = new FakeConnection(new URL(MANIFEST));
         connection.code = 503;
         try {
@@ -117,8 +115,7 @@ public final class GithubReleaseMetadataAdapterTest {
     }
 
     @Test
-    public void connectionAndStreamFailuresPropagateWithoutReturningAnOffer()
-            throws IOException {
+    public void connectionAndStreamFailuresPropagateWithoutReturningAnOffer() throws IOException {
         IOException connectFailure = new IOException("connection failed");
         FakeConnection connection = new FakeConnection(new URL(MANIFEST));
         connection.codeFailure = connectFailure;
@@ -147,8 +144,9 @@ public final class GithubReleaseMetadataAdapterTest {
         FakeConnection maximum = new FakeConnection(new URL(MANIFEST));
         maximum.payload = new byte[16_384];
         Arrays.fill(maximum.payload, (byte) 'a');
-        assertEquals(16_384, new GithubReleaseMetadataAdapter(url -> maximum)
-                .read(MANIFEST).length());
+        assertEquals(
+                16_384,
+                new GithubReleaseMetadataAdapter(url -> maximum).read(MANIFEST).length());
         assertTrue(maximum.disconnected);
         assertTrue(maximum.streamClosed);
 
