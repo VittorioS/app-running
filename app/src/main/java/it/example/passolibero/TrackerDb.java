@@ -4,9 +4,11 @@ import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
+import it.example.passolibero.application.history.DeleteHistorySession;
 import it.example.passolibero.application.history.SessionReadPort;
 import it.example.passolibero.application.session.SessionSnapshotWritePort;
 import it.example.passolibero.application.session.SessionSprintWritePort;
+import it.example.passolibero.data.local.SqliteSessionDeleteAdapter;
 import it.example.passolibero.data.local.SqliteSessionReadAdapter;
 import it.example.passolibero.data.local.SqliteSessionCreationAdapter;
 import it.example.passolibero.data.local.SqlitePointWriteAdapter;
@@ -239,33 +241,15 @@ public final class TrackerDb extends SQLiteOpenHelper {
      */
     public boolean deleteSession(long sessionId) {
         if (sessionId <= 0) return false;
-        android.content.SharedPreferences prefs = AppPrefs.get(getContextForHistory());
-        if (isCurrentSession(prefs, sessionId)) return false;
-
-        SQLiteDatabase database = getWritableDatabase();
-        String[] args = {Long.toString(sessionId)};
-        database.beginTransaction();
-        try {
-            if (isCurrentSession(prefs, sessionId)) return false;
-            int removed = database.delete("sessions", "id=?", args);
-            if (removed != 1) return false;
-            database.delete("points", "session_id=?", args);
-            database.delete("sprints", "session_id=?", args);
-            database.setTransactionSuccessful();
-            return true;
-        } finally {
-            database.endTransaction();
-        }
+        return new DeleteHistorySession(
+                new SqliteSessionDeleteAdapter(this, AppPrefs.get(getContextForHistory())))
+                .execute(sessionId);
     }
 
     private final Context appContext;
 
     private Context getContextForHistory() {
         return appContext;
-    }
-
-    private static boolean isCurrentSession(android.content.SharedPreferences p, long id) {
-        return p.getBoolean("active", false) && p.getLong("active_id", 0) == id;
     }
 
     /**

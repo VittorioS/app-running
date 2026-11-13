@@ -11,8 +11,8 @@ import java.util.List;
 /**
  * Legacy composition boundary for the History screen.
  *
- * <p>Keeps SQLite ownership and lifetime outside HistoryActivity while the rest
- * of that legacy screen (including deletion) is migrated in later small PRs.
+ * <p>Owns SQLite helper lifetimes outside HistoryActivity while the screen
+ * delegates reading and deletion to the application use cases.
  */
 public final class HistoryDataBridge {
     private HistoryDataBridge() {}
@@ -22,6 +22,12 @@ public final class HistoryDataBridge {
             return new ListHistorySessions(
                     new SqliteSessionReadAdapter(database.getReadableDatabase()))
                     .execute();
+        }
+    }
+
+    public static boolean deleteSession(Context context, long sessionId) {
+        try (TrackerDb database = new TrackerDb(context)) {
+            return database.deleteSession(sessionId);
         }
     }
 }
