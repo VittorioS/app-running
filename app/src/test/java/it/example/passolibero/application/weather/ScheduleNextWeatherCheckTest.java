@@ -15,10 +15,7 @@ public final class ScheduleNextWeatherCheckTest {
     private static final ZoneId ROME = ZoneId.of("Europe/Rome");
 
     private static Clock atLocal(int year, int month, int day, int hour, int minute) {
-        Instant instant =
-                LocalDateTime.of(year, month, day, hour, minute)
-                        .atZone(ROME)
-                        .toInstant();
+        Instant instant = LocalDateTime.of(year, month, day, hour, minute).atZone(ROME).toInstant();
         return Clock.fixed(instant, ROME);
     }
 
@@ -28,8 +25,7 @@ public final class ScheduleNextWeatherCheckTest {
 
     @Test
     public void fixedClockChoosesUpcomingSlotInPhoneLocalTime() {
-        ScheduleNextWeatherCheck subject =
-                new ScheduleNextWeatherCheck(atLocal(2026, 11, 6, 5, 0));
+        ScheduleNextWeatherCheck subject = new ScheduleNextWeatherCheck(atLocal(2026, 11, 6, 5, 0));
         assertEquals(
                 atUtc("2026-11-06T05:00:00Z"),
                 subject.nextEpochMillis(Arrays.asList("18:00", "06:00", "11:00")));
@@ -37,8 +33,7 @@ public final class ScheduleNextWeatherCheckTest {
 
     @Test
     public void exactSlotIsNotScheduledAgainUntilNextDay() {
-        ScheduleNextWeatherCheck subject =
-                new ScheduleNextWeatherCheck(atLocal(2026, 11, 6, 6, 0));
+        ScheduleNextWeatherCheck subject = new ScheduleNextWeatherCheck(atLocal(2026, 11, 6, 6, 0));
         assertEquals(
                 atUtc("2026-11-07T05:00:00Z"),
                 subject.nextEpochMillis(Collections.singletonList("06:00")));
@@ -66,13 +61,8 @@ public final class ScheduleNextWeatherCheckTest {
 
     @Test
     public void fixedClockRespectsSpringForwardWithoutInventingLocalHour() {
-        ScheduleNextWeatherCheck subject =
-                new ScheduleNextWeatherCheck(atLocal(2027, 3, 28, 0, 30));
-        long expected =
-                LocalDateTime.of(2027, 3, 28, 3, 30)
-                        .atZone(ROME)
-                        .toInstant()
-                        .toEpochMilli();
+        ScheduleNextWeatherCheck subject = new ScheduleNextWeatherCheck(atLocal(2027, 3, 28, 0, 30));
+        long expected = atUtc("2027-03-28T01:30:00Z");
         assertEquals(expected, subject.nextEpochMillis(Collections.singletonList("02:30")));
     }
 }
