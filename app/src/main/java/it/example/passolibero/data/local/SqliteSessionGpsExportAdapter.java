@@ -24,13 +24,7 @@ public final class SqliteSessionGpsExportAdapter implements SessionGpsExportPort
                 database.query(
                         "points",
                         new String[] {
-                            "t_wall",
-                            "lat",
-                            "lon",
-                            "accuracy_m",
-                            "speed_kmh",
-                            "delta_m",
-                            "movement"
+                            "t_wall", "lat", "lon", "accuracy_m", "speed_kmh", "delta_m", "movement"
                         },
                         "session_id=?",
                         new String[] {Long.toString(sessionId)},
