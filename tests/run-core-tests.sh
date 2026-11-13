@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 cd "$(dirname "$0")/.."
+# ADR-002 P9a: never compile battery diagnostics into main/release source sets.
+python3 tests/check-battery-debug-boundary.py
 mkdir -p build-test
 javac -d build-test app/src/main/java/it/example/passolibero/RunMath.java \
   app/src/main/java/it/example/passolibero/DistanceAccumulator.java \

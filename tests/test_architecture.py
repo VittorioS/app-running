@@ -172,5 +172,91 @@ class ArchitectureGuardTest(unittest.TestCase):
         self.assertEqual(GUARD.violations(self.root), [])
 
 
+
+BATTERY_GUARD_SCRIPT = Path(__file__).with_name("check-battery-debug-boundary.py")
+BATTERY_SPEC = importlib.util.spec_from_file_location(
+    "passolibero_battery_boundary", BATTERY_GUARD_SCRIPT
+)
+BATTERY_GUARD = importlib.util.module_from_spec(BATTERY_SPEC)
+BATTERY_SPEC.loader.exec_module(BATTERY_GUARD)
+
+
+class BatteryDebugSourceBoundaryTest(unittest.TestCase):
+    """Regression fixtures for P9a's debug-only source-set boundary."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.app = Path(self.temp.name) / "app"
+        self.debug = self.app / "src/debug/java/it/example/passolibero"
+        self.debug.mkdir(parents=True)
+        for name in ("BatteryRecorder", "BatteryAutoCapture", "BatteryDiagnosticsActivity"):
+            (self.debug / (name + ".java")).write_text(
+                "package it.example.passolibero;\n"
+                + "final class " + name + " {}\n",
+                encoding="utf-8",
+            )
+        self.debug_manifest = self.app / "src/debug/AndroidManifest.xml"
+        self.debug_manifest.write_text(
+            '<manifest><application><activity '
+            'android:name=".BatteryDiagnosticsActivity"/></application></manifest>\n',
+            encoding="utf-8",
+        )
+
+    def test_expected_debug_only_files_are_accepted(self):
+        main = self.app / "src/main/java/it/example/passolibero"
+        main.mkdir(parents=True)
+        (main / "TrackingService.java").write_text(
+            'class TrackingService { String target = "BatteryAutoCapture"; }\n',
+            encoding="utf-8",
+        )
+        self.assertEqual([], BATTERY_GUARD.violations(self.app))
+
+    def test_missing_debug_recorder_is_reported(self):
+        (self.debug / "BatteryRecorder.java").unlink()
+        errors = BATTERY_GUARD.violations(self.app)
+        self.assertTrue(any("BatteryRecorder" in error for error in errors))
+
+    def test_duplicate_recorder_declaration_in_main_is_rejected(self):
+        main = self.app / "src/main/java/it/example/passolibero"
+        main.mkdir(parents=True)
+        (main / "NotTheRecorderFilename.java").write_text(
+            "package it.example.passolibero;\nclass BatteryRecorder {}\n",
+            encoding="utf-8",
+        )
+        errors = BATTERY_GUARD.violations(self.app)
+        self.assertTrue(any("main" in error and "BatteryRecorder" in error for error in errors))
+
+    def test_release_source_cannot_contain_auto_capture(self):
+        release = self.app / "src/release/java/it/example/passolibero"
+        release.mkdir(parents=True)
+        (release / "BatteryAutoCapture.java").write_text(
+            "package it.example.passolibero;\nclass BatteryAutoCapture {}\n",
+            encoding="utf-8",
+        )
+        errors = BATTERY_GUARD.violations(self.app)
+        self.assertTrue(any("release" in error and "BatteryAutoCapture" in error for error in errors))
+
+    def test_release_manifest_cannot_register_debug_diagnostics_activity(self):
+        release_manifest = self.app / "src/release/AndroidManifest.xml"
+        release_manifest.parent.mkdir(parents=True)
+        release_manifest.write_text(
+            '<manifest><application><activity '
+            'android:name=".BatteryDiagnosticsActivity"/></application></manifest>\n',
+            encoding="utf-8",
+        )
+        errors = BATTERY_GUARD.violations(self.app)
+        self.assertTrue(any("release" in error and "BatteryDiagnosticsActivity" in error
+                            for error in errors))
+
+    def test_debug_manifest_must_register_diagnostics_activity(self):
+        self.debug_manifest.write_text(
+            "<manifest><application/></manifest>\n", encoding="utf-8"
+        )
+        errors = BATTERY_GUARD.violations(self.app)
+        self.assertTrue(any("debug" in error and "BatteryDiagnosticsActivity" in error
+                            for error in errors))
+
+
 if __name__ == "__main__":
     unittest.main()
