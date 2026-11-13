@@ -12,14 +12,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import org.junit.Test;
 
 /** ADR-002/#33 G1: characterize streaming APK SHA-256 with fake file IO. */
 public final class StreamingApkSha256AdapterTest {
     @Test
-    public void computesExactDigestAcrossMultiple64KiBChunksAndClosesSource()
-            throws Exception {
+    public void computesExactDigestAcrossMultiple64KiBChunksAndClosesSource() throws Exception {
         byte[] input = new byte[200_011];
         for (int index = 0; index < input.length; index++) {
             input[index] = (byte) (index * 37 + 11);
@@ -35,7 +33,8 @@ public final class StreamingApkSha256AdapterTest {
                             calls[0]++;
                             return new ByteArrayInputStream(input) {
                                 @Override
-                                public synchronized int read(byte[] buffer, int offset, int length) {
+                                public synchronized int read(
+                                        byte[] buffer, int offset, int length) {
                                     maximumRequested[0] = Math.max(maximumRequested[0], length);
                                     return super.read(buffer, offset, Math.min(length, 4_097));
                                 }
@@ -48,7 +47,8 @@ public final class StreamingApkSha256AdapterTest {
                             };
                         });
 
-        assertArrayEquals(MessageDigest.getInstance("SHA-256").digest(input), subject.digest(selected));
+        assertArrayEquals(
+                MessageDigest.getInstance("SHA-256").digest(input), subject.digest(selected));
         assertEquals(1, calls[0]);
         assertEquals(64 * 1024, maximumRequested[0]);
         assertTrue("The APK input stream must always close", closed[0]);
@@ -84,7 +84,9 @@ public final class StreamingApkSha256AdapterTest {
                                     }
                                 });
 
-        assertArrayEquals(MessageDigest.getInstance("SHA-256").digest(input), subject.digest(new File("unused")));
+        assertArrayEquals(
+                MessageDigest.getInstance("SHA-256").digest(input),
+                subject.digest(new File("unused")));
     }
 
     @Test
