@@ -72,13 +72,9 @@ public final class RestoreSavedDownloadTest {
         FakeReader reader = new FakeReader();
         RestoreSavedDownload restore = new RestoreSavedDownload(reader);
         reader.snapshot = saved(11L, 42L, HASH, CERT);
-        assertSame(
-                RestoreSavedDownload.Outcome.CLEAR,
-                restore.execute("stable", 42L).outcome);
+        assertSame(RestoreSavedDownload.Outcome.CLEAR, restore.execute("stable", 42L).outcome);
         reader.snapshot = saved(11L, (long) Integer.MAX_VALUE + 1, HASH, CERT);
-        assertSame(
-                RestoreSavedDownload.Outcome.CLEAR,
-                restore.execute("stable", 42L).outcome);
+        assertSame(RestoreSavedDownload.Outcome.CLEAR, restore.execute("stable", 42L).outcome);
     }
 
     @Test
@@ -86,13 +82,9 @@ public final class RestoreSavedDownloadTest {
         FakeReader reader = new FakeReader();
         RestoreSavedDownload restore = new RestoreSavedDownload(reader);
         reader.snapshot = saved(11L, 43L, "", CERT);
-        assertSame(
-                RestoreSavedDownload.Outcome.CLEAR,
-                restore.execute("debug", 42L).outcome);
+        assertSame(RestoreSavedDownload.Outcome.CLEAR, restore.execute("debug", 42L).outcome);
         reader.snapshot = saved(11L, 43L, HASH, "invalid");
-        assertSame(
-                RestoreSavedDownload.Outcome.CLEAR,
-                restore.execute("debug", 42L).outcome);
+        assertSame(RestoreSavedDownload.Outcome.CLEAR, restore.execute("debug", 42L).outcome);
     }
 
     @Test
