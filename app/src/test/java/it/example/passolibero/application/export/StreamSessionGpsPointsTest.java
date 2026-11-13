@@ -63,19 +63,19 @@ public final class StreamSessionGpsPointsTest {
     @Test
     public void propagatesOutputIoErrorWithoutReadingLaterPoints() {
         FakePointPort source = new FakePointPort();
-        source.points = Arrays.asList(
-                new SessionGpsExportPort.Point(1, 1, 2, 3, 4, 5, "RUN"),
-                new SessionGpsExportPort.Point(2, 6, 7, 8, 9, 10, "WALK"));
+        source.points =
+                Arrays.asList(
+                        new SessionGpsExportPort.Point(1, 1, 2, 3, 4, 5, "RUN"),
+                        new SessionGpsExportPort.Point(2, 6, 7, 8, 9, 10, "WALK"));
         IOException outputFailure = new IOException("destination full");
         int[] visited = {0};
 
+        SessionGpsExportPort.Sink failingSink = ignored -> {
+            visited[0]++;
+            throw outputFailure;
+        };
         try {
-            new StreamSessionGpsPoints(source).execute(
-                    3,
-                    ignored -> {
-                        visited[0]++;
-                        throw outputFailure;
-                    });
+            new StreamSessionGpsPoints(source).execute(3, failingSink);
             fail("The export cannot silently succeed after an IO error");
         } catch (IOException caught) {
             assertSame(outputFailure, caught);
