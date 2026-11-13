@@ -19,6 +19,11 @@ import org.junit.runner.RunWith;
 /** P8b/#34: no APK download, user data, real updater or installer is touched. */
 @RunWith(AndroidJUnit4.class)
 public final class SavedDownloadPreferencesAdapterInstrumentedTest {
+    private static final String HASH =
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private static final String CERT =
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
     private static void requireDisposableAndroid11() {
         assumeTrue("Android 11/API 30 only", Build.VERSION.SDK_INT == 30);
         assumeTrue(
@@ -63,16 +68,16 @@ public final class SavedDownloadPreferencesAdapterInstrumentedTest {
                             .putLong("update_download_id", 33L)
                             .putString("update_channel", "debug")
                             .putLong("update_code", 99L)
-                            .putString("update_sha256", "a".repeat(64))
-                            .putString("update_cert_sha256", "b".repeat(64))
+                            .putString("update_sha256", HASH)
+                            .putString("update_cert_sha256", CERT)
                             .commit());
             SavedDownloadPreferencesAdapter reader =
                     new SavedDownloadPreferencesAdapter(preferences);
             RestoreSavedDownload.Snapshot snapshot = reader.readForChannel("debug");
             assertEquals(33L, snapshot.downloadId);
             assertEquals(99L, snapshot.versionCode);
-            assertEquals("a".repeat(64), snapshot.sha256);
-            assertEquals("b".repeat(64), snapshot.certificateSha256);
+            assertEquals(HASH, snapshot.sha256);
+            assertEquals(CERT, snapshot.certificateSha256);
             assertEquals(33L, preferences.getLong("update_download_id", 0L));
         } finally {
             assertTrue(context.deleteSharedPreferences(key));
