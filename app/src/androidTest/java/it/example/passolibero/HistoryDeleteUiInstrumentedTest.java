@@ -51,7 +51,7 @@ public final class HistoryDeleteUiInstrumentedTest {
 
     private static Button deleteButtonFor(View view, String description) {
         if (view instanceof Button
-                && description.contentEquals(view.getContentDescription())) {
+                && description.equals(String.valueOf(view.getContentDescription()))) {
             return (Button) view;
         }
         if (view instanceof ViewGroup) {
