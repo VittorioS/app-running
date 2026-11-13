@@ -14,7 +14,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import it.example.passolibero.application.update.ReadDownloadState;
+import it.example.passolibero.application.update.RestoreSavedDownload;
 import it.example.passolibero.platform.update.AndroidDownloadStateAdapter;
+import it.example.passolibero.platform.update.SavedDownloadPreferencesAdapter;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -23,6 +25,7 @@ public final class UpdateActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private ReadDownloadState readDownloadState;
+    private RestoreSavedDownload restoreSavedDownload;
     private TextView status, version, channelLabel;
     private Button debugButton, stableButton, actionButton;
     private String channel = UpdateManager.CHANNEL_DEBUG;
@@ -56,6 +59,7 @@ public final class UpdateActivity extends Activity {
         super.onCreate(state);
         prefs = AppPrefs.get(this);
         readDownloadState = new ReadDownloadState(new AndroidDownloadStateAdapter(this));
+        restoreSavedDownload = new RestoreSavedDownload(new SavedDownloadPreferencesAdapter(prefs));
         LinearLayout root = Ui.vertical(this);
         root.setBackgroundColor(Ui.BG);
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -238,22 +242,19 @@ public final class UpdateActivity extends Activity {
     }
 
     private void restoreDownload() {
-        long id = prefs.getLong("update_download_id", 0);
-        if (id <= 0 || !channel.equals(prefs.getString("update_channel", ""))) return;
-        long code = prefs.getLong("update_code", 0);
-        String sha = prefs.getString("update_sha256", "");
-        String cert = prefs.getString("update_cert_sha256", "");
-        if (!UpdatePolicy.newer(BuildConfig.VERSION_CODE, code)
-                || !UpdatePolicy.validSha256(sha) || !UpdatePolicy.validSha256(cert)) {
+        RestoreSavedDownload.Decision result =
+                restoreSavedDownload.execute(channel, BuildConfig.VERSION_CODE);
+        if (result.outcome == RestoreSavedDownload.Outcome.IGNORE) return;
+        if (result.outcome == RestoreSavedDownload.Outcome.CLEAR) {
             clearDownload();
             return;
         }
         try {
-            String tag = UpdateManager.CHANNEL_DEBUG.equals(channel) ?
-                    UpdatePolicy.DEBUG_TAG : "stable";
-            offer = new UpdateManager.Offer(channel, tag,
-                    UpdatePolicy.assetName(channel, code), sha, cert, code, -1);
-            downloadId = id;
+            RestoreSavedDownload.Snapshot saved = result.snapshot;
+            offer = new UpdateManager.Offer(channel, result.tag,
+                    result.assetName, saved.sha256, saved.certificateSha256,
+                    saved.versionCode, -1);
+            downloadId = saved.downloadId;
             main.post(pollDownload);
         } catch (IllegalArgumentException ex) {
             clearDownload();
