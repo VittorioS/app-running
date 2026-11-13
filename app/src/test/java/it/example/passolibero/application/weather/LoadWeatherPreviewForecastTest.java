@@ -56,11 +56,9 @@ public final class LoadWeatherPreviewForecastTest {
     public void preservesAnEmptyFakeForecastWithoutManufacturingHours() throws IOException {
         FakeForecastPort source = new FakeForecastPort();
         source.response =
-                new WeatherForecastPort.Forecast(
-                        Collections.emptyList(), ZoneId.of("UTC"));
+                new WeatherForecastPort.Forecast(Collections.emptyList(), ZoneId.of("UTC"));
 
-        WeatherForecastPort.Forecast result =
-                new LoadWeatherPreviewForecast(source).execute(1, 2);
+        WeatherForecastPort.Forecast result = new LoadWeatherPreviewForecast(source).execute(1, 2);
 
         assertSame(source.response, result);
         assertEquals(0, result.hours.size());
@@ -86,8 +84,7 @@ public final class LoadWeatherPreviewForecastTest {
     public void noExtraCallsOrNormalizationOfLegacyCoordinates() throws IOException {
         FakeForecastPort source = new FakeForecastPort();
         source.response =
-                new WeatherForecastPort.Forecast(
-                        Collections.emptyList(), ZoneId.of("UTC"));
+                new WeatherForecastPort.Forecast(Collections.emptyList(), ZoneId.of("UTC"));
         assertSame(source.response, new LoadWeatherPreviewForecast(source).execute(-8.3, -77.4));
         assertEquals(1, source.calls);
         assertEquals(-8.3, source.latitude, 0);
