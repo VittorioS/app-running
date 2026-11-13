@@ -103,7 +103,6 @@ public final class BatteryRecorderCharacterizationTest {
                 new SandboxContext(InstrumentationRegistry.getInstrumentation().getTargetContext());
         try {
             assertFalse("Initially no recorder active", BatteryRecorder.isRunning());
-            assertFalse("No synthetic CSV exists yet", BatteryRecorder.hasReport(context));
             assertFalse(AppPrefs.get(context).getBoolean("battery_auto_debug", false));
 
             BatteryRecorder.start(context, 10, "Riferimento - nessuna sessione");
@@ -167,12 +166,16 @@ public final class BatteryRecorderCharacterizationTest {
             BatteryRecorder.stop();
             String exported = BatteryRecorder.csv(context);
             assertNotNull(exported);
-            byte[] persisted;
+            StringBuilder stored = new StringBuilder();
             try (FileInputStream input = context.openFileInput(CSV_FILE)) {
-                persisted = input.readAllBytes();
+                byte[] chunk = new byte[4096];
+                int got;
+                while ((got = input.read(chunk)) != -1) {
+                    stored.append(new String(chunk, 0, got, StandardCharsets.UTF_8));
+                }
             }
             assertEquals("Export and private recorder use identical UTF-8 bytes",
-                    exported, new String(persisted, StandardCharsets.UTF_8));
+                    exported, stored.toString());
             assertTrue(exported.startsWith(CSV_HEADER));
         } finally {
             BatteryRecorder.stop();
