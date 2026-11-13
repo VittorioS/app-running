@@ -10,14 +10,14 @@ import android.net.Uri;
 import android.os.Environment;
 import android.provider.Settings;
 
+import it.example.passolibero.application.update.UpdateManifestPort;
+import it.example.passolibero.data.remote.GithubReleaseMetadataAdapter;
+
 import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Locale;
@@ -57,22 +57,11 @@ public final class UpdateManager {
                 : null;
         if (tag == null) throw new IOException("Canale non valido");
 
-        URL manifest = new URL(BASE + tag + "/update.json");
-        HttpURLConnection conn = (HttpURLConnection) manifest.openConnection();
-        conn.setConnectTimeout(12_000);
-        conn.setReadTimeout(12_000);
-        conn.setRequestProperty("Accept", "application/json");
-        conn.setRequestProperty("Cache-Control", "no-cache");
-        conn.setInstanceFollowRedirects(true);
-        try {
-            int code = conn.getResponseCode();
-            if (code == 404) return null;
-            if (code != 200) throw new IOException("GitHub: HTTP " + code);
-            String json;
-            try (InputStream input = conn.getInputStream()) {
-                json = UpdateMetadataReader.readJson(input);
-            }
-            JSONObject data = new JSONObject(json);
+        // Il tag è già stato scelto da una whitelist: nessun URL dal manifest.
+        UpdateManifestPort manifest = new GithubReleaseMetadataAdapter();
+        String json = manifest.read(BASE + tag + "/update.json");
+        if (json == null) return null; // HTTP 404, nessuna release per il canale.
+        JSONObject data = new JSONObject(json);
             if (data.optInt("schema", -1) != 1
                     || !("it.example.passolibero").equals(data.optString("packageName"))
                     || !packageName.equals(data.optString("packageName"))
@@ -95,9 +84,6 @@ public final class UpdateManager {
                 throw new IOException("Origine aggiornamento non attendibile");
             }
             return new Offer(channel, tag, filename, digest, cert, offered, -1);
-        } finally {
-            conn.disconnect();
-        }
     }
 
     public static long enqueue(Context context, Offer offer) throws IOException {
