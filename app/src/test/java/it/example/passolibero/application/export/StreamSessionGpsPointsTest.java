@@ -70,10 +70,11 @@ public final class StreamSessionGpsPointsTest {
         IOException outputFailure = new IOException("destination full");
         int[] visited = {0};
 
-        SessionGpsExportPort.Sink failingSink = ignored -> {
-            visited[0]++;
-            throw outputFailure;
-        };
+        SessionGpsExportPort.Sink failingSink =
+                ignored -> {
+                    visited[0]++;
+                    throw outputFailure;
+                };
         try {
             new StreamSessionGpsPoints(source).execute(3, failingSink);
             fail("The export cannot silently succeed after an IO error");
