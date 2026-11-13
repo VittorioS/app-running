@@ -145,8 +145,7 @@ public final class GithubReleaseMetadataAdapterTest {
         maximum.payload = new byte[16_384];
         Arrays.fill(maximum.payload, (byte) 'a');
         assertEquals(
-                16_384,
-                new GithubReleaseMetadataAdapter(url -> maximum).read(MANIFEST).length());
+                16_384, new GithubReleaseMetadataAdapter(url -> maximum).read(MANIFEST).length());
         assertTrue(maximum.disconnected);
         assertTrue(maximum.streamClosed);
 
