@@ -21,6 +21,8 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import it.example.passolibero.application.weather.WeatherCitySearchPort;
+
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -313,7 +315,7 @@ public final class WeatherSettingsActivity extends Activity {
 
         new Thread(() -> {
             try {
-                final List<WeatherApi.City> found = WeatherApi.findCities(query);
+                final List<WeatherCitySearchPort.City> found = WeatherCitySearchBridge.search(query);
                 main.post(() -> {
                     if (isFinishing() || isDestroyed() || requestId != searchSerial) return;
                     searchButton.setEnabled(true);
@@ -328,7 +330,7 @@ public final class WeatherSettingsActivity extends Activity {
                     searchStatus.setText(found.size()
                             + (found.size() == 1 ? " località trovata. " : " località trovate. ")
                             + "Tocca il risultato corretto (città, regione e Paese):");
-                    for (WeatherApi.City city : found) {
+                    for (WeatherCitySearchPort.City city : found) {
                         Button option = Ui.button(this, "📍 " + city.title, false);
                         option.setTextSize(14);
                         option.setContentDescription("Aggiungi località " + city.title);
