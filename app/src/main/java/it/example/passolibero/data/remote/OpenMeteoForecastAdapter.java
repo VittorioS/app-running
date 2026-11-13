@@ -10,8 +10,8 @@ import java.util.Objects;
 /**
  * Map the unchanged hourly Open-Meteo forecast into the application read contract.
  *
- * <p>Production still uses WeatherApi.forecast, with its existing URL, timeouts,
- * validation and timezone fallback. An injected source supports offline tests.
+ * <p>Production still uses WeatherApi.forecast, with its existing URL, timeouts, validation and
+ * timezone fallback. An injected source supports offline tests.
  */
 public final class OpenMeteoForecastAdapter implements WeatherForecastPort {
     @FunctionalInterface
