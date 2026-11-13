@@ -192,14 +192,14 @@ class BatteryDebugSourceBoundaryTest(unittest.TestCase):
         self.debug.mkdir(parents=True)
         for name in ("BatteryRecorder", "BatteryAutoCapture", "BatteryDiagnosticsActivity"):
             (self.debug / (name + ".java")).write_text(
-                "package it.example.passolibero;\\n"
-                + "final class " + name + " {}\\n",
+                "package it.example.passolibero;\n"
+                + "final class " + name + " {}\n",
                 encoding="utf-8",
             )
         self.debug_manifest = self.app / "src/debug/AndroidManifest.xml"
         self.debug_manifest.write_text(
             '<manifest><application><activity '
-            'android:name=".BatteryDiagnosticsActivity"/></application></manifest>\\n',
+            'android:name=".BatteryDiagnosticsActivity"/></application></manifest>\n',
             encoding="utf-8",
         )
 
@@ -207,7 +207,7 @@ class BatteryDebugSourceBoundaryTest(unittest.TestCase):
         main = self.app / "src/main/java/it/example/passolibero"
         main.mkdir(parents=True)
         (main / "TrackingService.java").write_text(
-            'class TrackingService { String target = "BatteryAutoCapture"; }\\n',
+            'class TrackingService { String target = "BatteryAutoCapture"; }\n',
             encoding="utf-8",
         )
         self.assertEqual([], BATTERY_GUARD.violations(self.app))
@@ -221,7 +221,7 @@ class BatteryDebugSourceBoundaryTest(unittest.TestCase):
         main = self.app / "src/main/java/it/example/passolibero"
         main.mkdir(parents=True)
         (main / "NotTheRecorderFilename.java").write_text(
-            "package it.example.passolibero;\\nclass BatteryRecorder {}\\n",
+            "package it.example.passolibero;\nclass BatteryRecorder {}\n",
             encoding="utf-8",
         )
         errors = BATTERY_GUARD.violations(self.app)
@@ -231,7 +231,7 @@ class BatteryDebugSourceBoundaryTest(unittest.TestCase):
         release = self.app / "src/release/java/it/example/passolibero"
         release.mkdir(parents=True)
         (release / "BatteryAutoCapture.java").write_text(
-            "package it.example.passolibero;\\nclass BatteryAutoCapture {}\\n",
+            "package it.example.passolibero;\nclass BatteryAutoCapture {}\n",
             encoding="utf-8",
         )
         errors = BATTERY_GUARD.violations(self.app)
@@ -242,7 +242,7 @@ class BatteryDebugSourceBoundaryTest(unittest.TestCase):
         release_manifest.parent.mkdir(parents=True)
         release_manifest.write_text(
             '<manifest><application><activity '
-            'android:name=".BatteryDiagnosticsActivity"/></application></manifest>\\n',
+            'android:name=".BatteryDiagnosticsActivity"/></application></manifest>\n',
             encoding="utf-8",
         )
         errors = BATTERY_GUARD.violations(self.app)
@@ -251,7 +251,7 @@ class BatteryDebugSourceBoundaryTest(unittest.TestCase):
 
     def test_debug_manifest_must_register_diagnostics_activity(self):
         self.debug_manifest.write_text(
-            "<manifest><application/></manifest>\\n", encoding="utf-8"
+            "<manifest><application/></manifest>\n", encoding="utf-8"
         )
         errors = BATTERY_GUARD.violations(self.app)
         self.assertTrue(any("debug" in error and "BatteryDiagnosticsActivity" in error
