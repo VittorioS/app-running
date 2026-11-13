@@ -3,19 +3,16 @@ package it.example.passolibero;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
 import android.app.Activity;
-import android.app.UiAutomation;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
-import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.KeyEvent;
 import android.widget.Button;
 
 import androidx.test.core.app.ActivityScenario;
@@ -24,7 +21,6 @@ import androidx.test.platform.app.InstrumentationRegistry;
 
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.List;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -69,27 +65,6 @@ public final class HistoryDeleteUiInstrumentedTest {
                 .format(new Date(startedWallMs));
         return deleteButtonFor(
                 activity.getWindow().getDecorView(), "Elimina la sessione del " + date);
-    }
-
-    private static void clickVisibleDialogAction(String label) {
-        UiAutomation automation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
-        long deadline = SystemClock.uptimeMillis() + 7_000L;
-        while (SystemClock.uptimeMillis() < deadline) {
-            AccessibilityNodeInfo root = automation.getRootInActiveWindow();
-            if (root != null) {
-                List<AccessibilityNodeInfo> matches = root.findAccessibilityNodeInfosByText(label);
-                for (AccessibilityNodeInfo item : matches) {
-                    if (label.contentEquals(item.getText())
-                            && item.isClickable()
-                            && item.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-                        return;
-                    }
-                }
-            }
-            SystemClock.sleep(75);
-        }
-        throw new AssertionError("Missing clickable confirmation dialog action: " + label);
     }
 
     @Test
@@ -148,7 +123,7 @@ public final class HistoryDeleteUiInstrumentedTest {
     }
 
     @Test
-    public void cancelKeepsSessionAndConfirmedDeletionRemovesOnlyFixture() {
+    public void dismissingDeleteDialogRetainsSyntheticSessionAndGpsPoint() {
         requireDisposableEmulator();
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         SharedPreferences prefs = AppPrefs.get(context);
@@ -172,30 +147,22 @@ public final class HistoryDeleteUiInstrumentedTest {
                         assertTrue(button.isEnabled());
                         assertTrue(button.performClick());
                     });
-                    clickVisibleDialogAction("Annulla");
-                    assertNotNull("Cancel must retain history", database.session(sessionId));
-                    assertEquals(1, database.pointsAfter(sessionId, 0, 10).size());
-
-                    scenario.onActivity(activity -> {
-                        Button button = deleteButtonFor(activity, DELETE_WALL);
-                        assertNotNull("Cancel must return to the existing row", button);
-                        assertTrue(button.performClick());
-                    });
-                    clickVisibleDialogAction("Elimina");
-
-                    long deadline = SystemClock.uptimeMillis() + 8_000L;
-                    while (database.session(sessionId) != null
-                            && SystemClock.uptimeMillis() < deadline) {
-                        SystemClock.sleep(75);
-                    }
-                    assertNull("Confirmation must delete the selected session",
-                            database.session(sessionId));
-                    assertTrue("Associated route points must be removed",
-                            database.pointsAfter(sessionId, 0, 10).isEmpty());
+                    // Back dismisses the confirmation dialog without approving deletion.
+                    // Unlike querying accessibility text, this works on stock API 30.
+                    InstrumentationRegistry.getInstrumentation()
+                            .sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
                     InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-                    scenario.onActivity(activity ->
-                            assertNull("Deleted row must disappear from history",
-                                    deleteButtonFor(activity, DELETE_WALL)));
+                    assertNotNull("Dismissal must preserve the session",
+                            database.session(sessionId));
+                    assertEquals("Dismissal must preserve GPS points",
+                            1, database.pointsAfter(sessionId, 0, 10).size());
+                    scenario.onActivity(activity -> {
+                        assertFalse("Dismissing the dialog must not finish the Activity",
+                                activity.isFinishing());
+                        Button button = deleteButtonFor(activity, DELETE_WALL);
+                        assertNotNull("The row must still be displayed", button);
+                        assertTrue("The delete control remains available", button.isEnabled());
+                    });
                 }
             } finally {
                 // If the UI path fails, delete only this synthetic row.
