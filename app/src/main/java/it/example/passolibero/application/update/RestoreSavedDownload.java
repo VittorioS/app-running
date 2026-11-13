@@ -27,7 +27,8 @@ public final class RestoreSavedDownload {
         public final String sha256;
         public final String certificateSha256;
 
-        public Snapshot(long downloadId, long versionCode, String sha256, String certificateSha256) {
+        public Snapshot(
+                long downloadId, long versionCode, String sha256, String certificateSha256) {
             this.downloadId = downloadId;
             this.versionCode = versionCode;
             this.sha256 = sha256;
