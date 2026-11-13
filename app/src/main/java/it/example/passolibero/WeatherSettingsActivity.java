@@ -22,6 +22,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import it.example.passolibero.application.weather.WeatherCitySearchPort;
+import it.example.passolibero.application.weather.WeatherForecastPort;
 
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
@@ -396,7 +397,7 @@ public final class WeatherSettingsActivity extends Activity {
             for (WeatherLocations.City city : requested) {
                 if (requestId != previewSerial || isFinishing() || isDestroyed()) return;
                 try {
-                    WeatherApi.Forecast forecast = WeatherApi.forecast(city.latitude, city.longitude);
+                    WeatherForecastPort.Forecast forecast = WeatherForecastBridge.preview(city.latitude, city.longitude);
                     report.append(formatForecastCity(city, forecast, rules)).append("\n\n");
                 } catch (Exception ex) {
                     failures++;
@@ -425,15 +426,15 @@ public final class WeatherSettingsActivity extends Activity {
     }
 
     private String formatForecastCity(WeatherLocations.City city,
-                                      WeatherApi.Forecast forecast, WeatherRules rules) {
+                                      WeatherForecastPort.Forecast forecast, WeatherRules rules) {
         long now = System.currentTimeMillis() / 1000L;
         DateTimeFormatter clock = DateTimeFormatter.ofPattern("EEE HH:mm", Locale.ITALY)
                 .withZone(forecast.zone);
         StringBuilder text = new StringBuilder("📍 ").append(city.title)
                 .append("\n✅ = criteri rispettati | ✕ = non rispettati\n");
-        WeatherApi.Hour closest = null;
+        WeatherForecastPort.Hour closest = null;
         int count = 0, matching = 0;
-        for (WeatherApi.Hour hour : forecast.hours) {
+        for (WeatherForecastPort.Hour hour : forecast.hours) {
             if (hour.epochSec <= now && hour.epochSec + 3600 > now) {
                 closest = hour;
                 break;
@@ -448,7 +449,7 @@ public final class WeatherSettingsActivity extends Activity {
                     .append(String.format(Locale.ITALY, "%.0f km/h", closest.windKmh))
                     .append("\n");
         }
-        for (WeatherApi.Hour hour : forecast.hours) {
+        for (WeatherForecastPort.Hour hour : forecast.hours) {
             if (hour.epochSec + 3600 <= now || hour.epochSec >= now + 24 * 3600) continue;
             boolean good = rules.matches(hour.temperatureC, hour.windKmh);
             count++;
