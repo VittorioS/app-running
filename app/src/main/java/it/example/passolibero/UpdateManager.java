@@ -10,13 +10,14 @@ import android.net.Uri;
 import android.os.Environment;
 import android.provider.Settings;
 
+import it.example.passolibero.application.update.ApkSha256Port;
 import it.example.passolibero.application.update.UpdateManifestPort;
+import it.example.passolibero.data.local.StreamingApkSha256Adapter;
 import it.example.passolibero.data.remote.GithubReleaseMetadataAdapter;
 
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.Arrays;
@@ -128,15 +129,8 @@ public final class UpdateManager {
         if (!apk.isFile() || apk.length() < 100_000 || apk.length() > 300_000_000) {
             throw new IOException("File APK mancante o dimensione non valida");
         }
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        try (FileInputStream stream = new FileInputStream(apk)) {
-            byte[] bytes = new byte[64 * 1024];
-            int count;
-            while ((count = stream.read(bytes)) >= 0) {
-                if (count > 0) digest.update(bytes, 0, count);
-            }
-        }
-        if (!hex(digest.digest()).equals(offer.sha256)) {
+        ApkSha256Port apkDigest = new StreamingApkSha256Adapter();
+        if (!hex(apkDigest.digest(apk)).equals(offer.sha256)) {
             throw new IOException("Hash SHA-256 APK diverso: download non sicuro");
         }
         PackageManager pm = context.getPackageManager();
