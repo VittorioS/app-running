@@ -40,7 +40,8 @@ java -cp build-test GpsFixPolicyTest
 javac -cp build-test -d build-test tests/SessionTabStatsTest.java
 java -cp build-test SessionTabStatsTest
 
-javac -d build-test app/src/main/java/it/example/passolibero/WeatherSchedule.java tests/WeatherScheduleTest.java
+javac -d build-test app/src/main/java/it/example/passolibero/domain/weather/NextWeatherAlarmPolicy.java \
+  app/src/main/java/it/example/passolibero/WeatherSchedule.java tests/WeatherScheduleTest.java
 java -cp build-test WeatherScheduleTest
 
 javac -d build-test app/src/main/java/it/example/passolibero/UpdatePolicy.java tests/UpdatePolicyTest.java
