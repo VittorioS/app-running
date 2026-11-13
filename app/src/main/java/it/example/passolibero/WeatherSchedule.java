@@ -1,8 +1,7 @@
 package it.example.passolibero;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
+import it.example.passolibero.domain.weather.NextWeatherAlarmPolicy;
+
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,18 +41,6 @@ public final class WeatherSchedule {
 
     /** Prossima occorrenza futura nell'ora locale del telefono, rispettando l'ora legale. */
     public static long nextEpochMillis(List<String> times, ZoneId zone, long nowMillis) {
-        if (times == null || times.isEmpty()) return -1;
-        LocalDate today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate();
-        long best = Long.MAX_VALUE;
-        for (int days = 0; days <= 2; days++) {
-            LocalDate date = today.plusDays(days);
-            for (String hhmm : times) {
-                LocalTime time = LocalTime.parse(hhmm);
-                long candidate = date.atTime(time).atZone(zone).toInstant().toEpochMilli();
-                // Salta il controllo se l'ora è già passata; scegli domani.
-                if (candidate > nowMillis && candidate < best) best = candidate;
-            }
-        }
-        return best == Long.MAX_VALUE ? -1 : best;
+        return NextWeatherAlarmPolicy.nextEpochMillis(times, zone, nowMillis);
     }
 }
