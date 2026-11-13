@@ -1,6 +1,6 @@
 # PassoLibero — guida funzionale dell'app
 
-> **Scopo del documento.** Descrivere le funzionalità osservabili di PassoLibero dal punto di vista di chi la utilizza, di chi definisce i requisiti e di chi verifica il prodotto. La descrizione è ricavata dal codice presente nel ramo \`main\` al momento dell'analisi (14 novembre 2026). Non sostituisce una prova su dispositivo reale.
+> **Scopo del documento.** Descrivere le funzionalità osservabili di PassoLibero dal punto di vista di chi la utilizza, di chi definisce i requisiti e di chi verifica il prodotto. La descrizione è ricavata dal codice presente nel ramo `main` al momento dell'analisi (14 novembre 2026). Non sostituisce una prova su dispositivo reale.
 
 ## 1. Cos'è PassoLibero
 
@@ -169,4 +169,4 @@ Questa guida descrive soprattutto il comportamento esposto dai seguenti punti de
 | Meteo | [WeatherSettingsActivity.java](../app/src/main/java/it/example/passolibero/WeatherSettingsActivity.java), [WeatherMonitor.java](../app/src/main/java/it/example/passolibero/WeatherMonitor.java), [WeatherRules.java](../app/src/main/java/it/example/passolibero/WeatherRules.java) |
 | Aggiornamenti e compatibilità | [UpdateActivity.java](../app/src/main/java/it/example/passolibero/UpdateActivity.java), [UpdateManager.java](../app/src/main/java/it/example/passolibero/UpdateManager.java), [AndroidManifest.xml](../app/src/main/AndroidManifest.xml) |
 
-**Metodo e stato della verifica:** analisi statica di interfacce e flussi applicativi su \`main\` e confronto con la documentazione esistente. Non sono stati effettuati test manuali sul dispositivo, chiamate reali ai servizi online o prove di accuratezza GPS; la disponibilità e l'affidabilità effettive richiedono verifica in esercizio.
+**Metodo e stato della verifica:** analisi statica di interfacce e flussi applicativi su `main` e confronto con la documentazione esistente. Non sono stati effettuati test manuali sul dispositivo, chiamate reali ai servizi online o prove di accuratezza GPS; la disponibilità e l'affidabilità effettive richiedono verifica in esercizio.
