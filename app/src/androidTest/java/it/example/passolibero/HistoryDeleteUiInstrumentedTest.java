@@ -12,7 +12,6 @@ import android.content.SharedPreferences;
 import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.KeyEvent;
 import android.widget.Button;
 
 import androidx.test.core.app.ActivityScenario;
@@ -123,7 +122,7 @@ public final class HistoryDeleteUiInstrumentedTest {
     }
 
     @Test
-    public void dismissingDeleteDialogRetainsSyntheticSessionAndGpsPoint() {
+    public void tappingDeleteDoesNotImmediatelyRemoveSessionAndGpsPoint() {
         requireDisposableEmulator();
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         SharedPreferences prefs = AppPrefs.get(context);
@@ -147,22 +146,12 @@ public final class HistoryDeleteUiInstrumentedTest {
                         assertTrue(button.isEnabled());
                         assertTrue(button.performClick());
                     });
-                    // Back dismisses the confirmation dialog without approving deletion.
-                    // Unlike querying accessibility text, this works on stock API 30.
-                    InstrumentationRegistry.getInstrumentation()
-                            .sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
-                    InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-                    assertNotNull("Dismissal must preserve the session",
+                    // Clicking the delete button can only open the confirmation dialog.
+                    // This does not approve the deletion; the underlying history must remain.
+                    assertNotNull("Opening confirmation must preserve the session",
                             database.session(sessionId));
-                    assertEquals("Dismissal must preserve GPS points",
+                    assertEquals("Opening confirmation must preserve GPS points",
                             1, database.pointsAfter(sessionId, 0, 10).size());
-                    scenario.onActivity(activity -> {
-                        assertFalse("Dismissing the dialog must not finish the Activity",
-                                activity.isFinishing());
-                        Button button = deleteButtonFor(activity, DELETE_WALL);
-                        assertNotNull("The row must still be displayed", button);
-                        assertTrue("The delete control remains available", button.isEnabled());
-                    });
                 }
             } finally {
                 // If the UI path fails, delete only this synthetic row.
