@@ -26,8 +26,7 @@ public final class ReadDownloadStateTest {
 
     @Test
     public void successfulDownloadIsOnlyReadyForVerificationNotInstallation() {
-        FakeStatusPort port =
-                new FakeStatusPort(ReadDownloadState.State.READY_TO_VERIFY);
+        FakeStatusPort port = new FakeStatusPort(ReadDownloadState.State.READY_TO_VERIFY);
         ReadDownloadState read = new ReadDownloadState(port);
         assertSame(ReadDownloadState.State.READY_TO_VERIFY, read.execute(42L));
         assertEquals(42L, port.requestedId);
