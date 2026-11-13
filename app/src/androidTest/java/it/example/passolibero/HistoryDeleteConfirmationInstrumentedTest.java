@@ -105,6 +105,99 @@ public final class HistoryDeleteConfirmationInstrumentedTest {
         }
     }
 
+    /**
+     * Recreating HistoryActivity with an open confirmation must never be interpreted as
+     * consent to delete. This simulates Activity recreation on API 30, not physical rotation.
+     */
+    @Test
+    public void openDeleteDialogThenRecreateActivityPreservesBothSessionsAndGpsAndSprints() {
+        requireDisposableEmulator();
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SharedPreferences prefs = AppPrefs.get(context);
+        assertFalse("Disposable emulator must not have active tracking",
+                prefs.getBoolean("active", false));
+        boolean databaseExisted = context.getDatabasePath("sessions.db").exists();
+        long targetWall = TARGET_WALL + 172_800_000L;
+        long preservedWall = PRESERVED_WALL + 172_800_000L;
+
+        try (TrackerDb database = new TrackerDb(context)) {
+            long targetId = database.newSession(targetWall);
+            long preservedId = database.newSession(preservedWall);
+            try {
+                database.point(targetId, targetWall + 1_000L,
+                        40.0, 14.0, 4.0, 6.0, 2.0, "RUN");
+                database.point(preservedId, preservedWall + 1_000L,
+                        40.0, 14.0, 4.0, 6.0, 2.0, "RUN");
+                addSyntheticSprint(database, targetId, targetWall + 2_000L);
+                addSyntheticSprint(database, preservedId, preservedWall + 2_000L);
+
+                try (ActivityScenario<HistoryActivity> scenario =
+                        ActivityScenario.launch(HistoryActivity.class)) {
+                    scenario.onActivity(activity -> {
+                        Button target = deleteButtonFor(activity, targetWall);
+                        assertNotNull("Target row must be present", target);
+                        assertTrue("Synthetic inactive row must allow confirmation",
+                                target.isEnabled());
+                        assertTrue("Open confirmation without accepting",
+                                target.performClick());
+                    });
+
+                    // Destroy/recreate the Activity while the destructive dialog is open.
+                    // The UI must not interpret that lifecycle event as a positive click.
+                    scenario.recreate();
+                    scenario.onActivity(activity -> {
+                        Button target = deleteButtonFor(activity, targetWall);
+                        assertNotNull("Target must survive Activity recreation", target);
+                        assertTrue("Recreated target remains available", target.isEnabled());
+                        assertNotNull("Other row must survive Activity recreation",
+                                deleteButtonFor(activity, preservedWall));
+                    });
+                    assertNotNull("Recreation must not delete target", database.session(targetId));
+                    assertEquals(1, database.pointsAfter(targetId, 0, 10).size());
+                    assertEquals(1, database.sprints(targetId).size());
+
+                    // Explicit cancellation after recreation must also remain harmless.
+                    scenario.onActivity(activity -> {
+                        Button target = deleteButtonFor(activity, targetWall);
+                        assertNotNull(target);
+                        assertTrue(target.performClick());
+                    });
+                    onView(withText("Annulla")).inRoot(isDialog()).perform(click());
+                    scenario.onActivity(activity -> {
+                        assertNotNull("Cancelled row must stay visible",
+                                deleteButtonFor(activity, targetWall));
+                        assertNotNull("Unselected row must stay visible",
+                                deleteButtonFor(activity, preservedWall));
+                    });
+                }
+
+                assertNotNull("Cancelled target must remain in SQLite",
+                        database.session(targetId));
+                assertNotNull("Other session must remain in SQLite",
+                        database.session(preservedId));
+                assertEquals("Target GPS must remain", 1,
+                        database.pointsAfter(targetId, 0, 10).size());
+                assertEquals("Other GPS must remain", 1,
+                        database.pointsAfter(preservedId, 0, 10).size());
+                assertEquals("Target sprint must remain", 1, database.sprints(targetId).size());
+                assertEquals("Other sprint must remain", 1,
+                        database.sprints(preservedId).size());
+            } finally {
+                // Delete only the two synthetic IDs created by this test.
+                if (database.session(targetId) != null) {
+                    assertTrue(database.deleteSession(targetId));
+                }
+                if (database.session(preservedId) != null) {
+                    assertTrue(database.deleteSession(preservedId));
+                }
+            }
+        }
+        if (!databaseExisted) {
+            assertTrue("Remove only test-created database",
+                    context.deleteDatabase("sessions.db"));
+        }
+    }
+
     @Test
     public void sessionBecomingActiveWhileDialogIsOpenCannotBeDeleted() {
         requireDisposableEmulator();
