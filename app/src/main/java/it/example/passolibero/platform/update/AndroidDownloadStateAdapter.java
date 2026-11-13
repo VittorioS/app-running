@@ -7,8 +7,8 @@ import it.example.passolibero.application.update.ReadDownloadState;
 import java.util.Objects;
 
 /**
- * Android download status adapter. All download, URI and installer behavior stays in the
- * existing UpdateManager; this adapter only maps its status to the application contract.
+ * Android download status adapter. All download, URI and installer behavior stays in the existing
+ * UpdateManager; this adapter only maps its status to the application contract.
  */
 public final class AndroidDownloadStateAdapter implements ReadDownloadState.Port {
     private final Context context;
