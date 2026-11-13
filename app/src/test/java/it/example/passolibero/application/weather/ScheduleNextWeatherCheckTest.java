@@ -61,7 +61,8 @@ public final class ScheduleNextWeatherCheckTest {
 
     @Test
     public void fixedClockRespectsSpringForwardWithoutInventingLocalHour() {
-        ScheduleNextWeatherCheck subject = new ScheduleNextWeatherCheck(atLocal(2027, 3, 28, 0, 30));
+        ScheduleNextWeatherCheck subject =
+                new ScheduleNextWeatherCheck(atLocal(2027, 3, 28, 0, 30));
         long expected = atUtc("2027-03-28T01:30:00Z");
         assertEquals(expected, subject.nextEpochMillis(Collections.singletonList("02:30")));
     }
