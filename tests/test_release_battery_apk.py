@@ -36,8 +36,8 @@ class ReleaseBatteryBinaryAuditTest(unittest.TestCase):
         self.mapping = self.root / "mapping.txt"
         self.dexdump = self.root / "dexdump"
         self.aapt = self.root / "aapt"
-        self.dexdump.touch()
-        self.aapt.touch()
+        self.dexdump.write_text("fake dexdump tool", encoding="utf-8")
+        self.aapt.write_text("fake aapt tool", encoding="utf-8")
         self.mapping.write_text(
             "it.example.passolibero.TrackingService -> a.a:\n", encoding="utf-8"
         )
