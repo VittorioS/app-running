@@ -1,7 +1,6 @@
 package it.example.passolibero;
 
 import android.app.Activity;
-import android.app.DownloadManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -14,12 +13,16 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import it.example.passolibero.application.update.ReadDownloadState;
+import it.example.passolibero.platform.update.AndroidDownloadStateAdapter;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Controllo, download, verifica e richiesta d'installazione dell'APK firmato. */
 public final class UpdateActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
+    private ReadDownloadState readDownloadState;
     private TextView status, version, channelLabel;
     private Button debugButton, stableButton, actionButton;
     private String channel = UpdateManager.CHANNEL_DEBUG;
@@ -31,14 +34,14 @@ public final class UpdateActivity extends Activity {
     private final Runnable pollDownload = new Runnable() {
         @Override public void run() {
             if (!resumed || downloadId <= 0) return;
-            int progress = UpdateManager.downloadStatus(UpdateActivity.this, downloadId);
-            if (progress == DownloadManager.STATUS_SUCCESSFUL) {
+            ReadDownloadState.State progress = readDownloadState.execute(downloadId);
+            if (progress == ReadDownloadState.State.READY_TO_VERIFY) {
                 actionButton.setText("Verifica APK e installa");
                 actionButton.setEnabled(true);
                 status.setText("Download terminato. Tocca per verificare firma e integrità.");
                 return;
             }
-            if (progress == DownloadManager.STATUS_FAILED) {
+            if (progress == ReadDownloadState.State.FAILED) {
                 clearDownload();
                 status.setText("Download non riuscito. Riprova il controllo degli aggiornamenti.");
                 return;
@@ -52,6 +55,7 @@ public final class UpdateActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = AppPrefs.get(this);
+        readDownloadState = new ReadDownloadState(new AndroidDownloadStateAdapter(this));
         LinearLayout root = Ui.vertical(this);
         root.setBackgroundColor(Ui.BG);
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -181,8 +185,8 @@ public final class UpdateActivity extends Activity {
             }
             return;
         }
-        if (UpdateManager.downloadStatus(this, downloadId)
-                != DownloadManager.STATUS_SUCCESSFUL) {
+        if (readDownloadState.execute(downloadId)
+                != ReadDownloadState.State.READY_TO_VERIFY) {
             main.removeCallbacks(pollDownload);
             main.post(pollDownload);
             return;
