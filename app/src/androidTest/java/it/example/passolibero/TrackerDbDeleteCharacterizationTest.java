@@ -16,11 +16,15 @@ import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 
+import it.example.passolibero.data.local.SqliteSessionDeleteAdapter;
+
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import java.io.File;
+import java.lang.reflect.Proxy;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -204,6 +208,53 @@ public final class TrackerDbDeleteCharacterizationTest {
                 assertEquals(0L, count(sql, "sessions"));
                 assertEquals(0L, count(sql, "points"));
                 assertEquals(0L, count(sql, "sprints"));
+            }
+        } finally {
+            sandbox.cleanUp();
+        }
+    }
+
+    @Test public void sessionBecomingActiveInsideTransactionIsNeverDeleted() {
+        SandboxContext sandbox = sandbox();
+        try {
+            try (TrackerDb db = new TrackerDb(sandbox)) {
+                long sessionId = db.newSession(100);
+                addChildRows(db, sessionId);
+
+                // First isCurrentSession() observes inactivity; the second check,
+                // after beginTransaction(), observes that the same ID became active.
+                // This deterministic fake avoids scheduling threads or touching
+                // the real SharedPreferences of the app under test.
+                AtomicInteger activeReads = new AtomicInteger();
+                SharedPreferences changingPrefs = (SharedPreferences) Proxy.newProxyInstance(
+                        SharedPreferences.class.getClassLoader(),
+                        new Class<?>[] {SharedPreferences.class},
+                        (proxy, method, args) -> {
+                            if ("getBoolean".equals(method.getName())
+                                    && "active".equals(args[0])) {
+                                return activeReads.incrementAndGet() >= 2;
+                            }
+                            if ("getLong".equals(method.getName())
+                                    && "active_id".equals(args[0])) {
+                                return sessionId;
+                            }
+                            throw new AssertionError(
+                                    "Unexpected SharedPreferences access: " + method.getName());
+                        });
+
+                assertFalse("The second guard must protect an active session",
+                        new SqliteSessionDeleteAdapter(db, changingPrefs)
+                                .deleteSession(sessionId));
+                assertEquals("The adapter must check before and inside the transaction",
+                        2, activeReads.get());
+                assertFalse("A rejected delete must always end the transaction",
+                        db.getReadableDatabase().inTransaction());
+                assertNotNull("The session must be retained", db.session(sessionId));
+                assertEquals(1L, count(db.getReadableDatabase(), "sessions"));
+                assertEquals("Its GPS points must be retained",
+                        1, db.pointsAfter(sessionId, 0, 10).size());
+                assertEquals("Its sprint record must be retained",
+                        1, db.sprints(sessionId).size());
             }
         } finally {
             sandbox.cleanUp();
