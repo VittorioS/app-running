@@ -3,12 +3,13 @@ package it.example.passolibero;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.SystemClock;
 import android.util.JsonWriter;
 import android.widget.Toast;
+
+import it.example.passolibero.application.export.StreamSessionGpsPoints;
+import it.example.passolibero.data.local.SqliteSessionGpsExportAdapter;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -206,24 +207,19 @@ public final class SessionJsonExporter {
 
     private static void writePoints(JsonWriter writer, TrackerDb db, long sessionId)
             throws IOException {
-        SQLiteDatabase sql = db.getReadableDatabase();
-        // Cursor SQLite progressivo: nessun ArrayList che cresca con la durata.
-        try (Cursor cursor = sql.query("points",
-                new String[]{"t_wall", "lat", "lon", "accuracy_m", "speed_kmh",
-                        "delta_m", "movement"},
-                "session_id=?", new String[]{Long.toString(sessionId)},
-                null, null, "id ASC")) {
-            while (cursor.moveToNext()) {
-                writer.beginObject();
-                writer.name("timestamp_utc_ms").value(cursor.getLong(0));
-                writer.name("latitude").value(cursor.getDouble(1));
-                writer.name("longitude").value(cursor.getDouble(2));
-                writer.name("accuracy_m").value(cursor.getDouble(3));
-                writer.name("speed_kmh").value(cursor.getDouble(4));
-                writer.name("delta_m").value(cursor.getDouble(5));
-                writer.name("movement").value(cursor.getString(6));
-                writer.endObject();
-            }
-        }
+        // Nessun buffer di percorso o limite di paginazione: un punto alla volta.
+        new StreamSessionGpsPoints(
+                new SqliteSessionGpsExportAdapter(db.getReadableDatabase()))
+                .execute(sessionId, point -> {
+                    writer.beginObject();
+                    writer.name("timestamp_utc_ms").value(point.timestampUtcMs);
+                    writer.name("latitude").value(point.latitude);
+                    writer.name("longitude").value(point.longitude);
+                    writer.name("accuracy_m").value(point.accuracyM);
+                    writer.name("speed_kmh").value(point.speedKmh);
+                    writer.name("delta_m").value(point.deltaM);
+                    writer.name("movement").value(point.movement);
+                    writer.endObject();
+                });
     }
 }
