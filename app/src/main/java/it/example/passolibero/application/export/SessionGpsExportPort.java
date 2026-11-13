@@ -5,8 +5,8 @@ import java.io.IOException;
 /**
  * Incremental export view of one session's GPS points.
  *
- * <p>The adapter must preserve ascending SQLite row ID, source values and a constant-memory
- * cursor. Do not impose the 2,000-point display paging cap on an exported route.
+ * <p>The adapter must preserve ascending SQLite row ID, source values and a constant-memory cursor.
+ * Do not impose the 2,000-point display paging cap on an exported route.
  */
 public interface SessionGpsExportPort {
     void forEachPoint(long sessionId, Sink sink) throws IOException;
