@@ -15,6 +15,7 @@ import android.widget.Toast;
 
 import it.example.passolibero.application.update.ReadDownloadState;
 import it.example.passolibero.application.update.RestoreSavedDownload;
+import it.example.passolibero.presentation.update.DownloadPollingViewState;
 import it.example.passolibero.platform.update.AndroidDownloadStateAdapter;
 import it.example.passolibero.platform.update.SavedDownloadPreferencesAdapter;
 
@@ -37,21 +38,18 @@ public final class UpdateActivity extends Activity {
     private final Runnable pollDownload = new Runnable() {
         @Override public void run() {
             if (!resumed || downloadId <= 0) return;
-            ReadDownloadState.State progress = readDownloadState.execute(downloadId);
-            if (progress == ReadDownloadState.State.READY_TO_VERIFY) {
-                actionButton.setText("Verifica APK e installa");
-                actionButton.setEnabled(true);
-                status.setText("Download terminato. Tocca per verificare firma e integrità.");
-                return;
-            }
-            if (progress == ReadDownloadState.State.FAILED) {
+            DownloadPollingViewState ui =
+                    DownloadPollingViewState.from(readDownloadState.execute(downloadId));
+            if (ui.clearSavedDownload) {
                 clearDownload();
-                status.setText("Download non riuscito. Riprova il controllo degli aggiornamenti.");
-                return;
+            } else {
+                if (ui.actionLabel != null) actionButton.setText(ui.actionLabel);
+                actionButton.setEnabled(ui.actionEnabled);
             }
-            actionButton.setEnabled(false);
-            status.setText("Download in corso tramite Android…");
-            main.postDelayed(this, 1000);
+            status.setText(ui.statusText);
+            if (ui.nextPollDelayMillis > 0) {
+                main.postDelayed(this, ui.nextPollDelayMillis);
+            }
         }
     };
 
