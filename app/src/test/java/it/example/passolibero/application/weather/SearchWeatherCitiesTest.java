@@ -37,8 +37,7 @@ public final class SearchWeatherCitiesTest {
                 new WeatherCitySearchPort.City("Salerno, Colombia", 4.17, -75.96);
         source.result = Arrays.asList(first, second);
 
-        List<WeatherCitySearchPort.City> found =
-                new SearchWeatherCities(source).execute("Salerno");
+        List<WeatherCitySearchPort.City> found = new SearchWeatherCities(source).execute("Salerno");
 
         assertSame("The use case must not reorder or filter results", source.result, found);
         assertSame(first, found.get(0));
@@ -82,8 +81,7 @@ public final class SearchWeatherCitiesTest {
         source.result.add(new WeatherCitySearchPort.City("Zulu", -2, -2));
         source.result.add(new WeatherCitySearchPort.City("Alpha", 2, 2));
 
-        List<WeatherCitySearchPort.City> actual =
-                new SearchWeatherCities(source).execute("za");
+        List<WeatherCitySearchPort.City> actual = new SearchWeatherCities(source).execute("za");
 
         assertSame(source.result, actual);
         assertEquals("Zulu", actual.get(0).title);
