@@ -11,9 +11,9 @@ import java.util.Objects;
 /**
  * Original GitHub release metadata HTTP transport, isolated from security validation.
  *
- * <p>The existing UpdateManager constructs the only trusted URL after checking the
- * selected channel. This adapter preserves HTTP headers, timeouts, redirect behavior,
- * the 16-KiB UTF-8 limit and all network error strings. It never downloads an APK.
+ * <p>The existing UpdateManager constructs the only trusted URL after checking the selected
+ * channel. This adapter preserves HTTP headers, timeouts, redirect behavior, the 16-KiB UTF-8 limit
+ * and all network error strings. It never downloads an APK.
  */
 public final class GithubReleaseMetadataAdapter implements UpdateManifestPort {
     @FunctionalInterface
