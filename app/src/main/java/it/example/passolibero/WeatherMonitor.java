@@ -15,8 +15,10 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 
+import it.example.passolibero.application.weather.ScheduleNextWeatherCheck;
+
 import java.time.Instant;
-import java.time.ZoneId;
+import java.time.Clock;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
@@ -75,8 +77,8 @@ public final class WeatherMonitor {
         alarms.cancel(intent);
         if (!isActive(p)) return;
         List<String> times = WeatherSchedule.decode(p.getString("weather_times", ""));
-        long next = WeatherSchedule.nextEpochMillis(
-                times, ZoneId.systemDefault(), System.currentTimeMillis());
+        long next = new ScheduleNextWeatherCheck(Clock.systemDefaultZone())
+                .nextEpochMillis(times);
         if (next <= 0) return;
         // setAndAllowWhileIdle può ritardare in Doze: niente permessi exact alarm.
         try {
