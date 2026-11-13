@@ -9,8 +9,8 @@ import java.util.List;
 /**
  * Pure scheduling rule for the next local daily weather check.
  *
- * <p>Preserves the legacy resolution of daylight saving gaps and overlaps, including the
- * earlier offset selected by atZone for an ambiguous fall-back local time.
+ * <p>Preserves the legacy resolution of daylight saving gaps and overlaps, including the earlier
+ * offset selected by atZone for an ambiguous fall-back local time.
  */
 public final class NextWeatherAlarmPolicy {
     private NextWeatherAlarmPolicy() {}
