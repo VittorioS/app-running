@@ -56,6 +56,7 @@ jobs:
           python3 tests/check-architecture.py
           python3 -m unittest discover -s tests -p 'test_architecture.py'
           python3 -m unittest discover -s tests -p 'test_release_metadata.py'
+          python3 -m unittest discover -s tests -p 'test_release_battery_apk.py'
 
       - name: Spotless formatting check
         run: sh ./gradlew --no-daemon :app:spotlessCheck
@@ -72,6 +73,19 @@ jobs:
           min_sdk="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | sed -n "s/^sdkVersion:'\\([0-9]*\\)'.*/\\1/p")"
           echo "APK minSdk=$min_sdk, required <=30"
           [[ "$min_sdk" =~ ^[0-9]+$ ]] && (( min_sdk <= 30 ))
+
+      # Dedicated P9a/#71 CI security audit. No signing keys, artifacts,
+      # publishing, or changes to the privileged release-debug workflow.
+      - name: Audit unsigned release APK for debug-only battery classes
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh ./gradlew --no-daemon :app:assembleRelease
+          python3 tests/check-release-battery-apk.py \
+            app/build/outputs/apk/release/app-release-unsigned.apk \
+            app/build/outputs/mapping/release/mapping.txt \
+            "$ANDROID_HOME/build-tools/35.0.0/dexdump" \
+            "$ANDROID_HOME/build-tools/35.0.0/aapt"
 
       - name: Preserve diagnostics
         if: failure()
