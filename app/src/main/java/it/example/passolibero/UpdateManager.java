@@ -53,13 +53,18 @@ public final class UpdateManager {
     /** La sorgente deve essere un tag e un nome APK deterministici, non URL arbitrari dal JSON. */
     public static Offer check(String channel, String packageName, long installedCode)
             throws Exception {
+        return check(channel, packageName, installedCode, new GithubReleaseMetadataAdapter());
+    }
+
+    /** Package-private injection point for isolated metadata fixtures; production URL stays fixed. */
+    static Offer check(String channel, String packageName, long installedCode,
+                       UpdateManifestPort manifest) throws Exception {
         String tag = CHANNEL_DEBUG.equals(channel) ? DEBUG_TAG
                 : CHANNEL_STABLE.equals(channel) ? STABLE_TAG
                 : null;
         if (tag == null) throw new IOException("Canale non valido");
 
         // Il tag è già stato scelto da una whitelist: nessun URL dal manifest.
-        UpdateManifestPort manifest = new GithubReleaseMetadataAdapter();
         String json = manifest.read(BASE + tag + "/update.json");
         if (json == null) return null; // HTTP 404, nessuna release per il canale.
         JSONObject data = new JSONObject(json);
@@ -145,15 +150,20 @@ public final class UpdateManager {
                 || archive.getLongVersionCode() <= installed.getLongVersionCode()) {
             throw new IOException("Pacchetto o versione non compatibili");
         }
-        Signature[] expected = installed.signingInfo.getApkContentsSigners();
-        Signature[] actual = archive.signingInfo.getApkContentsSigners();
+        verifySigningIdentity(installed.signingInfo.getApkContentsSigners(),
+                archive.signingInfo.getApkContentsSigners(), offer.certificateSha256);
+    }
+
+    /** Identical signing checks used by the APK verifier, callable with synthetic test signers. */
+    static void verifySigningIdentity(Signature[] expected, Signature[] actual,
+                                      String certificateSha256) throws Exception {
         if (expected == null || actual == null || expected.length != actual.length
                 || expected.length != 1 || !Arrays.equals(expected[0].toByteArray(),
                 actual[0].toByteArray())) {
             throw new IOException("Firma dell'APK diversa da quella installata");
         }
         MessageDigest certDigest = MessageDigest.getInstance("SHA-256");
-        if (!hex(certDigest.digest(actual[0].toByteArray())).equals(offer.certificateSha256)) {
+        if (!hex(certDigest.digest(actual[0].toByteArray())).equals(certificateSha256)) {
             throw new IOException("Certificato dell'APK diverso da quello dichiarato");
         }
     }
