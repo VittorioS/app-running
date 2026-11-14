@@ -26,8 +26,8 @@ import org.junit.runner.RunWith;
 public final class UpdateManifestFailClosedInstrumentedTest {
     private static final String PACKAGE = "it.example.passolibero";
     private static final String TAG = "debug-pr-2";
-    private static final String HASH = "a".repeat(64);
-    private static final String CERT = "b".repeat(64);
+    private static final String HASH = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private static final String CERT = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     private static final long INSTALLED = 100;
     private static final long OFFERED = 101;
     private static final String TRUSTED_MANIFEST =

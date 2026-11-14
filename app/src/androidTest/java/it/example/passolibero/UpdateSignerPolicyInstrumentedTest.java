@@ -73,7 +73,7 @@ public final class UpdateSignerPolicyInstrumentedTest {
         disposableAndroid11Only();
         Signature signer = signer(1);
         assertRejected(new Signature[] {signer}, new Signature[] {signer},
-                "0".repeat(64), "Certificato dell'APK diverso da quello dichiarato");
+                "0000000000000000000000000000000000000000000000000000000000000000", "Certificato dell'APK diverso da quello dichiarato");
     }
 
     @Test public void absentOrMultipleSignersAreRejected() throws Exception {
