@@ -432,3 +432,54 @@ verificate al gate #38; i test su emulatore Android 11 non le
 sostituiscono. Regressione su UNKNOWN, storico, recovery, duplicazione
 sessioni o GPS/FGS implica stop a P4b e rivalutazione della #24.
 Rollback: revert della singola PR senza migrazione dati.
+
+## 21. Settimo seam P4b (issue #25): affidabilità della categoria gait
+
+```text
+TrackingService.advanceTimeline() (legacy, invariato)
+  -> MotionTimeline.advance(nowMs, MOVING, activity) (legacy)
+     -> se !isMoving(committed): conferma movimento (predicato P4b già isolato)
+        -> domain/tracking/ReliableGaitPolicy.hasKnownGait(activity name)
+           [true solo per RUN o WALK]
+        -> [true] committed = activity; [false] MOVING_UNKNOWN (legacy)
+        -> displayed = committed, credit(committed, unresolvedMs) (legacy)
+     -> altrimenti: MOVING già confermato, credit(committed, unresolvedMs)
+        -> domain/tracking/ReliableGaitPolicy.hasKnownGait(activity name)
+           [true solo per RUN o WALK]
+        -> [true] committed/displayed = activity
+           [false] committed/displayed = MOVING_UNKNOWN (legacy)
+        -> credit(committed, dt) (legacy)
+```
+
+Il seam estrae una **sola decisione riutilizzata in due call site**:
+`activity == RUN || activity == WALK` diventa
+`ReliableGaitPolicy.hasKnownGait(activityName)`. Il boundary legacy
+traduce il valore dell'enum con `activity.name()`; un input
+`activity == null` viene passato come `null`, mantenendo lo stesso
+fallback `MOVING_UNKNOWN` del confronto precedente, senza eccezioni
+nuove. La policy pura non conosce `MovementClassifier`, Android,
+application, platform o altri componenti legacy.
+
+Il ledger conserva i rami `MOVING` pendente/confermato, la conferma
+temporale, il riaccredito dei periodi `UNCERTAIN` al movimento
+precedente, lo stato `committed/displayed`, tutti i contatori e
+l'ordine dei `credit`. `isMoving(committed)`, che comprende anche
+`MOVING_UNKNOWN`, resta volutamente **distinto** dal riconoscimento
+di una categoria gait affidabile; nessuna modifica a STOP, gap worker,
+restore, Service o persistenza.
+
+**G1 precedente:** PR #103 integrata su `main` prima del cambio, con
+sei test di transizione `RUN/WALK/MOVING_UNKNOWN`, fallback, ripresa
+da UNCERTAIN/STOP, callback stale e gap worker, con ledger conservativo.
+Nuova verifica diretta: equivalenza del predicato per i cinque stati
+di `MovementClassifier.Kind`, `null` e stringhe non riconosciute.
+Il runner JVM portabile include esplicitamente la nuova classe nel
+comando `javac`.
+
+**Deroga #24/G3:** la modifica è una comparazione pura equivalente,
+non altera materialmente START/STOP, process death, FGS, GPS/step,
+recovery, SQLite/Preferences, UI o sequenze di effetti. I G3 fisici
+differiti in #24 restano **NON PASS**, da riesaminare a #38; l'emulatore
+Android 11 non li sostituisce. In caso di regressione su UNKNOWN,
+contabilità, dati, recovery, sessioni duplicate o GPS/FGS, sospendere
+P4b e rivalutare #24. Rollback: revert della sola PR senza migrazioni.
