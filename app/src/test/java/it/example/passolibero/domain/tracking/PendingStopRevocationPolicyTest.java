@@ -11,6 +11,7 @@ public final class PendingStopRevocationPolicyTest {
     @Test
     public void onlyOverlappingStepsCanRevokeAnActivePendingStop() {
         assertFalse(PendingStopRevocationPolicy.shouldRevoke(-1L, 2_000L));
+        assertFalse(PendingStopRevocationPolicy.shouldRevoke(-1L, Long.MAX_VALUE));
         assertFalse(PendingStopRevocationPolicy.shouldRevoke(2_000L, 1_999L));
         assertTrue(PendingStopRevocationPolicy.shouldRevoke(2_000L, 2_000L));
         assertTrue(PendingStopRevocationPolicy.shouldRevoke(2_000L, 2_001L));
