@@ -390,3 +390,45 @@ restano **NON PASS** e devono essere riesaminate nel gate finale #38;
 l'emulatore API30 non le sostituisce. Se compaiono regressioni su dati,
 sessioni duplicate, UNKNOWN, recovery o GPS/FGS, fermare P4b e rivalutare
 la #24. Rollback: revert isolato della PR senza migrazioni.
+
+## 20. Sesto seam P4b (issue #25): revoca dello STOP pendente da step tardivo
+
+```text
+TrackingService callback step/contatore (legacy, invariato)
+  -> MotionTimeline.observeDelayedStep(stepMs) (legacy)
+     -> domain/tracking/PendingStopRevocationPolicy.shouldRevoke(
+            stopSince, stepMs)
+        [true solo se stopSince >= 0 && stepMs >= stopSince]
+     -> [true] unknownMs += stopPendingMs;
+        stopPendingMs = 0; stopSince = -1 (ledger legacy)
+```
+
+Il seam estrae **soltanto** il predicato booleano `stopSince >= 0 &&
+stepMs >= stopSince` in `domain/tracking/PendingStopRevocationPolicy`,
+senza calcolare nuove durate, introdurre clock o cambiare l'ordine delle
+condizioni. I timestamp sono passati identici; il sentinel `stopSince = -1`
+continua a rappresentare l'assenza di un pending-stop. Uno step esattamente
+all'istante iniziale della sosta pendente revoca, uno precedente no.
+
+`MotionTimeline` mantiene l'intera mutazione di `unknownMs`,
+`stopPendingMs` e `stopSince`, senza variazioni a `finish()`,
+`restore()`, `advance()` o al ledger conservativo. La policy è Java
+puro, non importa classi legacy, Android, application o platform. Restano
+immutati il filtro dei report del contapassi, il worker, la latenza di
+delivery, GPS e ogni altro callback del Service.
+
+**G1 precedente:** PR #101 integrata prima del cambio, con sei test
+deterministici per confini step/stop, duplicati, secondo pending, stop
+confermato, blackout worker, report cumulativi e UNCERTAIN. La nuova PR
+aggiunge un test di equivalenza della condizione per coppie di `long`
+ai confini, inclusi valori negativi ed estremi, e include la nuova
+classe in `tests/run-core-tests.sh` per il `javac` portabile.
+
+**Deroga #24 / G3:** la singola sostituzione del predicato non modifica
+materialmente START/STOP, process death, restore, GPS/step sampling,
+servizio foreground, SQLite/Preferences o i side effect. Le prove G3
+fisiche rare differite della #24 restano **NON PASS** e dovranno essere
+verificate al gate #38; i test su emulatore Android 11 non le
+sostituiscono. Regressione su UNKNOWN, storico, recovery, duplicazione
+sessioni o GPS/FGS implica stop a P4b e rivalutazione della #24.
+Rollback: revert della singola PR senza migrazione dati.

@@ -1,6 +1,7 @@
 package it.example.passolibero;
 
 import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
+import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
 import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
 import it.example.passolibero.domain.tracking.UncertaintyGracePolicy;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
@@ -135,7 +136,7 @@ public final class MotionTimeline {
      * leave that interval unknown rather than inventing continuous walking.
      */
     public void observeDelayedStep(long stepMs) {
-        if (stopSince >= 0 && stepMs >= stopSince) {
+        if (PendingStopRevocationPolicy.shouldRevoke(stopSince, stepMs)) {
             unknownMs += stopPendingMs;
             stopPendingMs = 0;
             stopSince = -1;
