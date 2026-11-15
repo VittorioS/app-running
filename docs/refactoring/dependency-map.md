@@ -190,3 +190,29 @@ Intent(action) -> TrackingService.onStartCommand (legacy)
 
 `TrackingCommandClassifier` dipende solo da `String` e Java; non importa `Intent`, `Service`, `TrackingService` né platform. Il Service conserva firme, token e return code, la lettura degli extra sprint soltanto nel branch pertinente, il controllo GPS/permessi e l'ordine `startForeground` → enqueue `initializeTracking`. FGS, worker, recovery e STOP non sono stati spostati né testati end-to-end in questo seam.
 
+## 15. Primo seam P4b (issue #25): invalidazione dell'evidenza di andatura
+
+```text
+TrackingService.advanceTimeline (legacy, worker Android)
+    -> MotionTimeline.advance(...) / visible() (ledger legacy invariato)
+    -> application/tracking/TrackingGaitTransition.shouldInvalidateGait(
+           previous.name(), current.name()) (decisione pura)
+    -> [se true] ActivityEvidence.onMotionState(current) (effetto legacy)
+    -> applyTimeline() / SessionMotionVoiceEvents.observe(...) (ordine invariato)
+```
+
+Il primo seam P4b sposta **soltanto** il predicato «stato visibile cambiato verso
+`STILL` oppure `UNKNOWN`» in `application/tracking`. Il contratto di ingresso
+è costituito dai nomi stabili dell'enum `MovementClassifier.Kind`; la conversione
+`name()` avviene nel Service legacy, senza dipendenza `application` → package legacy.
+L'application restituisce una decisione booleana senza side effect e il Service
+mantiene il reset di `ActivityEvidence` **dopo** l'avanzamento del ledger e **prima**
+della proiezione in `RunState` e degli annunci vocali.
+
+Baseline G1: la PR #91 caratterizza WALK/STOP, UNKNOWN, callback fuori ordine e gap
+worker. La PR di questo seam aggiunge la parità esaustiva della decisione per
+tutte le coppie di `Kind` esistenti. Nessun cambio di soglie, intervalli, GPS,
+step, snapshot, Preferences, SQLite, START/STOP, foreground o voce. Il Service
+e `MotionTimeline` rimangono legacy; la migrazione di altre transizioni richiede
+PR separate. I test JVM non sostituiscono il collaudo hardware G3 differito di
+#24 né la review e i check `verify`/`android11`.
