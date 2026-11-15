@@ -30,6 +30,7 @@ import java.util.Locale;
 
 import it.example.passolibero.application.tracking.SessionEntryCoordinator;
 import it.example.passolibero.application.tracking.TrackingCommandClassifier;
+import it.example.passolibero.application.tracking.TrackingGaitTransition;
 import it.example.passolibero.application.tracking.TrackingStartupCoordinator;
 import it.example.passolibero.domain.SessionRecoveryPolicy;
 import it.example.passolibero.domain.ForegroundStartPolicy;
@@ -629,8 +630,7 @@ public final class TrackingService extends Service implements LocationListener, 
         motionTimeline.advance(now, evidence, freshActivity,
                 cumulativeSteps ? StepCounterEvidence.STOP_CONFIRM_MS : 0);
         MovementClassifier.Kind current = motionTimeline.visible();
-        if (previous != current && (current == MovementClassifier.Kind.STILL
-                || current == MovementClassifier.Kind.UNKNOWN)) {
+        if (TrackingGaitTransition.shouldInvalidateGait(previous.name(), current.name())) {
             // A confirmed stop or loss of evidence invalidates the old gait.
             activityEvidence.onMotionState(current);
         }
