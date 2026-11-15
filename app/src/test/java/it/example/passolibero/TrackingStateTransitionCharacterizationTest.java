@@ -32,10 +32,8 @@ public final class TrackingStateTransitionCharacterizationTest {
         timeline.advance(
                 0, MotionEvidencePolicy.Evidence.UNCERTAIN, MovementClassifier.Kind.UNKNOWN);
         // Simulate fresh, independently confirmed WALK evidence from accepted fixes.
-        activity.observe(1000, 1000, 4, 2, 6);
-        activity.observe(2000, 2000, 4, 2, 6);
-        activity.observe(3000, 3000, 4, 2, 6);
         for (long nowMs = 1000; nowMs <= 3000; nowMs += 1000) {
+            activity.observe(nowMs, nowMs, 4, 2, 6);
             timeline.advance(
                     nowMs, MotionEvidencePolicy.Evidence.MOVING, activity.current(nowMs));
         }
