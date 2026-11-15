@@ -298,3 +298,48 @@ della #24 rimangono **NON PASS**; il gate finale è #38. Qualsiasi regressione
 su recupero, doppie sessioni, tempi UNKNOWN, dati, GPS o FGS ferma il lotto
 P4b e richiede nuova valutazione in #24. Rollback: revert isolato della PR,
 senza migrazioni dati.
+
+## 18. Quarto seam P4b (issue #25): conferma dell'inizio movimento
+
+```text
+TrackingService.advanceTimeline() (legacy, invariato)
+    -> MotionTimeline.advance(nowMs, evidence, activity) (legacy)
+       -> timestamp/callback monotoni e filtro del worker gap (invariati)
+       -> ramo MOVING, dopo la gestione di uncertainty/stop (invariata)
+          -> if (!isMoving(committed)) (legacy)
+             -> movingSince = nowMs - dt, se non ancora inizializzato
+             -> unresolvedMs += dt
+             -> domain/tracking/MovementStartConfirmationPolicy.isConfirmed(
+                    nowMs - movingSince)
+                [true se durata >= 2_000 ms]
+             -> [true] attribuzione del gait e credito dei pending nel ledger
+                (legacy, ordine e contatori invariati)
+```
+
+La PR sposta **soltanto** la decisione booleana `nowMs - movingSince >=
+START_CONFIRM_MS` nel Domain puro, con `START_CONFIRM_MS = 2_000L`
+definito in `MovementStartConfirmationPolicy`. Nessun input viene ricalcolato:
+la sottrazione resta nel ledger, dopo l'inizializzazione del timestamp di
+inizio e l'accredito del `dt` pendente. Il Domain non importa classi legacy,
+Android, application o platform.
+
+Il ledger conserva i rami di evidenza, i return, l'ordine dei callback,
+`movingSince` e `unresolvedMs`, la scelta di `RUN`/`WALK`/
+`MOVING_UNKNOWN` al momento della conferma, lo stato `committed`/
+`displayed` e tutti i side effect. Nessuna modifica a `TrackingService`,
+`RunState`, `TrackerDb`, GPS, step, voce o lifecycle.
+
+**Baseline G1:** PR #97, mergiata prima dell'estrazione, con soglia di
+1.999/2.000 ms, gait al momento della conferma, stop della sessione prima
+di confermare, interruzione UNCERTAIN e ripartenza da STILL; ogni test
+verifica la conservazione temporale. Questa PR aggiunge test unitari di
+parità per i confini e gli estremi di tipo `long` e include la classe
+nel `javac` portabile in `tests/run-core-tests.sh`.
+
+**Deroga #24 / G3:** nessuna modifica materiale a START/STOP, FGS,
+process death, recovery, sensori, persist SQLite/Preferences o ordine
+degli effetti. Restano **non superate** le prove fisiche Android 11
+differite nella #24, richieste per il gate finale #38. Una regressione
+su UNKNOWN, recovery, duplicazione sessioni, GPS/FGS o dati storici ferma
+P4b e richiede rivalutazione della #24. Rollback: revert della singola
+PR, senza migrazione dati.
