@@ -40,7 +40,8 @@ public final class TrackingStateTransitionCharacterizationTest {
                     nowMs, MotionEvidencePolicy.Evidence.MOVING, activity.current(nowMs));
         }
         assertEquals(MovementClassifier.Kind.WALK, timeline.visible());
-        assertEquals(3000, timeline.walkMs());
+        assertEquals(1000, timeline.walkMs());
+        assertEquals(2000, timeline.movingUnknownMs());
 
         for (long nowMs = 4000; nowMs <= 7000; nowMs += 1000) {
             MovementClassifier.Kind previous = timeline.visible();
@@ -58,7 +59,8 @@ public final class TrackingStateTransitionCharacterizationTest {
         }
         assertEquals(MovementClassifier.Kind.STILL, timeline.visible());
         assertEquals(MovementClassifier.Kind.UNKNOWN, activity.current(7000));
-        assertEquals(3000, timeline.walkMs());
+        assertEquals(1000, timeline.walkMs());
+        assertEquals(2000, timeline.movingUnknownMs());
         assertEquals(4000, timeline.stillMs());
         assertConserved(timeline, 7000);
     }
