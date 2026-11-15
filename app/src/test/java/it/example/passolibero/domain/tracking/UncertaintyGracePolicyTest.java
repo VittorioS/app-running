@@ -21,8 +21,7 @@ public final class UncertaintyGracePolicyTest {
     public void retainsExactComparisonForAllBoundaryAndExtremeLongInputs() {
         for (long elapsedMs :
                 new long[] {
-                    Long.MIN_VALUE, -5_000L, -1L, 0L, 1L, 4_999L, 5_000L, 5_001L,
-                    Long.MAX_VALUE
+                    Long.MIN_VALUE, -5_000L, -1L, 0L, 1L, 4_999L, 5_000L, 5_001L, Long.MAX_VALUE
                 }) {
             assertEquals(
                     "uncertainty elapsed " + elapsedMs,
