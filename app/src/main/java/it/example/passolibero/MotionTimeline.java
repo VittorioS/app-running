@@ -1,5 +1,6 @@
 package it.example.passolibero;
 
+import it.example.passolibero.domain.tracking.ConfirmedMotionPolicy;
 import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
 import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
 import it.example.passolibero.domain.tracking.ReliableGaitPolicy;
@@ -46,7 +47,8 @@ public final class MotionTimeline {
         if (evidence == MotionEvidencePolicy.Evidence.MOVING) {
             // Unobserved startup/downtime must not become RUN retrospectively.
             if (uncertainSince >= 0) {
-                if (isMoving(committed)) credit(committed, unresolvedMs);
+                if (ConfirmedMotionPolicy.isMoving(committed == null ? null : committed.name()))
+                    credit(committed, unresolvedMs);
                 else unknownMs += unresolvedMs;
                 unresolvedMs = 0;
             }
@@ -57,7 +59,7 @@ public final class MotionTimeline {
                 stopPendingMs = 0;
                 stopSince = -1;
             }
-            if (!isMoving(committed)) {
+            if (!ConfirmedMotionPolicy.isMoving(committed == null ? null : committed.name())) {
                 // Movement confirmation is independent of gait classification.
                 if (movingSince < 0) movingSince = nowMs - dt;
                 unresolvedMs += dt;
@@ -142,11 +144,6 @@ public final class MotionTimeline {
             stopPendingMs = 0;
             stopSince = -1;
         }
-    }
-
-    private static boolean isMoving(MovementClassifier.Kind kind) {
-        return kind == MovementClassifier.Kind.RUN || kind == MovementClassifier.Kind.WALK
-                || kind == MovementClassifier.Kind.MOVING_UNKNOWN;
     }
 
     /** Resolve incomplete intervals without pretending unknown periods were stops. */
