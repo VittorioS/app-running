@@ -216,3 +216,40 @@ step, snapshot, Preferences, SQLite, START/STOP, foreground o voce. Il Service
 e `MotionTimeline` rimangono legacy; la migrazione di altre transizioni richiede
 PR separate. I test JVM non sostituiscono il collaudo hardware G3 differito di
 #24 né la review e i check `verify`/`android11`.
+
+## 16. Secondo seam P4b (issue #25): decisione sul gap di callback non osservato
+
+```text
+TrackingService.advanceTimeline / callback worker (legacy, invariati)
+    -> MotionTimeline.advance(nowMs, evidence, activity) (legacy)
+        -> calcola dt dopo il controllo monotono (invariato)
+        -> domain/tracking/UnobservedIntervalPolicy.isUnobservedGap(dt)
+            [true solo per dt > 5_000 ms]
+        -> [true] finish(), accredito dt in UNKNOWN, reset visibile
+            e ritorno anticipato (restano nel ledger legacy)
+        -> [false] normali transizioni e contabilizzazione (invariati)
+```
+
+Il seam estrae **soltanto** la decisione booleana `dt > UNKNOWN_GRACE_MS`.
+La soglia costante di **5.000 ms**, precedentemente privata in `MotionTimeline`,
+è ora condivisa tramite `UnobservedIntervalPolicy.UNKNOWN_GRACE_MS`: anche la
+comparazione già esistente `nowMs - uncertainSince < UNKNOWN_GRACE_MS` mantiene
+gli stessi operandi, l'ordine e la stessa soglia. Rimangono invariati i controlli
+per callback fuori ordine, il calcolo di `dt`, la risoluzione dei periodi
+`pending` in `finish()`, gli accrediti `UNKNOWN`, lo stato `committed`/
+`displayed`, il reset dei contatori temporali e l'ordine degli effetti.
+
+**G1 preesistente:** PR #93 integrata con test di caratterizzazione dei limiti
+5.000/5.001 ms, callback duplicate/stale, STOP non confermato e conservazione del
+ledger. La nuova suite JVM confronta l'esatta decisione con il confronto legacy,
+anche per zero, negativo ed estremi del tipo `long`.
+
+**Valutazione deroga #24:** questa estrazione non altera materialmente
+START/STOP, inizializzazione, resume/process death, frequenza GPS, servizio
+foreground, persistenza SQLite/Preferences o side effect: la decisione riceve
+esattamente il `dt` calcolato dal ledger e restituisce lo stesso booleano.
+Non sono aggiunti call site né viene modificato il recupero di sessione.
+I rari casi G3 fisici differiti di #24 restano **non verificati** e necessari
+per il gate finale #38; CI emulata non li sostituisce. In caso di regressione
+su recovery, dati, GPS/FGS o tempi UNKNOWN: stop del lotto P4b e analisi in #24.
+Rollback: revert della singola PR senza migrazioni.

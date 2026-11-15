@@ -1,5 +1,7 @@
 package it.example.passolibero;
 
+import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
+
 /**
  * Monotonic-time interval ledger. Pending stop intervals are attributed to the
  * previous activity if motion resumes before confirmation. UI never shows a
@@ -9,7 +11,6 @@ public final class MotionTimeline {
     private static final long STRONG_STOP_MS = 4_000;
     private static final long MODERATE_STOP_MS = 8_000;
     private static final long START_CONFIRM_MS = 2_000;
-    private static final long UNKNOWN_GRACE_MS = 5_000;
     private MovementClassifier.Kind committed = MovementClassifier.Kind.UNKNOWN;
     private MovementClassifier.Kind displayed = MovementClassifier.Kind.UNKNOWN;
     private long lastMs = -1, stopSince = -1, movingSince = -1, uncertainSince = -1;
@@ -27,7 +28,7 @@ public final class MotionTimeline {
         if (nowMs <= lastMs) return;
         long dt = nowMs - lastMs;
         lastMs = nowMs;
-        if (dt > UNKNOWN_GRACE_MS) {
+        if (UnobservedIntervalPolicy.isUnobservedGap(dt)) {
             // A suspended worker is unobserved time, even when its first new
             // callback contains evidence of movement or stillness right now.
             finish();
@@ -116,7 +117,7 @@ public final class MotionTimeline {
             stopSince = -1;
         }
         if (uncertainSince < 0) uncertainSince = nowMs - dt;
-        if (nowMs - uncertainSince < UNKNOWN_GRACE_MS) {
+        if (nowMs - uncertainSince < UnobservedIntervalPolicy.UNKNOWN_GRACE_MS) {
             unresolvedMs += dt;
         } else {
             unknownMs += unresolvedMs + dt;
