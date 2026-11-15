@@ -483,3 +483,56 @@ differiti in #24 restano **NON PASS**, da riesaminare a #38; l'emulatore
 Android 11 non li sostituisce. In caso di regressione su UNKNOWN,
 contabilità, dati, recovery, sessioni duplicate o GPS/FGS, sospendere
 P4b e rivalutare #24. Rollback: revert della sola PR senza migrazioni.
+
+## 22. Ottavo seam P4b (issue #25): riconoscimento del movimento già confermato
+
+```text
+TrackingService.advanceTimeline() (legacy, invariato)
+  -> MotionTimeline.advance(nowMs, MOVING, activity) (legacy)
+     -> se uncertainSince >= 0 (legacy):
+        -> domain/tracking/ConfirmedMotionPolicy.isMoving(committed name)
+           [true: RUN / WALK / MOVING_UNKNOWN]
+        -> [true] credit(committed, unresolvedMs)
+           [false] unknownMs += unresolvedMs (ledger legacy)
+     -> dopo il reset di stopSince e relative attribuzioni (legacy):
+        -> domain/tracking/ConfirmedMotionPolicy.isMoving(committed name)
+           [false] avvia la conferma MOVING da 2.000 ms (ledger legacy)
+           [true] prosegue il MOVING già confermato (ledger legacy)
+```
+
+L'estrazione riguarda **una sola classificazione di stato**, riutilizzata in
+due punti: il predicato privato legacy `isMoving(committed)` equivale a
+`committed == RUN || committed == WALK || committed == MOVING_UNKNOWN`.
+Il nuovo `ConfirmedMotionPolicy.isMoving(String)` confronta i medesimi
+nomi dell'enum; il boundary legacy passa `committed.name()` oppure
+`null` senza introdurre nuove eccezioni. Il predicato precedente è
+rimosso, senza spostare gli effetti del chiamante. `ReliableGaitPolicy`
+(§21) continua a significare **solo RUN/WALK affidabili** e NON deve
+essere usata per determinare se un MOVING_UNKNOWN è già confermato.
+
+Il ledger conserva i test `uncertainSince` e `stopSince`, il
+`MovementStartConfirmationPolicy` dei 2 secondi, tutte le assegnazioni
+a `committed/displayed`, i `credit` e `unknownMs`, i tempi
+pendenti, la gestione delle evidenze STILL e dei gap, `finish()`,
+`restore()` e l'ordine dei callback. Nessuna nuova dipendenza dal
+Domain verso classi legacy, Android o application; nessuna modifica
+a `TrackingService` o a persistenza.
+
+**G1 prima del codice produttivo:** i sei test di transizione gait di
+PR #103 erano già integrati, con CI post-merge `verify`/
+`android11` verdi; sul branch presente sono stati aggiunti prima
+della modifica tre test di caratterizzazione su MOVING_UNKNOWN dopo
+UNCERTAIN, ripartenza da STILL e gap worker prima di applicare il
+cambio di produzione. Un test diretto confronta tutte le cinque
+varianti `MovementClassifier.Kind` con il predicato originale e
+verifica `null`/valori non riconosciuti; il runner portabile compila
+la nuova policy nell'elenco esplicito `javac`.
+
+**Rischio/G3 #24:** singola classificazione pura senza modificare
+materialmente START/STOP, FGS, GPS, recovery, process death,
+SQLite/Preferences, snapshot, UI, sensori, endpoint o permessi. Le
+prove fisiche G3 rare rinviate dalla #24 restano **NON PASS** e
+richiedono valutazione finale al gate #38. Se compaiono regressioni
+su UNKNOWN, contabilità, dati, recovery, sessioni duplicate, GPS/FGS
+sospendere P4b e riesaminare #24. Rollback: revert isolato della PR,
+nessuna migrazione dati.
