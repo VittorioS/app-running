@@ -1,6 +1,7 @@
 package it.example.passolibero;
 
 import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
+import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
 import it.example.passolibero.domain.tracking.UncertaintyGracePolicy;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
 
@@ -100,7 +101,7 @@ public final class MotionTimeline {
             long required = evidence == MotionEvidencePolicy.Evidence.STILL_STRONG
                     ? STRONG_STOP_MS : MODERATE_STOP_MS;
             required = Math.max(required, minimumStopMs);
-            if (nowMs - stopSince >= required) {
+            if (StopConfirmationPolicy.isConfirmed(nowMs - stopSince, required)) {
                 committed = MovementClassifier.Kind.STILL;
                 displayed = MovementClassifier.Kind.STILL;
                 stillMs += stopPendingMs;

@@ -343,3 +343,50 @@ differite nella #24, richieste per il gate finale #38. Una regressione
 su UNKNOWN, recovery, duplicazione sessioni, GPS/FGS o dati storici ferma
 P4b e richiede rivalutazione della #24. Rollback: revert della singola
 PR, senza migrazione dati.
+
+## 19. Quinto seam P4b (issue #25): decisione di conferma della sosta
+
+```text
+TrackingService.advanceTimeline() (legacy, invariato)
+  -> MotionTimeline.advance(nowMs, evidence, activity, minimumStopMs)
+     -> filtro timestamp e gap non osservato (invariati)
+     -> ramo STILL_STRONG / STILL_MODERATE (legacy)
+        -> gestione STILL già confermato (legacy)
+        -> stopSince inizializzato, stopPendingMs += dt (legacy)
+        -> required = evidenza corrente ? 4_000 ms : 8_000 ms (legacy)
+        -> required = Math.max(required, minimumStopMs) (legacy)
+        -> domain/tracking/StopConfirmationPolicy.isConfirmed(
+               nowMs - stopSince, required)
+           [true solo se elapsedStillEvidenceMs >= requiredStopMs]
+        -> [true] committed/displayed = STILL; stillMs += stopPendingMs;
+           unknownMs += unresolvedMs; reset pending (legacy)
+```
+
+Il seam sposta **soltanto** il confronto booleano `nowMs - stopSince >=
+required` in una policy pura di dominio. La sottrazione `nowMs - stopSince`
+resta nel ledger, così come le soglie originali `STRONG_STOP_MS = 4_000`
+e `MODERATE_STOP_MS = 8_000`, la selezione sulla **evidenza corrente** e
+l'override `Math.max(required, minimumStopMs)` per la latenza dei report
+cumulativi del contapassi (tipicamente `StepCounterEvidence.STOP_CONFIRM_MS
+= 12_000`). Non cambia alcuna condizione di conferma, neppure al bordo.
+
+Il domain non conosce `MotionEvidencePolicy`, `MotionTimeline`, i sensori,
+Android, application né classi legacy. `TrackingService`, l'ordine dei
+callback e dei side effect, l'attribuzione dei microstop, il trattamento dei
+report di passi ritardati, `unknownMs`, `stillMs`, `runMs`, `finish()`
+e `restore()` restano invariati.
+
+**G1 prima del cambio:** PR #99, test di caratterizzazione STOP forte a
+3.999/4.000 ms, moderato a 7.999/8.000 ms, budget di ritardo a 12.000 ms,
+alternanza forza evidenza, microstop, report step sovrapposti, gap worker,
+conservazione del ledger. La PR presente aggiunge test unitari sulla parità
+del predicato ai confini e per estremi `long`; il runner JVM portabile
+include esplicitamente il file nel comando `javac`.
+
+**Valutazione deroga #24/G3:** seam deterministico senza modifica materiale
+a GPS, sensori, FGS, START/STOP, process death, recovery, SQLite,
+SharedPreferences, snapshot o UI. Le prove fisiche differite dalla #24
+restano **NON PASS** e devono essere riesaminate nel gate finale #38;
+l'emulatore API30 non le sostituisce. Se compaiono regressioni su dati,
+sessioni duplicate, UNKNOWN, recovery o GPS/FGS, fermare P4b e rivalutare
+la #24. Rollback: revert isolato della PR senza migrazioni.
