@@ -253,3 +253,48 @@ I rari casi G3 fisici differiti di #24 restano **non verificati** e necessari
 per il gate finale #38; CI emulata non li sostituisce. In caso di regressione
 su recovery, dati, GPS/FGS o tempi UNKNOWN: stop del lotto P4b e analisi in #24.
 Rollback: revert della singola PR senza migrazioni.
+
+## 17. Terzo seam P4b (issue #25): scadenza dell'incertezza continua
+
+```text
+TrackingService.advanceTimeline() (legacy, invariato)
+    -> MotionTimeline.advance(nowMs, evidence, activity) (legacy)
+        -> ramo MOVING / STILL (ordine invariato)
+        -> ramo UNCERTAIN con uncertainSince inizializzato come prima
+           -> domain/tracking/UncertaintyGracePolicy.shouldKeepPending(
+                  nowMs - uncertainSince)
+              [true solo se durata < 5_000 ms]
+           -> [true] accumulo unresolvedMs += dt (legacy)
+           -> [false] unknownMs += unresolvedMs + dt;
+              committed/displayed = UNKNOWN (legacy)
+```
+
+La PR estrae **soltanto** il predicato `nowMs - uncertainSince <
+UnobservedIntervalPolicy.UNKNOWN_GRACE_MS` in una decisione pura del Domain.
+La nuova `UncertaintyGracePolicy` usa la **stessa costante di 5.000 ms**
+già condivisa con `UnobservedIntervalPolicy`, senza crearne una seconda.
+La differenza è funzionale: l'estrazione precedente #94 gestiva il **gap
+tra due callback** (`dt > 5.000`), mentre questo seam gestisce la **durata
+cumulativa di evidenza UNCERTAIN** (`durata < 5.000`).
+
+Il ledger legacy conserva l'ordine dei rami `MOVING`, `STILL`, `UNCERTAIN`,
+l'inizializzazione di `uncertainSince`, il calcolo degli operandi, la
+contabilità `UNKNOWN` e `unresolved`, il reset di `committed` e
+`displayed`, `finish()`, `restore()` e le API pubbliche. Nessun
+cambiamento del `TrackingService` né nuovi side effect.
+
+**G1 caratterizzato prima della produzione:** PR #95 integrata con quattro
+test di confine 4.999/5.000 ms, recupero MOVING, incertezza iniziale e STOP
+non confermato, oltre ai test #91/#93 preesistenti. La PR di estrazione
+aggiunge un test del predicato ai confini, per numeri negativi e per gli
+estremi `long`; `tests/run-core-tests.sh` include la nuova classe Java
+nella lista esplicita di compilazione del runner.
+
+**Valutazione della deroga #24:** il cambiamento è unicamente una decisione
+senza stato con identici input e output, non altera materialmente START/STOP,
+process death, ripristino, foreground, GPS/step, SQLite, Preferences,
+snapshot, thread, voice, UI o la loro sequenza. I test G3 fisici differiti
+della #24 rimangono **NON PASS**; il gate finale è #38. Qualsiasi regressione
+su recupero, doppie sessioni, tempi UNKNOWN, dati, GPS o FGS ferma il lotto
+P4b e richiede nuova valutazione in #24. Rollback: revert isolato della PR,
+senza migrazioni dati.
