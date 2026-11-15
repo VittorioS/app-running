@@ -1,5 +1,6 @@
 package it.example.passolibero;
 
+import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
 import it.example.passolibero.domain.tracking.UncertaintyGracePolicy;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
 
@@ -11,7 +12,6 @@ import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
 public final class MotionTimeline {
     private static final long STRONG_STOP_MS = 4_000;
     private static final long MODERATE_STOP_MS = 8_000;
-    private static final long START_CONFIRM_MS = 2_000;
     private MovementClassifier.Kind committed = MovementClassifier.Kind.UNKNOWN;
     private MovementClassifier.Kind displayed = MovementClassifier.Kind.UNKNOWN;
     private long lastMs = -1, stopSince = -1, movingSince = -1, uncertainSince = -1;
@@ -58,7 +58,7 @@ public final class MotionTimeline {
                 // Movement confirmation is independent of gait classification.
                 if (movingSince < 0) movingSince = nowMs - dt;
                 unresolvedMs += dt;
-                if (nowMs - movingSince >= START_CONFIRM_MS) {
+                if (MovementStartConfirmationPolicy.isConfirmed(nowMs - movingSince)) {
                     committed = (activity == MovementClassifier.Kind.RUN
                             || activity == MovementClassifier.Kind.WALK)
                             ? activity : MovementClassifier.Kind.MOVING_UNKNOWN;
