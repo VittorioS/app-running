@@ -2,6 +2,7 @@ package it.example.passolibero;
 
 import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
 import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
+import it.example.passolibero.domain.tracking.ReliableGaitPolicy;
 import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
 import it.example.passolibero.domain.tracking.UncertaintyGracePolicy;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
@@ -61,8 +62,8 @@ public final class MotionTimeline {
                 if (movingSince < 0) movingSince = nowMs - dt;
                 unresolvedMs += dt;
                 if (MovementStartConfirmationPolicy.isConfirmed(nowMs - movingSince)) {
-                    committed = (activity == MovementClassifier.Kind.RUN
-                            || activity == MovementClassifier.Kind.WALK)
+                    committed = ReliableGaitPolicy.hasKnownGait(
+                                    activity == null ? null : activity.name())
                             ? activity : MovementClassifier.Kind.MOVING_UNKNOWN;
                     displayed = committed;
                     credit(committed, unresolvedMs);
@@ -74,7 +75,7 @@ public final class MotionTimeline {
                 credit(committed, unresolvedMs);
                 unresolvedMs = 0;
                 movingSince = -1;
-                if (activity == MovementClassifier.Kind.RUN || activity == MovementClassifier.Kind.WALK) {
+                if (ReliableGaitPolicy.hasKnownGait(activity == null ? null : activity.name())) {
                     committed = activity;
                     displayed = activity;
                 } else {
