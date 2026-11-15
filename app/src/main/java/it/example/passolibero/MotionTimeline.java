@@ -1,5 +1,6 @@
 package it.example.passolibero;
 
+import it.example.passolibero.domain.tracking.UncertaintyGracePolicy;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
 
 /**
@@ -117,7 +118,7 @@ public final class MotionTimeline {
             stopSince = -1;
         }
         if (uncertainSince < 0) uncertainSince = nowMs - dt;
-        if (nowMs - uncertainSince < UnobservedIntervalPolicy.UNKNOWN_GRACE_MS) {
+        if (UncertaintyGracePolicy.shouldKeepPending(nowMs - uncertainSince)) {
             unresolvedMs += dt;
         } else {
             unknownMs += unresolvedMs + dt;

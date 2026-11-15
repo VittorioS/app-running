@@ -13,6 +13,7 @@ javac -d build-test app/src/main/java/it/example/passolibero/RunMath.java \
   app/src/main/java/it/example/passolibero/StepCounterEvidence.java \
   app/src/main/java/it/example/passolibero/MotionEvidencePolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/UnobservedIntervalPolicy.java \
+  app/src/main/java/it/example/passolibero/domain/tracking/UncertaintyGracePolicy.java \
   app/src/main/java/it/example/passolibero/MotionTimeline.java \
   app/src/main/java/it/example/passolibero/InertialGaitDetector.java \
   app/src/main/java/it/example/passolibero/RunStats.java \
