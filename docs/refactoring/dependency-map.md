@@ -536,3 +536,53 @@ richiedono valutazione finale al gate #38. Se compaiono regressioni
 su UNKNOWN, contabilità, dati, recovery, sessioni duplicate, GPS/FGS
 sospendere P4b e riesaminare #24. Rollback: revert isolato della PR,
 nessuna migrazione dati.
+
+## 23. Nono seam P4b (issue #25): scelta della soglia STOP effettiva
+
+```text
+TrackingService.advanceTimeline() (legacy, invariato)
+  -> MotionTimeline.advance(nowMs, evidence, activity, minimumStopMs) (legacy)
+     -> ramo STILL_STRONG / STILL_MODERATE, con stato pending (legacy)
+        -> stopSince e stopPendingMs (ledger legacy, invariati)
+        -> domain/tracking/EffectiveStopThresholdPolicy.requiredStopMs(
+               evidence.name(), minimumStopMs)
+           [STILL_STRONG: max(4_000, minimumStopMs);
+            ogni altra evidenza: max(8_000, minimumStopMs)]
+        -> StopConfirmationPolicy.isConfirmed(nowMs - stopSince, required)
+        -> eventuale conferma STILL e accrediti (legacy, invariati)
+```
+
+La policy pura restituisce **solo la soglia necessaria**, selezionata in ogni
+callback sulla forza dell'evidenza **corrente** e sul budget minimo corrente.
+Non memorizza il valore iniziale e non anticipa/ritarda la valutazione:
+il ramo legacy chiama ancora `StopConfirmationPolicy.isConfirmed` nello
+stesso punto, con la stessa sottrazione `nowMs - stopSince`. La precedente
+espressione `Math.max(evidence == STILL_STRONG ? 4_000 : 8_000,
+minimumStopMs)` è riprodotta anche per zero, valori negativi ed estremi
+`long`. La chiamata si trova solo nel ramo STILL; `evidence.name()`
+usa l'enum non-null già richiesto dal ramo, senza modifiche alle API.
+
+`TrackingService`, frequenza e ordine dei callback, classificazione gait,
+`stopSince`, `stopPendingMs`, `unresolvedMs`, `stillMs`, `unknownMs`,
+`committed/displayed`, `finish()`, `restore()`, GPS, sensori, FGS,
+START/STOP, recovery, SQLite/Preferences, snapshot, voce e UI non cambiano.
+La dipendenza punta dal ledger legacy al Domain Java puro, senza dipendenze
+in senso contrario né nuovi port. Il runner JVM portabile include la nuova
+classe nel comando `javac` esplicito.
+
+**G1 precedente:** PR #106, merged su `main` commit
+`60801ef24741a3d14020a0135ea8aadb26b842f6`, CI post-merge
+[#43940779400](https://github.com/VittorioS/app-running/actions/runs/43940779400)
+`verify=success` e `android11=success`. I sei test di caratterizzazione
+coprono soglie 4/8/12 secondi, budget che cambia durante STOP pending,
+forza corrente e conservazione del ledger. Il nuovo test di policy
+confronta la formula legacy con i risultati su confini ed estremi `long`
+e prova che ogni invocazione non conserva stato.
+
+**Deroga #24/G3:** il cambio non modifica materialmente il ciclo di vita
+Android, recovery, i sensori o la persistenza. Le prove G3 rare differite
+della #24 restano **NON PASS**, da affrontare nel gate finale #38; la CI su
+emulatore API30 non equivale a prove fisiche. Regressioni su UNKNOWN,
+storico, sessioni duplicate, recupero o GPS/FGS sospendono P4b e richiedono
+rivalutazione della #24. Rollback: revert isolato di questa PR, senza
+migrazioni dati, firma o release.
