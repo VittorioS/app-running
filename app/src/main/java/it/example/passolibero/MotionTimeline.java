@@ -1,6 +1,7 @@
 package it.example.passolibero;
 
 import it.example.passolibero.domain.tracking.ConfirmedMotionPolicy;
+import it.example.passolibero.domain.tracking.EffectiveStopThresholdPolicy;
 import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
 import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
 import it.example.passolibero.domain.tracking.ReliableGaitPolicy;
@@ -14,8 +15,6 @@ import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
  * stop candidate; a confirmed stop is backdated to the first strong evidence.
  */
 public final class MotionTimeline {
-    private static final long STRONG_STOP_MS = 4_000;
-    private static final long MODERATE_STOP_MS = 8_000;
     private MovementClassifier.Kind committed = MovementClassifier.Kind.UNKNOWN;
     private MovementClassifier.Kind displayed = MovementClassifier.Kind.UNKNOWN;
     private long lastMs = -1, stopSince = -1, movingSince = -1, uncertainSince = -1;
@@ -102,9 +101,8 @@ public final class MotionTimeline {
             }
             if (stopSince < 0) stopSince = nowMs - dt;
             stopPendingMs += dt;
-            long required = evidence == MotionEvidencePolicy.Evidence.STILL_STRONG
-                    ? STRONG_STOP_MS : MODERATE_STOP_MS;
-            required = Math.max(required, minimumStopMs);
+            long required = EffectiveStopThresholdPolicy.requiredStopMs(
+                    evidence.name(), minimumStopMs);
             if (StopConfirmationPolicy.isConfirmed(nowMs - stopSince, required)) {
                 committed = MovementClassifier.Kind.STILL;
                 displayed = MovementClassifier.Kind.STILL;
