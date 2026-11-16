@@ -586,3 +586,52 @@ emulatore API30 non equivale a prove fisiche. Regressioni su UNKNOWN,
 storico, sessioni duplicate, recupero o GPS/FGS sospendono P4b e richiedono
 rivalutazione della #24. Rollback: revert isolato di questa PR, senza
 migrazioni dati, firma o release.
+
+## 24. Decimo seam P4b (issue #25): riconoscimento dell'evidenza STILL
+
+```text
+TrackingService.advanceTimeline() (legacy, invariato)
+  -> MotionTimeline.advance(nowMs, evidence, activity, minimumStopMs)
+     -> filtro timestamp e gap worker (legacy, invariato)
+     -> MOVING prima di STILL (legacy, invariato)
+     -> domain/tracking/StillEvidencePolicy.isStill(
+            evidence == null ? null : evidence.name())
+        [true solo per STILL_STRONG e STILL_MODERATE]
+     -> [true] ramo STILL, timeout/threshold e accrediti legacy
+     -> [false] ramo UNCERTAIN e gestione UNKNOWN legacy
+```
+
+Spostato **un solo predicato booleano**: la precedente condizione
+`evidence == STILL_STRONG || evidence == STILL_MODERATE` e' ora
+`StillEvidencePolicy.isStill(String)`, che confronta i nomi immutabili
+dell'enum. Il boundary legacy passa `evidence.name()` o `null` e
+preserva la mancata conferma della sosta con input `null`. La policy
+non conosce `MotionEvidencePolicy`, Android, application, platform,
+tracking service o persistenza e non mantiene stato.
+
+L'ordine MOVING -> STILL -> UNCERTAIN resta invariato. La nuova decisione
+non modifica la scelta della soglia corrente in
+`EffectiveStopThresholdPolicy`, il confronto in
+`StopConfirmationPolicy`, `stopSince`, `movingSince`, `uncertainSince`,
+`lastMs`, `stopPendingMs`, `unresolvedMs`, `committed/displayed`,
+contatori, `finish/restore`, crediti, timestamp o side effect.
+`TrackingService`, GPS/step, FGS, START/STOP, recovery, SQLite/Prefs,
+snapshot, UI, voce, permessi, workflow e release sono invariati.
+Il runner portabile aggiunge soltanto il file sorgente alla lista `javac`.
+
+**G1 precedente:** PR #108 test-only integrata dal maintainer su `main`
+commit `f671f9489c8a0bed2c8d6c51e09087bb9119abe5`, con
+[CI post-merge #43958027141](https://github.com/VittorioS/app-running/actions/runs/43958027141)
+`verify=success`, `android11=success`, verificata prima del cambio.
+I cinque test G1 caratterizzano i rami STILL/UNCERTAIN/MOVING, stop
+pendente, ripresa e input null con ledger conservativo. Il test diretto
+della nuova policy confronta tutti gli enum legacy e gli input
+null/sconosciuti, senza modificare la baseline.
+
+**Deroga #24/G3:** classificazione deterministica senza impatto materiale
+sul lifecycle, process death, restore, FGS, GPS/step o persistenza.
+I rari test G3 fisici differiti della #24 rimangono **NON PASS** e sono
+richiesti al gate finale #38; l'emulatore non sostituisce il device.
+Una regressione UNKNOWN, storico, sessioni duplicate, recovery o GPS/FGS
+sospende P4b e richiede rivalutazione della #24. Rollback della sola PR,
+senza migrazioni.
