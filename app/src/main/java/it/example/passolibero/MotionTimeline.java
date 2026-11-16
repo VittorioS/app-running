@@ -6,6 +6,7 @@ import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
 import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
 import it.example.passolibero.domain.tracking.ReliableGaitPolicy;
 import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
+import it.example.passolibero.domain.tracking.StillEvidencePolicy;
 import it.example.passolibero.domain.tracking.UncertaintyGracePolicy;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
 
@@ -89,8 +90,7 @@ public final class MotionTimeline {
             return;
         }
         movingSince = -1;
-        if (evidence == MotionEvidencePolicy.Evidence.STILL_STRONG
-                || evidence == MotionEvidencePolicy.Evidence.STILL_MODERATE) {
+        if (StillEvidencePolicy.isStill(evidence == null ? null : evidence.name())) {
             uncertainSince = -1;
             if (committed == MovementClassifier.Kind.STILL) {
                 stillMs += unresolvedMs;
