@@ -2112,3 +2112,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Messaggio breve «GPS perso. Continuo a tempo», quindi tempo residuo stimato, evitando un'interazione visiva invasiva.
 
 **Riferimenti:** §7.10.
+
+### D24 — Quanto tollerare una perdita GPS transitoria durante uno Sprint?
+
+**Domanda (sintesi):** Quanto tollerare una perdita GPS transitoria durante uno Sprint?
+
+**Risposta confermata:** Concedere 2 secondi prima del passaggio alla stima temporale; durante questa tolleranza non conteggiare distanze GPS inaffidabili.
+
+**Riferimenti:** §7.10.
