@@ -14,12 +14,9 @@ public final class UncertainEvidenceTransitionTest {
         for (long elapsedMs : elapsedMsValues) {
             for (long pendingMs : pendingMsValues) {
                 for (long deltaMs : deltaMsValues) {
-                    boolean legacyPending =
-                            UncertaintyGracePolicy.shouldKeepPending(elapsedMs);
-                    long legacyUnresolvedMs =
-                            legacyPending ? pendingMs + deltaMs : 0L;
-                    long legacyUnknownCreditMs =
-                            legacyPending ? 0L : pendingMs + deltaMs;
+                    boolean legacyPending = UncertaintyGracePolicy.shouldKeepPending(elapsedMs);
+                    long legacyUnresolvedMs = legacyPending ? pendingMs + deltaMs : 0L;
+                    long legacyUnknownCreditMs = legacyPending ? 0L : pendingMs + deltaMs;
                     UncertainEvidenceTransition.Effect effect =
                             UncertainEvidenceTransition.resolve(elapsedMs, pendingMs, deltaMs);
                     String context =
