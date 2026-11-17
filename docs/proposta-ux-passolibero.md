@@ -1976,3 +1976,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** L'obiettivo esplicito pre-avvio sopravvive a chiusura e riapertura app finché la sessione inizia oppure l'utente lo elimina esplicitamente. Dopo l'avvio vale per quella sessione; il prossimo nuovo allenamento riparte senza obiettivo.
 
 **Riferimenti:** §7.23.
+
+### D07 — Un obiettivo già raggiunto va annunciato se nel frattempo è stato modificato?
+
+**Domanda (sintesi):** Un obiettivo già raggiunto va annunciato se nel frattempo è stato modificato?
+
+**Risposta confermata:** Sì: conservare evento, distanza target originale e istante di raggiungimento; annunciarlo una volta sola anche se la configurazione cambia prima del TTS. Evitare duplicati.
+
+**Riferimenti:** §7.19–§7.21.
