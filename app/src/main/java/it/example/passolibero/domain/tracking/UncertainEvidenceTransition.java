@@ -3,8 +3,8 @@ package it.example.passolibero.domain.tracking;
 /**
  * Pure transition result for a callback with insufficient motion evidence.
  *
- * <p>The legacy ledger owns callback ordering, pending STOP cancellation, all counter mutations
- * and the actual committed/visible state. This value describes only the effects to apply.
+ * <p>The legacy ledger owns callback ordering, pending STOP cancellation, all counter mutations and
+ * the actual committed/visible state. This value describes only the effects to apply.
  */
 public final class UncertainEvidenceTransition {
     private UncertainEvidenceTransition() {}
