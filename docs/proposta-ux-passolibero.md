@@ -2072,3 +2072,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** No: il progresso stimato vale esclusivamente per il target Sprint, non per distanza GPS totale, obiettivo o checkpoint dell'allenamento. Se il GPS torna affidabile, le nuove distanze reali alimentano il totale della sessione.
 
 **Riferimenti:** §7.10, §7.19.
+
+### D19 — Cosa usare se non esiste alcun ritmo personale attendibile?
+
+**Domanda (sintesi):** Cosa usare se non esiste alcun ritmo personale attendibile?
+
+**Risposta confermata:** Come fallback estremo ipotizzare un ritmo base di corsa, ancora da definire e validare, con velocità maggiorata del 50%; dichiarare la scarsa confidenza della stima. Non è stato approvato alcun valore numerico di ritmo base.
+
+**Riferimenti:** §7.10.
