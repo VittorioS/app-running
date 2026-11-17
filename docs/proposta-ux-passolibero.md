@@ -2024,3 +2024,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Non fermare automaticamente lo Sprint: convertire soltanto i metri rimanenti in una stima di tempo basata su ritmo personale. Evitare di imporre un nuovo Sprint.
 
 **Riferimenti:** §7.10.
+
+### D13 — Quale ritmo usare per stimare lo Sprint senza GPS?
+
+**Domanda (sintesi):** Quale ritmo usare per stimare lo Sprint senza GPS?
+
+**Risposta confermata:** Priorità a velocità attendibile rilevata nello Sprint in corso, quindi ritmi di Sprint precedenti; solo in subordine usare riferimenti di corsa ordinaria.
+
+**Riferimenti:** §7.10.
