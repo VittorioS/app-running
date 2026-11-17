@@ -687,3 +687,61 @@ emulatore API30 non li sostituisce. Regressioni UNKNOWN, contatori,
 storico, sessioni duplicate, recovery o GPS/FGS sospendono P4b e
 richiedono rivalutazione #24. Rollback isolato della sola PR,
 senza migrazioni o release.
+
+## 26. Dodicesimo seam P4b (issue #25): destinazione del credito temporale
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance() / finish() / observeDelayedStep() [legacy]
+     -> MotionTimeline.credit(kind, dt) [ledger legacy]
+        -> if (dt <= 0) return [ledger legacy, invariato]
+        -> domain/tracking/TimeCreditBucketPolicy.bucketFor(kind name)
+           RUN -> RUN; WALK -> WALK; STILL -> STILL;
+           MOVING_UNKNOWN -> MOVING_UNKNOWN; ogni altro/null -> UNKNOWN
+        -> runMs / walkMs / stillMs / movingUnknownMs / unknownMs += dt
+           [solo ledger legacy: incrementi e ordine invariati]
+```
+
+Estratta esclusivamente la classificazione della **destinazione** del
+credito: il precedente ordine `kind == RUN`, `WALK`, `STILL`,
+`MOVING_UNKNOWN`, altrimenti `UNKNOWN`, e' riprodotto in
+`TimeCreditBucketPolicy.bucketFor(String)` come enum Java puro,
+senza dipendenze dal package legacy, Android, application, data o platform.
+Il boundary usa `kind.name()` oppure `null`, preservando il fallback
+conservativo a UNKNOWN per gli input null e inattesi. La policy e'
+stateless e non legge clock o evidenze e non accredita alcun intervallo.
+
+Il controllo `dt <= 0` rimane **prima della chiamata alla policy**.
+`MotionTimeline.credit()` conserva tutti e cinque gli incrementi
+esistenti `+= dt`, con gli stessi side effect, e tutti i suoi call site
+invariati: attribuzione di microstop pendenti a gait gia' confermato,
+prima conferma movimento, ripresa dopo UNCERTAIN e aggiornamenti
+successivi. Nessun backfill o gait inventato. Conservati i branch
+MOVING / STILL / UNCERTAIN, `stopSince`, `movingSince`,
+`uncertainSince`, `lastMs`, `stopPendingMs`, `unresolvedMs`,
+`committed/displayed`, `finish/restore`, soglie STOP e la
+conservazione `moving=run+walk+movingUnknown`,
+`elapsed=moving+still+unknown`. Nessuna modifica a
+`TrackingService`, GPS/step/FGS/START/STOP, recovery,
+SQLite/Preferences, snapshot, UI, voce, permessi, firma, workflow
+o release. Il runner JVM include la nuova sorgente nel `javac` esplicito.
+
+**G1 precedente:** [PR #112](https://github.com/VittorioS/app-running/pull/112)
+test-only integrata dal maintainer in `main` commit
+`be2c466fb4501777bc04a42081fd8b08ef2b9115`.
+[CI post-merge #44077050756](https://github.com/VittorioS/app-running/actions/runs/44077050756)
+`verify=success` e `android11=success`, verificata **prima**
+del cambio produttivo. Sei test caratterizzano microstop WALK->RUN,
+RUN->WALK, MOVING_UNKNOWN->WALK, revoca step ritardati, STOP pendente
+senza gait e timestamp duplicati/out of order, con ledger conservativo
+a `finish()`. Nuovi test unitari diretti confrontano la classificazione
+precedente con tutti i valori `MovementClassifier.Kind`, piu' input
+null/sconosciuti, e la mancanza di stato interno.
+
+**Deroga #24/G3:** non sono toccati lifecycle Android, sensori,
+GPS/FGS, recovery o persistenza. Le prove fisiche G3 rare rinviate
+della #24 restano **NON PASS** e devono essere rivalutate nel gate #38;
+la CI su emulatore API30 non sostituisce il dispositivo fisico.
+In caso di regressioni UNKNOWN, contatori, storico, sessioni
+duplicate, recovery o GPS/FGS fermare P4b e riesaminare la #24.
+Rollback isolato di questa PR, senza migrazioni o release.
