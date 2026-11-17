@@ -2016,3 +2016,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Annunciare solo l'ultimo checkpoint pendente, con distanza e tempo originari; conservare tutti gli eventi nel registro e dare priorità alla voce Sprint. Distinto dalla disattivazione volontaria.
 
 **Riferimenti:** §7.11–§7.15.
+
+### D12 — Come gestire l'assenza GPS durante uno Sprint a distanza?
+
+**Domanda (sintesi):** Come gestire l'assenza GPS durante uno Sprint a distanza?
+
+**Risposta confermata:** Non fermare automaticamente lo Sprint: convertire soltanto i metri rimanenti in una stima di tempo basata su ritmo personale. Evitare di imporre un nuovo Sprint.
+
+**Riferimenti:** §7.10.
