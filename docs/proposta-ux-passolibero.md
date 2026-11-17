@@ -2096,3 +2096,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Pronunciare «Sprint concluso per limite prudenziale», senza dire che il target è stato raggiunto; nel riepilogo distinguere misure osservate e stime parziali.
 
 **Riferimenti:** §7.10, §9.
+
+### D22 — Gli Sprint con ritmo personale affidabile hanno limite di 8 secondi?
+
+**Domanda (sintesi):** Gli Sprint con ritmo personale affidabile hanno limite di 8 secondi?
+
+**Risposta confermata:** No: non applicare il tetto di 8 secondi. Stimare soltanto i metri residui rispetto a quelli già misurati (esempio 100 m target, 40 m GPS, 60 m stimati), fino al completamento del target.
+
+**Riferimenti:** §7.10.
