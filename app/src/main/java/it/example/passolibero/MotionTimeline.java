@@ -4,6 +4,7 @@ import it.example.passolibero.domain.tracking.ConfirmedMotionPolicy;
 import it.example.passolibero.domain.tracking.ConfirmedStillPolicy;
 import it.example.passolibero.domain.tracking.EffectiveStopThresholdPolicy;
 import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
+import it.example.passolibero.domain.tracking.MovingUncertaintyRecoveryTransition;
 import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
 import it.example.passolibero.domain.tracking.ReliableGaitPolicy;
 import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
@@ -49,9 +50,16 @@ public final class MotionTimeline {
         if (evidence == MotionEvidencePolicy.Evidence.MOVING) {
             // Unobserved startup/downtime must not become RUN retrospectively.
             if (uncertainSince >= 0) {
-                if (ConfirmedMotionPolicy.isMoving(committed == null ? null : committed.name()))
-                    credit(committed, unresolvedMs);
-                else unknownMs += unresolvedMs;
+                MovingUncertaintyRecoveryTransition.Effect recovery =
+                        MovingUncertaintyRecoveryTransition.settle(
+                                committed == null ? null : committed.name(), unresolvedMs);
+                if (recovery.destination()
+                        == MovingUncertaintyRecoveryTransition.Destination
+                                .PREVIOUS_CONFIRMED_MOVEMENT) {
+                    credit(committed, recovery.creditMs());
+                } else {
+                    unknownMs += recovery.creditMs();
+                }
                 unresolvedMs = 0;
             }
             uncertainSince = -1;
