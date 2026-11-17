@@ -57,8 +57,7 @@ public final class MovingStartTransitionTest {
         assertTrue(missing.confirmed());
         assertFalse(missing.useCurrentGait());
         assertFalse(
-                MovingStartTransition.evaluate(1_999L, 999L, 0L, 1_000L, "RUN")
-                        .useCurrentGait());
+                MovingStartTransition.evaluate(1_999L, 999L, 0L, 1_000L, "RUN").useCurrentGait());
     }
 
     @Test
@@ -69,8 +68,8 @@ public final class MovingStartTransitionTest {
         assertEquals(1_000L, pending.pendingMs());
 
         MovingStartTransition.Effect confirmed =
-                MovingStartTransition.evaluate(2_000L, 1_000L, pending.movingSinceMs(),
-                        pending.pendingMs(), "UNKNOWN");
+                MovingStartTransition.evaluate(
+                        2_000L, 1_000L, pending.movingSinceMs(), pending.pendingMs(), "UNKNOWN");
         assertTrue(confirmed.confirmed());
         assertFalse(confirmed.useCurrentGait());
         assertEquals(2_000L, confirmed.pendingMs());
