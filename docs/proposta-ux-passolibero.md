@@ -2064,3 +2064,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Annunciare brevemente «Sprint completato»; nel riepilogo distinguere la distanza realmente misurata da GPS dalla porzione stimata/non verificata, senza dichiarare tutta la distanza misurata.
 
 **Riferimenti:** §7.10, §9.
+
+### D18 — La distanza Sprint stimata conta per distanza e obiettivo della sessione?
+
+**Domanda (sintesi):** La distanza Sprint stimata conta per distanza e obiettivo della sessione?
+
+**Risposta confermata:** No: il progresso stimato vale esclusivamente per il target Sprint, non per distanza GPS totale, obiettivo o checkpoint dell'allenamento. Se il GPS torna affidabile, le nuove distanze reali alimentano il totale della sessione.
+
+**Riferimenti:** §7.10, §7.19.
