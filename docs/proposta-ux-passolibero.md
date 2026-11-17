@@ -2128,3 +2128,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Sostituire la porzione stimata sovrapposta con la misura GPS affidabile, senza conteggiare due volte la stessa progressione e senza perdere altre parti valide.
 
 **Riferimenti:** §7.10.
+
+### D26 — Se GPS tardivo corregge al ribasso uno Sprint già concluso?
+
+**Domanda (sintesi):** Se GPS tardivo corregge al ribasso uno Sprint già concluso?
+
+**Risposta confermata:** Non riaprire Sprint né richiedere corsa aggiuntiva. La conclusione tramite stima resta conclusione; aggiornare il riepilogo indicando con precisione quota misurata e quota inizialmente stimata/corretta.
+
+**Riferimenti:** §7.10, §9.
