@@ -996,3 +996,75 @@ l'emulatore non e' un test su telefono fisico.
 Regressioni su UNKNOWN, contatori/storico, sessioni duplicate,
 GPS/FGS o recovery richiedono stop P4b e riesame #24.
 Rollback: revert isolato di questa PR, senza migrazioni.
+
+
+## 31. Diciassettesimo seam P4b (#25): conferma dello STOP pendente
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance(..., STILL_STRONG/MODERATE, minimumStopMs)
+     -> guard timestamp/gap e ordine MOVING/STILL/UNCERTAIN [legacy]
+     -> se committed gia' STILL: accredito esistente [legacy, invariato]
+     -> altrimenti PendingStillTransition.evaluate(
+          nowMs, dt, stopSince, stopPendingMs, unresolvedMs,
+          currentEvidenceName, minimumStopMs) [domain puro]
+        -> EffectiveStopThresholdPolicy.requiredStopMs(evidence, minimum)
+        -> StopConfirmationPolicy.isConfirmed(elapsedStop, required)
+        -> Effect(stopSinceMs, pendingStopMs, confirmed,
+                  stillCreditMs, unknownCreditMs)
+     -> stopSince/stopPendingMs = valori calcolati [ledger]
+     -> se confirmed: committed/displayed=STILL;
+          stillMs += stillCreditMs; unknownMs += unknownCreditMs;
+          stopPendingMs=0; unresolvedMs=0; stopSince=-1 [ledger]
+```
+
+**Prima/dopo:** il ramo non confermato inizializzava
+`stopSince = nowMs - dt` solo se mancante, accumulava
+`stopPendingMs += dt`, ricalcolava **a ogni callback** la soglia
+corrente `max(4000/8000 ms, minimumStopMs)` e confermava con
+`nowMs - stopSince >= required`. Alla conferma, accreditava il
+periodo candidato a STILL, ma il precedente intervallo irrisolto
+ad UNKNOWN, quindi azzerava entrambi i pending e il timer STOP.
+
+Ora `PendingStillTransition.evaluate` calcola senza side effect
+`Effect(stopSinceMs, pendingStopMs, confirmed, stillCreditMs,
+unknownCreditMs)`, riusando le due policy di dominio già integrate.
+Nella fase pending i crediti proposti sono zero; alla conferma sono
+rispettivamente il pending STOP aggiornato e `unresolvedMs`.
+Gli **stessi effetti** sono applicati nello stesso punto e ordine
+dal ledger. La policy non importa Android, classi legacy,
+application, data o platform e non mantiene stato.
+
+**Invarianti:** soglia da forza STILL del callback **corrente**,
+budget ritardi step dinamico, STOP pendente non visibile, soglia
+inclusiva, nessun riavvio del candidato con forza alternata,
+conservazione UNKNOWN, `moving=run+walk+movingUnknown`,
+`elapsed=moving+still+unknown`, aritmetica `long` originale
+senza saturazione. Rami MOVING, STILL già confermato e UNCERTAIN,
+`finish/restore`, guard temporali e blackout, revoca step
+tardivo, tutti i contatori e i side effect restano nel legacy.
+Nessun cambiamento a TrackingService, GPS/sensori/FGS,
+START/STOP, recovery, SQLite/Prefs, snapshot, UI, permessi,
+firma, workflow o release.
+
+**G1 già integrata:** [PR #106](https://github.com/VittorioS/app-running/pull/106)
+(soglie effettive e budget step), [PR #108](https://github.com/VittorioS/app-running/pull/108)
+(STILL pending interrotto da UNCERTAIN/MOVING, forza alternata),
+[PR #110](https://github.com/VittorioS/app-running/pull/110)
+(STILL confermato e timeout). La [PR #120](https://github.com/VittorioS/app-running/pull/120)
+è stata integrata dal maintainer in `main` commit
+`cff2e507672b6878d3f2bd6d7d6749bd8e73ff54`, con
+[CI post-merge #44187052501](https://github.com/VittorioS/app-running/actions/runs/44187052501)
+`verify=success` e `android11=success` verificati **prima** del
+nuovo codice produttivo. I test diretti della transizione confrontano
+timer, pending e crediti con la formula legacy su confini 3999/4000,
+7999/8000, minimo corrente, alternanza evidenza e aritmetica
+`long`, inclusi valori estremi. Nessun test locale o fisico
+rivendicato.
+
+**Deroga condizionata #24:** i rari collaudi G3 su dispositivo
+fisico rimangono **NON PASS**, da rivalutare a #38; l'emulatore
+API30 non li sostituisce. Regressioni UNKNOWN, ledger/storico,
+sessioni duplicate, recovery, GPS/FGS fermano P4b e impongono
+rivalutazione #24. Rollback: revert isolato di questa PR, senza
+migrazioni.
