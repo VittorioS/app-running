@@ -2176,3 +2176,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Concludere lo Sprint con stato «Interrotto per problema tecnico»; non riprenderlo automaticamente alla riattivazione del servizio. L'allenamento generale può invece essere recuperato.
 
 **Riferimenti:** §6.5, §7.10.
+
+### D32 — Come conservare uno Sprint interrotto per problema tecnico?
+
+**Domanda (sintesi):** Come conservare uno Sprint interrotto per problema tecnico?
+
+**Risposta confermata:** Mantenerlo nel riepilogo e nello Storico con stato «Interrotto per problema tecnico», tempo, distanza e sole statistiche attendibili, distinto da Sprint completato o annullato volontariamente.
+
+**Riferimenti:** §7.10, §9–§10.
