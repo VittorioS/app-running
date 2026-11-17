@@ -2160,3 +2160,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Dall'inizio effettivo della perdita di segnale, coprendo retroattivamente anche i primi 2 secondi; rimuovere ogni sovrapposizione qualora ritornino misure GPS affidabili.
 
 **Riferimenti:** §7.10.
+
+### D30 — Quale riferimento usare a ogni nuova perdita GPS dello stesso Sprint?
+
+**Domanda (sintesi):** Quale riferimento usare a ogni nuova perdita GPS dello stesso Sprint?
+
+**Risposta confermata:** Ricalcolare la velocità utilizzando tutti i segmenti Sprint misurati da GPS affidabile, escludendo progressi solo stimati; privilegiare misure reali dello Sprint corrente rispetto a precedenti storici.
+
+**Riferimenti:** §7.10.
