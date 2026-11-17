@@ -1952,3 +1952,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Il comando nel dock Sprint apre direttamente l'editor di configurazione Sprint, senza pagina indice intermedia.
 
 **Riferimenti:** §7.10.
+
+### D04 — Come raggiungere gli editor durante l'allenamento?
+
+**Domanda (sintesi):** Come raggiungere gli editor durante l'allenamento?
+
+**Risposta confermata:** Da Statistiche e Mappa live sono disponibili accessi diretti ai tre editor: obiettivo distanza, checkpoint vocali e Sprint, senza sospendere il tracking.
+
+**Riferimenti:** §7.22.
