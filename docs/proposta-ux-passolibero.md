@@ -62,11 +62,13 @@ PassoLibero serve sia a chi vuole iniziare una corsa o camminata senza configura
 
 1. Con sessione inattiva, permettere di identificare subito l'azione «Inizia allenamento».
 2. Con sessione attiva, mostrare che la registrazione è in corso e permettere di rientrarvi subito.
-3. Con servizio non aggiornato, evitare un falso stato «registrazione in corso» e rendere evidente il recupero.
+3. Con servizio non aggiornato, evitare un falso stato «registrazione in corso», rendere evidente il recupero e impedire l'avvio di una seconda sessione finché la precedente non è stata risolta.
 4. Offrire accesso stabile a Storico e Meteo senza promuovere impostazioni tecniche nella zona principale.
 5. Consentire personalizzazione mirata **prima** dell'allenamento senza imporre un setup obbligatorio.
 
 ### 6.3 Gerarchia — Home senza sessione
+
+Questa gerarchia è disponibile soltanto quando **non esiste alcuna sessione attiva o interrotta ancora da finalizzare**. Se una sessione precedente è incompleta, prima si applica il recupero o la conclusione previsti in §6.5; «Inizia allenamento» non può creare una sessione parallela.
 
 1. **Intestazione:** nome PassoLibero + accesso a «Impostazioni» mediante comando con etichetta accessibile.
 2. **Messaggio di contesto:** «Pronto a muoverti?» / «Registra la tua prossima corsa o camminata». Evitare «GPS pronto» finché non è stato verificato.
@@ -95,15 +97,18 @@ Sostituire integralmente il blocco inattivo con un riepilogo **solo della sessio
 Quando la sessione è ancora segnata come attiva ma il servizio ha smesso di aggiornarsi:
 
 - Banner prioritario «Il tracciamento sembra interrotto» con spiegazione breve e contestuale.
-- **Azione primaria di recupero:** «Riprendi tracciamento», secondo la funzionalità esistente.
+- **Azioni per risolvere la sessione:** «Riprendi tracciamento» (o «Riprendi» dopo il riavvio del telefono) per continuare **la stessa** sessione, oppure «Termina e salva» per finalizzarla con i dati attendibili già registrati. Conservare l'indicazione del tempo senza tracking.
 - Mostrare eventuali distanza e durata come **ultimi valori disponibili**, non come registrazione in tempo reale se non lo sono.
 - Nessun conteggio fittizio del tempo in movimento o della distanza non osservati; evitare la parola «Pausa» perché non esiste una funzione di pausa manuale.
 - Consentire accesso al dettaglio della sessione per vedere il contesto, senza mascherare l'interruzione.
+- **Nessun nuovo allenamento finché la sessione precedente è irrisolta:** anche quando l'utente richiede «Inizia allenamento», indirizzarlo prima a «Riprendi tracciamento» o «Termina e salva» per la sessione esistente. «Riprendi» continua la precedente, non ne crea una nuova; una nuova sessione può iniziare soltanto **dopo** la finalizzazione e il salvataggio della precedente. Non consentire due registrazioni contemporanee né eliminare silenziosamente i dati parziali.
 
 ### 6.6 Comportamento dell'azione «Inizia allenamento»
 
+**Precondizione obbligatoria:** verificare che non esista un allenamento attivo o interrotto non finalizzato. In caso contrario, **non eseguire il flusso di nuovo avvio**: mostrare il recupero della sessione precedente (§6.5), lasciando scegliere tra ripresa della stessa sessione e «Termina e salva». Solo dopo che la precedente è stata conclusa si può avviare un nuovo allenamento.
+
 ```text
-Home inattiva
+Home inattiva (nessuna sessione da risolvere)
     ├─ «Modifica obiettivo» → scegli → ritorno alla Home
     └─ «Inizia allenamento»
          ├─ Posizione disattivata → spiegazione + Apri impostazioni
@@ -1860,6 +1865,7 @@ Le città e gli orari salvati resteranno disponibili.
 ## 13. Criteri di accettazione UX (da verificare con prototipi/test)
 
 - Da Home inattiva l'utente identifica immediatamente come iniziare un allenamento.
+- Con una sessione precedente attiva o interrotta e non finalizzata, il nuovo avvio è bloccato: l'utente deve poter «Riprendere» la stessa sessione oppure «Terminare e salvare» quella precedente prima di avviarne una nuova; non vengono create registrazioni parallele (§6.5–§6.6).
 - L'utente riconosce in ogni momento se la sessione sta registrando, è interrotta o è terminata.
 - Durante una sessione si leggono distanza, durata e ritmo attuale (min/km) senza aprire schede secondarie; le assenze di dato sono riconoscibili.
 - L'azione di termine non richiede uno scroll lungo e non può essere attivata irreversibilmente con un solo tocco.
@@ -1891,7 +1897,7 @@ Le città e gli orari salvati resteranno disponibili.
 
 ## 15. Decisioni consolidate e punti ancora aperti prima della PR
 
-1. **Deciso:** due profili serviti con progressiva esposizione delle funzioni; avvio immediato con controlli di posizione/GPS e obiettivo facoltativo prima del tap; **configurazione Sprint facoltativa prima della sessione**, non prerequisito dell’avvio.
+1. **Deciso:** due profili serviti con progressiva esposizione delle funzioni; avvio immediato con controlli di posizione/GPS e obiettivo facoltativo prima del tap; **configurazione Sprint facoltativa prima della sessione**, non prerequisito dell’avvio. **Un nuovo allenamento non può partire mentre esiste una sessione attiva o interrotta non conclusa:** prima è necessario riprendere la sessione precedente oppure terminarla e salvarla; nessun avvio parallelo (§6.5–§6.6).
 2. **Deciso:** durante l’allenamento sono prioritarie le **statistiche**; la mappa è accessibile su richiesta. La terza metrica principale è **ritmo attuale (min/km)**, insieme a distanza e durata; con dato non attendibile si mostra uno stato di indisponibilità.
 3. **Deciso:** la mappa live è una vista dedicata quasi a schermo intero con tre metriche essenziali persistenti; il tracking continua. **Deciso:** i dettagli GPS di un singolo tratto si consultano su una **pagina dedicata con mini-mappa contestuale**, aperta da mappa o elenco, non in un pannello inferiore. «Torna alla mappa» mantiene contesto e selezione; «Apri sulla mappa» focalizza il tratto.
 4. **Deciso:** dopo «Termina e salva» e la conferma del salvataggio locale, aprire **subito il riepilogo finale**. Priorità a distanza complessiva, durata totale e ritmo medio complessivo; corsa/camminata, obiettivo e anteprima del percorso seguono. **«Torna alla Home» è la CTA principale, «Esplora dettagli» secondaria.** Da una sessione aperta dallo Storico si torna invece allo Storico. La resa visuale resta da testare.
