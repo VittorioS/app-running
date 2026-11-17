@@ -2056,3 +2056,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Decisione finale: sì, usare i nuovi dati GPS attendibili, preservando il progresso già stimato e correggendo eventuali sovrapposizioni con misure effettive. Sostituisce la precedente ipotesi di conversione irreversibile a tempo.
 
 **Riferimenti:** §7.10.
+
+### D17 — Come presentare uno Sprint concluso tramite stima temporale?
+
+**Domanda (sintesi):** Come presentare uno Sprint concluso tramite stima temporale?
+
+**Risposta confermata:** Annunciare brevemente «Sprint completato»; nel riepilogo distinguere la distanza realmente misurata da GPS dalla porzione stimata/non verificata, senza dichiarare tutta la distanza misurata.
+
+**Riferimenti:** §7.10, §9.
