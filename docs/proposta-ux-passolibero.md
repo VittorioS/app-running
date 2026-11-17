@@ -2000,3 +2000,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Gli eventi già registrati mantengono distanza e ora originali; se sono più di uno annunciare solo il più recente. Il nuovo intervallo vale in avanti, senza recuperare soglie retroattive.
 
 **Riferimenti:** §7.15–§7.18.
+
+### D10 — Se il TTS è temporaneamente indisponibile quando si raggiunge l'obiettivo?
+
+**Domanda (sintesi):** Se il TTS è temporaneamente indisponibile quando si raggiunge l'obiettivo?
+
+**Risposta confermata:** Recuperare l'annuncio al ritorno del TTS soltanto mentre lo stesso allenamento è ancora attivo, con dettagli originali, una sola volta e rispettando la priorità Sprint.
+
+**Riferimenti:** §7.19.
