@@ -2040,3 +2040,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Se mancano ritmi Sprint attendibili usare il ritmo affidabile della corsa corrente, poi ritmi delle corse precedenti; applicare una maggiorazione prudenziale alla velocità stimata, da precisare.
 
 **Riferimenti:** §7.10.
+
+### D15 — Come interpretare il fattore +50% del fallback?
+
+**Domanda (sintesi):** Come interpretare il fattore +50% del fallback?
+
+**Risposta confermata:** Aumentare la velocità stimata del 50% (velocità × 1,5; ritmo min/km ÷ 1,5), non dimezzare il ritmo. È un'assunzione di fallback, non una garanzia fisiologica.
+
+**Riferimenti:** §7.10.
