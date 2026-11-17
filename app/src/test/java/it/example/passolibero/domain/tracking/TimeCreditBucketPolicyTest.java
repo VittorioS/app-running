@@ -47,6 +47,7 @@ public final class TimeCreditBucketPolicyTest {
         assertEquals(
                 TimeCreditBucketPolicy.Bucket.MOVING_UNKNOWN,
                 TimeCreditBucketPolicy.bucketFor("MOVING_UNKNOWN"));
-        assertEquals(TimeCreditBucketPolicy.Bucket.STILL, TimeCreditBucketPolicy.bucketFor("STILL"));
+        assertEquals(
+                TimeCreditBucketPolicy.Bucket.STILL, TimeCreditBucketPolicy.bucketFor("STILL"));
     }
 }
