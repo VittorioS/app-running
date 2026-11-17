@@ -1,12 +1,12 @@
 package it.example.passolibero;
 
 import it.example.passolibero.domain.tracking.ConfirmedMotionPolicy;
+import it.example.passolibero.domain.tracking.ConfirmedMovingIntervalTransition;
 import it.example.passolibero.domain.tracking.ConfirmedStillPolicy;
 import it.example.passolibero.domain.tracking.EffectiveStopThresholdPolicy;
 import it.example.passolibero.domain.tracking.MovingUncertaintyRecoveryTransition;
 import it.example.passolibero.domain.tracking.MovingStartTransition;
 import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
-import it.example.passolibero.domain.tracking.ReliableGaitPolicy;
 import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
 import it.example.passolibero.domain.tracking.StillEvidencePolicy;
 import it.example.passolibero.domain.tracking.TimeCreditBucketPolicy;
@@ -92,10 +92,13 @@ public final class MotionTimeline {
                 }
             } else {
                 // Short uncertainty that recovers remains the preceding activity.
-                credit(committed, unresolvedMs);
+                ConfirmedMovingIntervalTransition.Effect effect =
+                        ConfirmedMovingIntervalTransition.evaluate(
+                                unresolvedMs, dt, activity == null ? null : activity.name());
+                credit(committed, effect.previousCreditMs());
                 unresolvedMs = 0;
                 movingSince = -1;
-                if (ReliableGaitPolicy.hasKnownGait(activity == null ? null : activity.name())) {
+                if (effect.useCurrentGait()) {
                     committed = activity;
                     displayed = activity;
                 } else {
@@ -103,7 +106,7 @@ public final class MotionTimeline {
                     committed = MovementClassifier.Kind.MOVING_UNKNOWN;
                     displayed = committed;
                 }
-                credit(committed, dt);
+                credit(committed, effect.currentCreditMs());
             }
             return;
         }
