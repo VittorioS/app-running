@@ -27,6 +27,7 @@ javac -d build-test app/src/main/java/it/example/passolibero/RunMath.java \
   app/src/main/java/it/example/passolibero/domain/tracking/MovingStartTransition.java \
   app/src/main/java/it/example/passolibero/domain/tracking/ConfirmedMovingIntervalTransition.java \
   app/src/main/java/it/example/passolibero/domain/tracking/ConfirmedStillPolicy.java \
+  app/src/main/java/it/example/passolibero/domain/tracking/ConfirmedStillIntervalTransition.java \
   app/src/main/java/it/example/passolibero/domain/tracking/TimeCreditBucketPolicy.java \
   app/src/main/java/it/example/passolibero/MotionTimeline.java \
   app/src/main/java/it/example/passolibero/InertialGaitDetector.java \
