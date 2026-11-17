@@ -932,3 +932,67 @@ copre automaticamente i G3 fisici rari ancora **NON PASS**, da
 riesaminare al gate finale #38; regressioni UNKNOWN, contatori,
 storico, recovery, sessioni duplicate o GPS/FGS bloccano P4b.
 Rollback: revert isolato di questa PR, senza migrazioni.
+
+
+## 30. Sedicesimo seam P4b (#25): intervalli MOVING gia' confermati
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance(MOVING, currentActivity) [ledger]
+     -> timestamp/gap; recupero UNCERTAIN/STOP pending [ledger, invariati]
+     -> ConfirmedMotionPolicy.isMoving(committed) [domain]
+        -> false: MovingStartTransition [gia' integrata]
+        -> true: ConfirmedMovingIntervalTransition.evaluate(
+              unresolvedMs, dt, currentActivityName) [domain puro]
+              -> ReliableGaitPolicy.hasKnownGait(currentActivityName)
+              -> Effect(previousCreditMs, currentCreditMs, useCurrentGait)
+          -> credit(previous committed, previousCreditMs) [ledger]
+          -> unresolvedMs = 0; movingSince = -1 [ledger]
+          -> committed/displayed = current RUN/WALK oppure MOVING_UNKNOWN
+             [ledger]
+          -> credit(current committed, currentCreditMs) [ledger]
+```
+
+**Responsabilita' trasferita:** nel ramo MOVING *gia' confermato*
+la policy pura `ConfirmedMovingIntervalTransition` esplicita la
+separazione tra il periodo irrisolto precedente e il delta del
+callback corrente. Solo il callback corrente puo' usare il nuovo
+gait RUN/WALK; se non e' attendibile, la nuova categoria resta
+MOVING_UNKNOWN. La policy chiama `ReliableGaitPolicy`, non importa
+legacy/Android/application/data/platform e non mantiene stato.
+
+**Effetti invariati e ordinati:** il ledger continua a chiamare
+`credit(committed, unresolvedMs)` (adesso tramite
+`effect.previousCreditMs()`) **prima** di azzerare `unresolvedMs`
+e scegliere il nuovo gait. Poi imposta `movingSince=-1`,
+`committed/displayed` e accredita soltanto `dt` con
+`credit(committed, effect.currentCreditMs())`. Restano
+nel ledger tutte le mutazioni e ogni gestione di tempo
+UNKNOWN, RUN/WALK/MOVING_UNKNOWN, STILL, pending, soglie e
+`finish/restore`, senza backfill retroattivo. Invariati tutti
+i callback di `TrackingService`, GPS/step, FGS/lifecycle,
+recovery, SQLite/Prefs, snapshot, UI/voce, permessi, firma,
+versioni, workflow e release.
+
+**Baseline G1:** i test gia' integrati
+`TrackingGaitChangeCharacterizationTest` e
+`TrackingConfirmedMotionCharacterizationTest` verificano
+RUN/WALK/MOVING_UNKNOWN, cambio gait, ritorno dopo UNCERTAIN,
+worker blackout, nessuna riclassificazione dell'intervallo
+precedente e ledger conservativo. Il prerequisito immediato
+[PR #118](https://github.com/VittorioS/app-running/pull/118)
+e' merged su `main` commit
+`ee37f6e30fee4cd8613508e28e8d35cae6b25d48` con
+[CI post-merge #44185090774](https://github.com/VittorioS/app-running/actions/runs/44185090774)
+`verify=success` e `android11=success`, verificata
+**prima** di questo cambio. I nuovi test puri confrontano
+crediti precedenti/correnti con la formula originale per
+tutti i gait legacy, `null`, nomi inattesi e durate di
+confine/estreme.
+
+**Deroga/rischio:** #24 resta OPEN e i rari G3 fisici
+differiti rimangono **NON PASS** fino al gate #38;
+l'emulatore non e' un test su telefono fisico.
+Regressioni su UNKNOWN, contatori/storico, sessioni duplicate,
+GPS/FGS o recovery richiedono stop P4b e riesame #24.
+Rollback: revert isolato di questa PR, senza migrazioni.
