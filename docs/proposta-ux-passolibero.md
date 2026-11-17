@@ -1270,12 +1270,14 @@ Obiettivo: in pochi secondi, rispondere a «Quanto ho fatto?», «Quanto è dura
 |---|---|
 | Distanza complessiva | Distanza registrata nella singola sessione, inclusiva delle porzioni valide non attribuite alle due andature; **non** distanza cumulativa dell'intero storico |
 | Durata totale | Tempo dall'avvio alla fine, non sinonimo di solo tempo in movimento |
-| Ritmo medio complessivo | Etichetta chiaramente distinta da «ritmo attuale»; segue la metrica storica della sessione (tempo e distanza corrispondenti), con `--:--` se non calcolabile |
+| Ritmo medio complessivo | Etichetta chiaramente distinta da «ritmo attuale»; segue la metrica storica della sessione (tempo e distanza corrispondenti), con `--:--` se non calcolabile. Quando le soglie di assenza del segnale GPS sono superate, mostrare «Ritmo medio non attendibile» nel riepilogo principale e lasciare il valore numerico calcolato, marcato come incompleto, nei Dettagli |
 | Tempo corsa/camminata | Valori derivati da periodi effettivamente classificati; non assorbono automaticamente il movimento non classificato o incerto |
 | Movimento non classificato/incerto | Tipi diversi di incertezza; vanno mantenuti identificabili nelle analisi anche se il riepilogo li compatta |
 | Distanze per andatura | Non necessariamente equivalenti al totale GPS; non presentare la loro somma come distanza complessiva senza esplicitare l'esclusione |
 | Obiettivo | Dato della **sessione appena conclusa**, mostrato solo se presente; nessuna promessa di traguardi o premi non implementati |
 | Percorso GPS | Potrebbe essere parziale o mancante: il riepilogo resta utilizzabile anche senza mappa |
+
+**Assenza del segnale GPS e attendibilità del ritmo medio (decisioni 40–42).** Per applicare le soglie di affidabilità del ritmo medio, considerare **solo i periodi di assenza completa del segnale GPS** mentre il servizio di tracking è operativo. Il ritmo medio principale diventa «Ritmo medio non attendibile» se tali periodi superano il **10% della durata monitorata** complessiva oppure se almeno una singola assenza dura **più di 2 minuti consecutivi**. Le due condizioni sono alternative. Un segnale presente ma impreciso **non conta come assenza del segnale** ai fini di queste soglie: i campioni continuano a essere trattati dal **filtro GPS già esistente**, senza introdurre un secondo criterio di indisponibilità basato sulla precisione. Il tempo con servizio attivo continua ad avanzare; i periodi di servizio interrotto non entrano nella durata monitorata. In caso di ritmo non attendibile, il dato numerico calcolato resta consultabile nei Dettagli con avvertenza di incompletezza, senza colmare la distanza con stime fittizie.
 
 ### 9.5 Wireframe testuale — valori inventati
 
@@ -1873,7 +1875,7 @@ Le città e gli orari salvati resteranno disponibili.
 - Il preset Sprint può essere modificato durante una sessione da «Opzioni → Modifica sprint» solo a prova inattiva; un salvataggio valido aggiorna il prossimo sprint e resta persistente, mentre «Annulla» preserva i vecchi valori. La configurazione non avvia una prova e non interrompe il tracking.
 - Uno sprint già configurato può essere **avviato con un solo tocco sia da Allenamento sia da Mappa live**, senza cambiare schermata, con una CTA grande nel **medesimo dock inferiore immobile** in entrambe; durante preparazione/countdown/prova **la stessa CTA cambia in «Tieni premuto 2 s per annullare»**. Un tap breve non annulla, una tenuta continua completa sì; il rilascio anticipato non produce effetti. Countdown, esecuzione, completamento/annullamento condividono lo stato e non si confondono con il termine della sessione. Ripetere uno sprint non richiede una nuova configurazione.
 - Dopo «Termina e salva», il riepilogo compare automaticamente **solo quando la sessione risulta effettivamente salvata**; in caso di esito non verificabile appare uno stato appropriato.
-- Il riepilogo distingue distanza complessiva, durata totale, ritmo medio complessivo e ripartizione dell'andatura; non inventa classificazioni o dati cumulativi.
+- Il riepilogo distingue distanza complessiva, durata totale, ritmo medio complessivo e ripartizione dell'andatura; non inventa classificazioni o dati cumulativi. Per la sola affidabilità del ritmo medio, le soglie di assenza GPS (>10% della durata monitorata oppure >2 minuti consecutivi) riguardano **esclusivamente la mancanza completa del segnale**, senza riclassificare come assenza i fix imprecisi già gestiti dal filtro GPS (§9.4).
 - Dopo salvataggio, «Torna alla Home» è la CTA principale e «Esplora dettagli» quella secondaria; entrambe sono reperibili senza scroll prolungato e rispettano il comportamento del comando Indietro.
 - Nello Storico, ogni sessione ha una scheda cronologica leggibile con mini-mappa **statica e monocolore**; l'intera scheda apre il riepilogo, mentre l'anteprima non ha zoom, pan o pulsanti propri. I cambi di attività non cambiano colore nell'anteprima e le lacune GPS non sono collegate artificialmente.
 - Esportazione ed eliminazione sono reperibili ma non competono con l'apertura di un dettaglio storico.
@@ -2253,6 +2255,6 @@ Le città e gli orari salvati resteranno disponibili.
 
 **Domanda:** Quali soglie rendono il ritmo medio non attendibile per assenza GPS?
 
-**Risposta confermata:** Basta una condizione: GPS inutilizzabile per oltre il 10% della durata monitorata totale, oppure una singola interruzione superiore a 2 minuti consecutivi. Si tratta di soglie UX da validare tecnicamente; le regole Sprint rimangono separate. **D42 ancora aperta:** se includere nelle soglie anche le posizioni GPS troppo imprecise.
+**Risposta confermata:** Basta una condizione: GPS inutilizzabile per oltre il 10% della durata monitorata totale, oppure una singola interruzione superiore a 2 minuti consecutivi. Si tratta di soglie UX da validare tecnicamente; le regole Sprint rimangono separate. La successiva decisione 42 precisa che contano soltanto i periodi di **assenza completa del segnale**; i fix imprecisi restano sotto il filtro GPS esistente (specifica integrata in §9.4).
 
 **Riferimenti:** §6.5, §9.
