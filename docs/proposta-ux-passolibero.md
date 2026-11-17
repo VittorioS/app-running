@@ -2216,3 +2216,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Recuperare la sessione persistita e mostrare «Allenamento interrotto» con «Riprendi tracciamento» o «Termina e salva»; conservare obiettivo/impostazioni e distinguere gli intervalli privi di tracking.
 
 **Riferimenti:** §6.5, §9–§10.
+
+### D37 — Come calcolare la durata principale dopo un'interruzione anche molto lunga?
+
+**Domanda:** Come calcolare la durata principale dopo un'interruzione anche molto lunga?
+
+**Risposta confermata:** Mostrare come durata allenamento soltanto la somma dei periodi monitorati; mostrare separatamente tempo senza tracking e durata cronologica dall'avvio alla fine. **Questa decisione aggiorna D34 e §9.4.**
+
+**Riferimenti:** §9.4.
