@@ -9,7 +9,7 @@ import it.example.passolibero.domain.tracking.ReliableGaitPolicy;
 import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
 import it.example.passolibero.domain.tracking.StillEvidencePolicy;
 import it.example.passolibero.domain.tracking.TimeCreditBucketPolicy;
-import it.example.passolibero.domain.tracking.UncertaintyGracePolicy;
+import it.example.passolibero.domain.tracking.UncertainEvidenceTransition;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
 
 /**
@@ -123,11 +123,11 @@ public final class MotionTimeline {
             stopSince = -1;
         }
         if (uncertainSince < 0) uncertainSince = nowMs - dt;
-        if (UncertaintyGracePolicy.shouldKeepPending(nowMs - uncertainSince)) {
-            unresolvedMs += dt;
-        } else {
-            unknownMs += unresolvedMs + dt;
-            unresolvedMs = 0;
+        UncertainEvidenceTransition.Effect effect =
+                UncertainEvidenceTransition.resolve(nowMs - uncertainSince, unresolvedMs, dt);
+        unresolvedMs = effect.unresolvedMsAfter();
+        unknownMs += effect.unknownCreditMs();
+        if (effect.invalidateConfirmedState()) {
             committed = MovementClassifier.Kind.UNKNOWN;
             displayed = MovementClassifier.Kind.UNKNOWN;
         }
