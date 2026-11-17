@@ -2248,3 +2248,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Nel riepilogo principale mostrare «Ritmo medio non attendibile»; nei Dettagli mantenere il valore calcolato con indicazione esplicita di incompletezza. Conservare distanza e tempo attendibili; non stimare distanza generale per colmare lacune.
 
 **Riferimenti:** §6.5, §9.
+
+### D41 — Quali soglie rendono il ritmo medio non attendibile per assenza GPS?
+
+**Domanda:** Quali soglie rendono il ritmo medio non attendibile per assenza GPS?
+
+**Risposta confermata:** Basta una condizione: GPS inutilizzabile per oltre il 10% della durata monitorata totale, oppure una singola interruzione superiore a 2 minuti consecutivi. Si tratta di soglie UX da validare tecnicamente; le regole Sprint rimangono separate. **D42 ancora aperta:** se includere nelle soglie anche le posizioni GPS troppo imprecise.
+
+**Riferimenti:** §6.5, §9.
