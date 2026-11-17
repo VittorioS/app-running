@@ -22,41 +22,31 @@ public final class TimeCreditBucketPolicyTest {
             } else {
                 expected = TimeCreditBucketPolicy.Bucket.UNKNOWN;
             }
-            assertEquals(
-                    kind.name(), expected, TimeCreditBucketPolicy.bucketFor(kind.name()));
+            assertEquals(kind.name(), expected, TimeCreditBucketPolicy.bucketFor(kind.name()));
         }
     }
 
     @Test
     public void nullAndUnrecognizedStatesStayUnknown() {
+        assertEquals(TimeCreditBucketPolicy.Bucket.UNKNOWN, TimeCreditBucketPolicy.bucketFor(null));
+        assertEquals(TimeCreditBucketPolicy.Bucket.UNKNOWN, TimeCreditBucketPolicy.bucketFor(""));
         assertEquals(
-                TimeCreditBucketPolicy.Bucket.UNKNOWN, TimeCreditBucketPolicy.bucketFor(null));
+                TimeCreditBucketPolicy.Bucket.UNKNOWN, TimeCreditBucketPolicy.bucketFor("running"));
         assertEquals(
-                TimeCreditBucketPolicy.Bucket.UNKNOWN, TimeCreditBucketPolicy.bucketFor(""));
+                TimeCreditBucketPolicy.Bucket.UNKNOWN, TimeCreditBucketPolicy.bucketFor("MOVING"));
         assertEquals(
-                TimeCreditBucketPolicy.Bucket.UNKNOWN,
-                TimeCreditBucketPolicy.bucketFor("running"));
-        assertEquals(
-                TimeCreditBucketPolicy.Bucket.UNKNOWN,
-                TimeCreditBucketPolicy.bucketFor("MOVING"));
-        assertEquals(
-                TimeCreditBucketPolicy.Bucket.UNKNOWN,
-                TimeCreditBucketPolicy.bucketFor("run"));
+                TimeCreditBucketPolicy.Bucket.UNKNOWN, TimeCreditBucketPolicy.bucketFor("run"));
     }
 
     @Test
     public void eachCallUsesOnlyCurrentState() {
+        assertEquals(TimeCreditBucketPolicy.Bucket.RUN, TimeCreditBucketPolicy.bucketFor("RUN"));
         assertEquals(
-                TimeCreditBucketPolicy.Bucket.RUN, TimeCreditBucketPolicy.bucketFor("RUN"));
-        assertEquals(
-                TimeCreditBucketPolicy.Bucket.UNKNOWN,
-                TimeCreditBucketPolicy.bucketFor("UNKNOWN"));
-        assertEquals(
-                TimeCreditBucketPolicy.Bucket.WALK, TimeCreditBucketPolicy.bucketFor("WALK"));
+                TimeCreditBucketPolicy.Bucket.UNKNOWN, TimeCreditBucketPolicy.bucketFor("UNKNOWN"));
+        assertEquals(TimeCreditBucketPolicy.Bucket.WALK, TimeCreditBucketPolicy.bucketFor("WALK"));
         assertEquals(
                 TimeCreditBucketPolicy.Bucket.MOVING_UNKNOWN,
                 TimeCreditBucketPolicy.bucketFor("MOVING_UNKNOWN"));
-        assertEquals(
-                TimeCreditBucketPolicy.Bucket.STILL, TimeCreditBucketPolicy.bucketFor("STILL"));
+        assertEquals(TimeCreditBucketPolicy.Bucket.STILL, TimeCreditBucketPolicy.bucketFor("STILL"));
     }
 }
