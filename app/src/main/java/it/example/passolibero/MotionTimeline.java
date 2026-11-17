@@ -3,11 +3,10 @@ package it.example.passolibero;
 import it.example.passolibero.domain.tracking.ConfirmedMotionPolicy;
 import it.example.passolibero.domain.tracking.ConfirmedMovingIntervalTransition;
 import it.example.passolibero.domain.tracking.ConfirmedStillPolicy;
-import it.example.passolibero.domain.tracking.EffectiveStopThresholdPolicy;
 import it.example.passolibero.domain.tracking.MovingUncertaintyRecoveryTransition;
 import it.example.passolibero.domain.tracking.MovingStartTransition;
 import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
-import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
+import it.example.passolibero.domain.tracking.PendingStillTransition;
 import it.example.passolibero.domain.tracking.StillEvidencePolicy;
 import it.example.passolibero.domain.tracking.TimeCreditBucketPolicy;
 import it.example.passolibero.domain.tracking.UncertainEvidenceTransition;
@@ -120,15 +119,22 @@ public final class MotionTimeline {
                 displayed = MovementClassifier.Kind.STILL;
                 return;
             }
-            if (stopSince < 0) stopSince = nowMs - dt;
-            stopPendingMs += dt;
-            long required = EffectiveStopThresholdPolicy.requiredStopMs(
-                    evidence.name(), minimumStopMs);
-            if (StopConfirmationPolicy.isConfirmed(nowMs - stopSince, required)) {
+            PendingStillTransition.Effect pending =
+                    PendingStillTransition.evaluate(
+                            nowMs,
+                            dt,
+                            stopSince,
+                            stopPendingMs,
+                            unresolvedMs,
+                            evidence.name(),
+                            minimumStopMs);
+            stopSince = pending.stopSinceMs();
+            stopPendingMs = pending.pendingStopMs();
+            if (pending.confirmed()) {
                 committed = MovementClassifier.Kind.STILL;
                 displayed = MovementClassifier.Kind.STILL;
-                stillMs += stopPendingMs;
-                unknownMs += unresolvedMs;
+                stillMs += pending.stillCreditMs();
+                unknownMs += pending.unknownCreditMs();
                 stopPendingMs = 0;
                 unresolvedMs = 0;
                 stopSince = -1;
