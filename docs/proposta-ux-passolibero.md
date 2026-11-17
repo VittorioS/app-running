@@ -2136,3 +2136,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Non riaprire Sprint né richiedere corsa aggiuntiva. La conclusione tramite stima resta conclusione; aggiornare il riepilogo indicando con precisione quota misurata e quota inizialmente stimata/corretta.
 
 **Riferimenti:** §7.10, §9.
+
+### D27 — Se la correzione al ribasso arriva mentre Sprint è ancora attivo?
+
+**Domanda (sintesi):** Se la correzione al ribasso arriva mentre Sprint è ancora attivo?
+
+**Risposta confermata:** Ricalcolare la distanza residua usando misure affidabili e stime non sovrapposte; lo Sprint può durare più di quanto inizialmente previsto.
+
+**Riferimenti:** §7.10.
