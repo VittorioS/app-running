@@ -3,8 +3,8 @@ package it.example.passolibero.domain.tracking;
 /**
  * Pure transition effect for fresh MOVING evidence without confirmed movement.
  *
- * <p>The legacy ledger owns timestamps, pending time, committed/visible state and all credits.
- * This transition only computes the existing candidate interval and confirmation decision.
+ * <p>The legacy ledger owns timestamps, pending time, committed/visible state and all credits. This
+ * transition only computes the existing candidate interval and confirmation decision.
  */
 public final class MovingStartTransition {
     /** Immutable intermediate values; no state or counters are modified by this class. */
@@ -23,8 +23,7 @@ public final class MovingStartTransition {
             long previousMovingSinceMs,
             long unresolvedMs,
             String currentGaitName) {
-        long movingSinceMs =
-                previousMovingSinceMs < 0 ? nowMs - deltaMs : previousMovingSinceMs;
+        long movingSinceMs = previousMovingSinceMs < 0 ? nowMs - deltaMs : previousMovingSinceMs;
         long pendingMs = unresolvedMs + deltaMs;
         boolean confirmed = MovementStartConfirmationPolicy.isConfirmed(nowMs - movingSinceMs);
         boolean useCurrentGait = confirmed && ReliableGaitPolicy.hasKnownGait(currentGaitName);
