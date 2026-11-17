@@ -2144,3 +2144,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Ricalcolare la distanza residua usando misure affidabili e stime non sovrapposte; lo Sprint può durare più di quanto inizialmente previsto.
 
 **Riferimenti:** §7.10.
+
+### D28 — Introdurre un nuovo tetto temporale negli Sprint con ritmo personale affidabile?
+
+**Domanda (sintesi):** Introdurre un nuovo tetto temporale negli Sprint con ritmo personale affidabile?
+
+**Risposta confermata:** No: mantenere il completamento per distanza senza ulteriore limite di durata. L'aumento stimato della velocità può far terminare prima del previsto; le correzioni GPS si applicano per precisione, non implicano automaticamente un prolungamento.
+
+**Riferimenti:** §7.10.
