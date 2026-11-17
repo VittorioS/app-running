@@ -805,3 +805,67 @@ rimane condizionata: rari test G3 su dispositivo fisico **NON PASS**
 fino al gate #38. Regressioni contabili/UNKNOWN/storico/recovery/GPS/FGS
 fermano P4b e impongono rivalutazione #24. Rollback: revert isolato
 di questa PR, nessuna migrazione o release.
+
+
+## 28. Quattordicesimo seam P4b (#25): recupero MOVING da incertezza pendente
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance(nowMs, MOVING, activity) [ledger legacy]
+     -> guard timestamp e gap non osservato [legacy, invariati]
+     -> if (uncertainSince >= 0) [legacy]
+        -> domain/tracking/MovingUncertaintyRecoveryTransition.settle(
+               committed name, unresolvedMs)
+           -> ConfirmedMotionPolicy.isMoving(previous committed)
+           -> Effect(destination, creditMs)
+        -> destination PREVIOUS_CONFIRMED_MOVEMENT:
+              credit(committed, creditMs) [ledger]
+           destination UNKNOWN:
+              unknownMs += creditMs [ledger]
+        -> unresolvedMs = 0; uncertainSince = -1 [ledger]
+     -> eventuale STOP pending, nuova conferma MOVING,
+        gait corrente e dt [ledger legacy, invariati]
+```
+
+**Contratto pre/post:** per una callback MOVING, quando
+`uncertainSince >= 0`, il codice precedente sceglieva
+`ConfirmedMotionPolicy.isMoving(committed)` e attribuiva
+`unresolvedMs` con `credit(committed, unresolvedMs)` al precedente
+movimento confermato, oppure ad `unknownMs`, poi azzerava
+`unresolvedMs`. Ora `MovingUncertaintyRecoveryTransition.settle`
+restituisce un valore immutabile con destinazione e durata originale:
+`PREVIOUS_CONFIRMED_MOVEMENT` solo per RUN, WALK, MOVING_UNKNOWN;
+`UNKNOWN` per STILL, UNKNOWN, input null o inatteso. Il caller applica
+gli stessi due rami di accredito e lo stesso azzeramento, nello stesso
+punto del ramo MOVING e prima del recupero dello STOP pending.
+
+Il nuovo Domain usa solo `ConfirmedMotionPolicy` e Java puro. Non
+dipende da Android/legacy/application/data/platform, non modifica
+timestamp, timeout, attributi o contatori. Il ledger conserva il guard
+`uncertainSince >= 0`, il reset `uncertainSince = -1`, il successivo
+`stopPendingMs`/microstop, la conferma del movimento, la categoria
+gait corrente, il credito `dt` e ogni altra mutazione. I test puri
+confrontano i risultati con la condizione legacy per tutti i
+`MovementClassifier.Kind`, durate ai confini e agli estremi di
+`long`, incluso il fallback conservativo per `null`; le chiamate non
+mantengono stato. Non cambiano `TrackingService`, callback GPS/step,
+FGS/START/STOP, recovery, SQLite/Prefs, UI/voce, firma, workflow o
+release.
+
+**Baseline G1:** [PR #115](https://github.com/VittorioS/app-running/pull/115)
+test-only integrata dal maintainer su `main` commit
+`a1ba5758ab9fe25d5e2167adacd06136ebe7907f`, con
+[CI post-merge #44168920133](https://github.com/VittorioS/app-running/actions/runs/44168920133)
+`verify=success` e `android11=success` verificata prima della
+modifica produttiva. I cinque test MOVING documentano incertezza
+recuperata sul precedente gait, nessun backfill senza movimento
+confermato, STOP pending interrotto, riconferma dopo STILL e
+timestamp duplicati/fuori ordine; invarianti di conservazione al
+`finish()`.
+
+**Rischio e deroga:** P4b si svolge ancora sotto deroga limitata per
+#24: i casi G3 fisici rari restano **NON PASS** e devono essere
+riesaminati nel gate finale #38. CI Android 11 emulata non equivale a
+prova fisica. Se emergono regressioni su UNKNOWN, accrediti, storico,
+sessioni duplicate, recovery o GPS/FGS, fermare P4b e riesaminare
+#24. Rollback: revert isolato di questa PR, senza migrazioni.
