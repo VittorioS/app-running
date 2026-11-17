@@ -2184,3 +2184,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Mantenerlo nel riepilogo e nello Storico con stato «Interrotto per problema tecnico», tempo, distanza e sole statistiche attendibili, distinto da Sprint completato o annullato volontariamente.
 
 **Riferimenti:** §7.10, §9–§10.
+
+### D33 — Se il tracking generale non riparte, è possibile salvare la sessione parziale?
+
+**Domanda:** Se il tracking generale non riparte, è possibile salvare la sessione parziale?
+
+**Risposta confermata:** Sì: presentare «Riprova» e «Termina e salva», conservando i dati attendibili fino all'interruzione e indicando chiaramente la registrazione parziale, senza inventare periodi non osservati.
+
+**Riferimenti:** §6.5, §9.
