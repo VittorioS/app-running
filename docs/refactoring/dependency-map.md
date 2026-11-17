@@ -745,3 +745,63 @@ la CI su emulatore API30 non sostituisce il dispositivo fisico.
 In caso di regressioni UNKNOWN, contatori, storico, sessioni
 duplicate, recovery o GPS/FGS fermare P4b e riesaminare la #24.
 Rollback isolato di questa PR, senza migrazioni o release.
+
+## 27. Tredicesimo seam P4b (issue #25): effetti della transizione UNCERTAIN
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance(...) [ledger legacy]
+     -> timestamp, guard worker gap, MOVING, STILL [legacy, invariati]
+     -> ramo evidenza insufficiente (UNCERTAIN/null) [legacy]
+        -> annulla eventuale STOP pending e accredita unknownMs [legacy, invariato]
+        -> inizializza uncertainSince se necessario [legacy, invariato]
+        -> domain/tracking/UncertainEvidenceTransition.resolve(
+               nowMs - uncertainSince, unresolvedMs, dt)
+             -> UncertaintyGracePolicy.shouldKeepPending(uncertainElapsedMs)
+             -> Effect(unresolvedMsAfter, unknownCreditMs,
+                       invalidateConfirmedState)
+        -> unresolvedMs = effect.unresolvedMsAfter [ledger]
+        -> unknownMs += effect.unknownCreditMs [ledger]
+        -> se necessario committed/displayed = UNKNOWN [ledger]
+```
+
+**Responsabilita' migrata:** l'evento puro con durata d'incertezza
+cumulativa, intervallo irrisolto e delta del callback seleziona
+un **risultato immutabile** che esplicita tre effetti da applicare,
+senza mutare lo stato del ledger o introdurre dipendenze Android.
+In precedenza il ramo legacy eseguiva:
+`if (UncertaintyGracePolicy.shouldKeepPending(nowMs - uncertainSince))
+unresolvedMs += dt; else { unknownMs += unresolvedMs + dt;
+unresolvedMs = 0; committed/displayed = UNKNOWN; }`.
+Ora `UncertainEvidenceTransition.resolve` calcola esattamente:
+- prima dei 5.000 ms: `Effect(unresolvedMs + dt, 0, false)`;
+- da 5.000 ms inclusi: `Effect(0, unresolvedMs + dt, true)`.
+
+Il ledger mantiene tutte le scritture a `unresolvedMs`, `unknownMs`,
+`committed` e `displayed` e ne conserva la semantica, inclusa
+l'addizione Java `long` senza saturazione. L'addizione di un credito
+UNKNOWN nullo nel ramo pending e' neutra. Il Domain non importa classi
+del package legacy o livelli esterni. Non si spostano l'annullamento
+STOP pending, il callback timestamp, le soglie, il gait, gli altri
+contatori, i salvataggi/snapshot o la gestione del Service.
+
+**Baseline G1 preesistente:** [PR #95](https://github.com/VittorioS/app-running/pull/95)
+con test di caratterizzazione della grace UNCERTAIN (4.999/5.000 ms),
+recovery con MOVING e STOP pendente; inoltre le PR #91 e #110 caratterizzano
+invarianti ledger e altre transizioni. **Prerequisito immediato:**
+[PR #113](https://github.com/VittorioS/app-running/pull/113) merged
+su `main`, commit `676fa70535e8acb011b8619b8675a276c76e8c0e`,
+[CI post-merge #44147528686](https://github.com/VittorioS/app-running/actions/runs/44147528686)
+`verify=success` e `android11=success` verificati prima del cambio.
+Nuovi test unitari puri confrontano la formula legacy su confini,
+durate e overflow `long` e verificano la mancanza di stato.
+
+**Invarianti:** Android 11/API 30, offline, ordine callback e dei rami,
+UNKNOWN conservativo, `moving=run+walk+movingUnknown`,
+`elapsed=moving+still+unknown`, `stopSince`, `uncertainSince`,
+`lastMs`, `finish/restore`, GPS/step/FGS, START/STOP, recovery,
+SQLite/Prefs, UI, voce, firma e release invariati. La deroga #24
+rimane condizionata: rari test G3 su dispositivo fisico **NON PASS**
+fino al gate #38. Regressioni contabili/UNKNOWN/storico/recovery/GPS/FGS
+fermano P4b e impongono rivalutazione #24. Rollback: revert isolato
+di questa PR, nessuna migrazione o release.
