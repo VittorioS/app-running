@@ -2232,3 +2232,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Sì: tutti i periodi con servizio operativo contribuiscono alla durata monitorata anche con GPS debole o assente. Solo l'interruzione del servizio interrompe questo conteggio; non inventare distanze GPS.
 
 **Riferimenti:** §6.5, §9.
+
+### D39 — Il ritmo medio complessivo include le soste?
+
+**Domanda:** Il ritmo medio complessivo include le soste?
+
+**Risposta confermata:** Sì: calcolare durata monitorata complessiva (incluse soste, escluse interruzioni del servizio) divisa per distanza registrata. Il ritmo medio in movimento resta nei Dettagli. Se la distanza è zero/non attendibile, non presentare un valore fittizio.
+
+**Riferimenti:** §9.
