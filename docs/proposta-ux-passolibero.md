@@ -2152,3 +2152,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** No: mantenere il completamento per distanza senza ulteriore limite di durata. L'aumento stimato della velocità può far terminare prima del previsto; le correzioni GPS si applicano per precisione, non implicano automaticamente un prolungamento.
 
 **Riferimenti:** §7.10.
+
+### D29 — Da quale istante stimare dopo i 2 secondi di tolleranza GPS?
+
+**Domanda (sintesi):** Da quale istante stimare dopo i 2 secondi di tolleranza GPS?
+
+**Risposta confermata:** Dall'inizio effettivo della perdita di segnale, coprendo retroattivamente anche i primi 2 secondi; rimuovere ogni sovrapposizione qualora ritornino misure GPS affidabili.
+
+**Riferimenti:** §7.10.
