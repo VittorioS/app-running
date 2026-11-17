@@ -2104,3 +2104,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** No: non applicare il tetto di 8 secondi. Stimare soltanto i metri residui rispetto a quelli già misurati (esempio 100 m target, 40 m GPS, 60 m stimati), fino al completamento del target.
 
 **Riferimenti:** §7.10.
+
+### D23 — Cosa annunciare quando si perde il GPS durante lo Sprint?
+
+**Domanda (sintesi):** Cosa annunciare quando si perde il GPS durante lo Sprint?
+
+**Risposta confermata:** Messaggio breve «GPS perso. Continuo a tempo», quindi tempo residuo stimato, evitando un'interazione visiva invasiva.
+
+**Riferimenti:** §7.10.
