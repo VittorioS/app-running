@@ -50,11 +50,7 @@ public final class PendingStillTransitionTest {
                                                     evidence.name(),
                                                     minimumMs);
                                     String context =
-                                            evidence.name()
-                                                    + " now="
-                                                    + nowMs
-                                                    + " dt="
-                                                    + deltaMs;
+                                            evidence.name() + " now=" + nowMs + " dt=" + deltaMs;
                                     assertEquals(context, legacyStart, effect.stopSinceMs());
                                     assertEquals(context, legacyPending, effect.pendingStopMs());
                                     assertEquals(context, legacyConfirmed, effect.confirmed());
@@ -78,11 +74,9 @@ public final class PendingStillTransitionTest {
     @Test
     public void confirmsExactlyAtStrongAndModerateThresholds() {
         PendingStillTransition.Effect strongBefore =
-                PendingStillTransition.evaluate(
-                        3_999L, 1L, 0L, 3_998L, 1_000L, "STILL_STRONG", 0L);
+                PendingStillTransition.evaluate(3_999L, 1L, 0L, 3_998L, 1_000L, "STILL_STRONG", 0L);
         PendingStillTransition.Effect strongAt =
-                PendingStillTransition.evaluate(
-                        4_000L, 1L, 0L, 3_999L, 1_000L, "STILL_STRONG", 0L);
+                PendingStillTransition.evaluate(4_000L, 1L, 0L, 3_999L, 1_000L, "STILL_STRONG", 0L);
         PendingStillTransition.Effect moderateBefore =
                 PendingStillTransition.evaluate(
                         7_999L, 1L, 0L, 7_998L, 2_000L, "STILL_MODERATE", 0L);
@@ -111,15 +105,25 @@ public final class PendingStillTransitionTest {
 
         PendingStillTransition.Effect second =
                 PendingStillTransition.evaluate(
-                        5_000L, 1_000L, first.stopSinceMs(), first.pendingStopMs(), 900L,
-                        "STILL_STRONG", 12_000L);
+                        5_000L,
+                        1_000L,
+                        first.stopSinceMs(),
+                        first.pendingStopMs(),
+                        900L,
+                        "STILL_STRONG",
+                        12_000L);
         assertFalse(second.confirmed());
         assertEquals(5_000L, second.pendingStopMs());
 
         PendingStillTransition.Effect third =
                 PendingStillTransition.evaluate(
-                        6_000L, 1_000L, second.stopSinceMs(), second.pendingStopMs(), 900L,
-                        "STILL_STRONG", 0L);
+                        6_000L,
+                        1_000L,
+                        second.stopSinceMs(),
+                        second.pendingStopMs(),
+                        900L,
+                        "STILL_STRONG",
+                        0L);
         assertTrue(third.confirmed());
         assertEquals(6_000L, third.stillCreditMs());
         assertEquals(900L, third.unknownCreditMs());
