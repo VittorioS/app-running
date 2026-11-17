@@ -1936,3 +1936,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Una sessione attiva apre direttamente l'allenamento in corso; una sessione salvata apre il riepilogo definitivo. Non usare il riepilogo finale per sessioni non concluse.
 
 **Riferimenti:** §9, §10.4.
+
+### D02 — Da quale vista è possibile terminare la sessione?
+
+**Domanda (sintesi):** Da quale vista è possibile terminare la sessione?
+
+**Risposta confermata:** «Termina e salva» soltanto dalla vista Statistiche, sempre visibile senza scroll e con conferma. Dalla Mappa live si torna a Statistiche con un tocco; il dock Sprint resta nella medesima posizione.
+
+**Riferimenti:** §6, §9.
