@@ -869,3 +869,66 @@ riesaminati nel gate finale #38. CI Android 11 emulata non equivale a
 prova fisica. Se emergono regressioni su UNKNOWN, accrediti, storico,
 sessioni duplicate, recovery o GPS/FGS, fermare P4b e riesaminare
 #24. Rollback: revert isolato di questa PR, senza migrazioni.
+
+
+## 29. Quindicesimo seam P4b (#25): effetto di conferma iniziale MOVING
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance(nowMs, MOVING, activity, minimumStopMs) [ledger]
+     -> controlli timestamp/gap; recupero UNCERTAIN/STOP pending [legacy]
+     -> se NON esiste un movimento gia' confermato [legacy]
+        -> domain/tracking/MovingStartTransition.evaluate(
+             nowMs, dt, movingSince, unresolvedMs, activity.name/null)
+           -> MovementStartConfirmationPolicy.isConfirmed(elapsedMs)
+           -> ReliableGaitPolicy.hasKnownGait(currentActivityName)
+           -> Effect(movingSinceMs, pendingMs, confirmed, useCurrentGait)
+        -> movingSince = effect.movingSinceMs [ledger]
+        -> unresolvedMs = effect.pendingMs [ledger]
+        -> se confermato: committed/displayed = current gait
+           oppure MOVING_UNKNOWN; credit(committed, unresolvedMs);
+           unresolvedMs = 0; movingSince = -1 [ledger, stesso ordine]
+     -> se gia' confermato: percorso MOVING esistente [legacy invariato]
+```
+
+**Contratto pre/post:** la conferma iniziale di movimento era calcolata
+in `MotionTimeline.advance` dalla sequenza:
+`movingSince = (movingSince < 0 ? nowMs - dt : movingSince)`,
+`unresolvedMs += dt`, e `MovementStartConfirmationPolicy.isConfirmed(
+nowMs - movingSince)`. Alla conferma (2.000 ms inclusi), il solo gait
+del **callback corrente** decide RUN/WALK oppure MOVING_UNKNOWN per
+attivita' assente/inaffidabile; l'intero pending viene attribuito al
+gait scelto in quel momento.
+
+Ora `MovingStartTransition.evaluate` calcola esclusivamente
+`Effect(movingSinceMs, pendingMs, confirmed, useCurrentGait)` da
+input immutabili, usando le policy di conferma e gait pure gia'
+integrate. L'ordine degli effetti del ledger resta
+`movingSince`, `unresolvedMs`, eventuale `committed/displayed`,
+`credit(committed, unresolvedMs)`, reset del pending e del timestamp.
+Resta invariata l'aritmetica Java `long`, incluso overflow;
+non viene inventato un gait dai candidati precedenti.
+
+**G1 integrata:** [PR #115](https://github.com/VittorioS/app-running/pull/115)
+e le precedenti baseline `TrackingMovementStartCharacterizationTest`,
+`TrackingConfirmedMotionCharacterizationTest` e
+`TrackingGaitChangeCharacterizationTest` coprono confini
+1.999/2.000 ms, interruzioni, UNKNOWN, MOVING_UNKNOWN, cambi di gait,
+STILL e gap worker. La [PR #116](https://github.com/VittorioS/app-running/pull/116)
+e' merged su `main` commit `e6b4ca793170cdbe4b1f36e4b2db60e5ae205033`;
+la [CI post-merge #44175033479](https://github.com/VittorioS/app-running/actions/runs/44175033479)
+ha `verify=success` e `android11=success`, verificati **prima** della
+modifica produttiva. Nuovi test puri di parita' controllano clock,
+durate e `long` estremi, tutti gli stati di gait e null, assenza
+di stato tra chiamate. Nessuna suite hardware o test locale rivendicato.
+
+Nessun cambiamento a `TrackingService`, GPS/step, FGS/START/STOP,
+persistenza SQLite/Prefs, snapshot, callback, lifecycle, recovery,
+permessi, UI, voce, firma, workflow o release. I contatori e gli
+accrediti restano nel ledger, e restano validi
+`moving=run+walk+movingUnknown` e
+`elapsed=moving+still+unknown`. La deroga condizionata #24 non
+copre automaticamente i G3 fisici rari ancora **NON PASS**, da
+riesaminare al gate finale #38; regressioni UNKNOWN, contatori,
+storico, recovery, sessioni duplicate o GPS/FGS bloccano P4b.
+Rollback: revert isolato di questa PR, senza migrazioni.
