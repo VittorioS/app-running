@@ -1,6 +1,7 @@
 package it.example.passolibero;
 
 import it.example.passolibero.domain.tracking.ConfirmedMotionPolicy;
+import it.example.passolibero.domain.tracking.ConfirmedStillPolicy;
 import it.example.passolibero.domain.tracking.EffectiveStopThresholdPolicy;
 import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
 import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
@@ -92,7 +93,7 @@ public final class MotionTimeline {
         movingSince = -1;
         if (StillEvidencePolicy.isStill(evidence == null ? null : evidence.name())) {
             uncertainSince = -1;
-            if (committed == MovementClassifier.Kind.STILL) {
+            if (ConfirmedStillPolicy.isConfirmed(committed == null ? null : committed.name())) {
                 stillMs += unresolvedMs;
                 unresolvedMs = 0;
                 stillMs += dt;

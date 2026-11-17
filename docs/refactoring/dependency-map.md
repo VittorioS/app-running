@@ -635,3 +635,55 @@ richiesti al gate finale #38; l'emulatore non sostituisce il device.
 Una regressione UNKNOWN, storico, sessioni duplicate, recovery o GPS/FGS
 sospende P4b e richiede rivalutazione della #24. Rollback della sola PR,
 senza migrazioni.
+
+## 25. Undicesimo seam P4b (issue #25): riconoscimento di STILL già confermato
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance(nowMs, evidence, activity, minimumStopMs)
+     -> timestamp, worker gap e ramo MOVING [legacy, invariati]
+     -> StillEvidencePolicy.isStill(evidence name) [domain]
+        -> ConfirmedStillPolicy.isConfirmed(committed name) [domain]
+           [true solo per STILL già confermato]
+        -> [true] accredito unresolvedMs + dt a stillMs [ledger legacy]
+        -> [false] candidato STOP, soglia corrente e conferma [ledger legacy]
+```
+
+L'unico comportamento estratto è il predicato precedentemente scritto
+`committed == MovementClassifier.Kind.STILL`. Il ledger passa
+`committed.name()` oppure `null` al nuovo
+`domain/tracking/ConfirmedStillPolicy.isConfirmed(String)`, equivalente
+per tutte le varianti `MovementClassifier.Kind` e per `null`.
+La policy è Java puro, non dipende dal package legacy, da Android o da
+application/platform/data e non contiene stato. Non attribuisce tempo e
+non conferma nuove soste.
+
+Conservati nell'ordine originale `StillEvidencePolicy`, la decisione
+`ConfirmedStillPolicy`, i crediti `stillMs += unresolvedMs` e
+`stillMs += dt`, azzeramento `unresolvedMs`, `displayed`, il
+ritorno anticipato del ramo STILL già confermato, il percorso pending
+con `stopSince`, `EffectiveStopThresholdPolicy`,
+`StopConfirmationPolicy`, `unknownMs`, `stopPendingMs`, `finish`,
+`restore` e tutti i side effect del ledger. Nessun cambiamento a
+`TrackingService`, callback GPS/step, FGS/lifecycle, START/STOP,
+recovery, SQLite/Preferences, snapshot, UI, voce, permessi o release.
+Il runner JVM include la nuova sorgente nella lista esplicita `javac`.
+
+**Baseline G1:** [PR #110](https://github.com/VittorioS/app-running/pull/110)
+test-only integrata dal maintainer su `main` commit
+`dc51e2f903eb18bc5d4c1539affba39109cb4764`, con
+[CI post-merge #44072975440](https://github.com/VittorioS/app-running/actions/runs/44072975440)
+`verify=success` e `android11=success` verificati prima di questa
+estrazione. I sei test di caratterizzazione fissano la continuazione
+di STILL, il ritorno dopo UNCERTAIN breve, la scadenza della grace
+cumulativa, la riconferma di movimento, il worker blackout e il
+contapassi tardivo. Il test della policy confronta il predicato legacy
+su tutti gli stati e valori null/sconosciuti.
+
+**Deroga #24/G3:** non sono toccati lifecycle, sensori, GPS/FGS,
+persistenza o recovery. I test G3 fisici rari differiti della #24
+restano **NON PASS**, da valutare al gate finale #38; la CI su
+emulatore API30 non li sostituisce. Regressioni UNKNOWN, contatori,
+storico, sessioni duplicate, recovery o GPS/FGS sospendono P4b e
+richiedono rivalutazione #24. Rollback isolato della sola PR,
+senza migrazioni o release.
