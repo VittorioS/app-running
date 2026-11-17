@@ -2240,3 +2240,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Sì: calcolare durata monitorata complessiva (incluse soste, escluse interruzioni del servizio) divisa per distanza registrata. Il ritmo medio in movimento resta nei Dettagli. Se la distanza è zero/non attendibile, non presentare un valore fittizio.
 
 **Riferimenti:** §9.
+
+### D40 — Come presentare il ritmo quando il GPS manca per una parte significativa dell'allenamento?
+
+**Domanda:** Come presentare il ritmo quando il GPS manca per una parte significativa dell'allenamento?
+
+**Risposta confermata:** Nel riepilogo principale mostrare «Ritmo medio non attendibile»; nei Dettagli mantenere il valore calcolato con indicazione esplicita di incompletezza. Conservare distanza e tempo attendibili; non stimare distanza generale per colmare lacune.
+
+**Riferimenti:** §6.5, §9.
