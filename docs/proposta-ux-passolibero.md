@@ -1960,3 +1960,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Da Statistiche e Mappa live sono disponibili accessi diretti ai tre editor: obiettivo distanza, checkpoint vocali e Sprint, senza sospendere il tracking.
 
 **Riferimenti:** §7.22.
+
+### D05 — La pagina unica «Opzioni allenamento» resta accessibile durante una sessione?
+
+**Domanda (sintesi):** La pagina unica «Opzioni allenamento» resta accessibile durante una sessione?
+
+**Risposta confermata:** No: durante la sessione usare accessi diretti ai tre editor; «Opzioni allenamento» rimane disponibile soltanto fuori allenamento (per esempio Home/Impostazioni). Questa scelta sostituisce la previsione in-sessione di §7.22.
+
+**Riferimenti:** §7.22.
