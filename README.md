@@ -2,6 +2,10 @@
 
 App Android nativa in Java (**Android 11/API 30 obbligatorio**, minSdk 30, compile/target SDK 35). CI con test strumentali API 30. Tracciamento GPS e sensori passi durante sessioni avviate dall'utente; storico interamente sul dispositivo.
 
+## Specifica funzionale deterministica
+
+La [documentazione del comportamento implementato](docs/behavior/README.md) descrive feature, Statecharts Mermaid, tabelle di transizione, invarianti e scenari Gherkin essenziali. È una fotografia del codice corrente, distinta da roadmap e proposte future.
+
 ## Schermate
 
 - **Home:** mappa OpenStreetMap, posizione GPS corrente e SOLO percorso della sessione attiva, aggiornato ogni 1,5 s. Al termine viene svuotata. Pulsante per aprire la schermata dell'allenamento e accesso allo storico.
