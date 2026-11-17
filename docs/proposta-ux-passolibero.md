@@ -2192,3 +2192,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Sì: presentare «Riprova» e «Termina e salva», conservando i dati attendibili fino all'interruzione e indicando chiaramente la registrazione parziale, senza inventare periodi non osservati.
 
 **Riferimenti:** §6.5, §9.
+
+### D34 — Come mostrare nel riepilogo il tempo senza tracking?
+
+**Domanda:** Come mostrare nel riepilogo il tempo senza tracking?
+
+**Risposta confermata:** Mostrare distintamente durata complessiva e tempo senza tracking; non attribuire periodi senza servizio a corsa, camminata o sosta. **Aggiornamento successivo D37:** il valore principale della durata sarà la somma dei periodi monitorati, mentre la durata cronologica totale resterà separata.
+
+**Riferimenti:** §9.
