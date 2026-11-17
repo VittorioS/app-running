@@ -1992,3 +1992,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Scartare tutti gli annunci checkpoint pendenti, senza cancellare gli eventi registrati e senza recuperi retroattivi alla riattivazione. Annunci obiettivo e Sprint indipendenti.
 
 **Riferimenti:** §7.11, §7.18.
+
+### D09 — Cosa accade agli eventi checkpoint pendenti quando cambia l'intervallo?
+
+**Domanda (sintesi):** Cosa accade agli eventi checkpoint pendenti quando cambia l'intervallo?
+
+**Risposta confermata:** Gli eventi già registrati mantengono distanza e ora originali; se sono più di uno annunciare solo il più recente. Il nuovo intervallo vale in avanti, senza recuperare soglie retroattive.
+
+**Riferimenti:** §7.15–§7.18.
