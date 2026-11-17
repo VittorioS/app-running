@@ -2032,3 +2032,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Priorità a velocità attendibile rilevata nello Sprint in corso, quindi ritmi di Sprint precedenti; solo in subordine usare riferimenti di corsa ordinaria.
 
 **Riferimenti:** §7.10.
+
+### D14 — Come ricorrere ai ritmi di corsa non Sprint per il fallback?
+
+**Domanda (sintesi):** Come ricorrere ai ritmi di corsa non Sprint per il fallback?
+
+**Risposta confermata:** Se mancano ritmi Sprint attendibili usare il ritmo affidabile della corsa corrente, poi ritmi delle corse precedenti; applicare una maggiorazione prudenziale alla velocità stimata, da precisare.
+
+**Riferimenti:** §7.10.
