@@ -2048,3 +2048,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Aumentare la velocità stimata del 50% (velocità × 1,5; ritmo min/km ÷ 1,5), non dimezzare il ritmo. È un'assunzione di fallback, non una garanzia fisiologica.
 
 **Riferimenti:** §7.10.
+
+### D16 — Se il GPS torna durante uno Sprint convertito a tempo, riprendere i dati GPS?
+
+**Domanda (sintesi):** Se il GPS torna durante uno Sprint convertito a tempo, riprendere i dati GPS?
+
+**Risposta confermata:** Decisione finale: sì, usare i nuovi dati GPS attendibili, preservando il progresso già stimato e correggendo eventuali sovrapposizioni con misure effettive. Sostituisce la precedente ipotesi di conversione irreversibile a tempo.
+
+**Riferimenti:** §7.10.
