@@ -1984,3 +1984,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Sì: conservare evento, distanza target originale e istante di raggiungimento; annunciarlo una volta sola anche se la configurazione cambia prima del TTS. Evitare duplicati.
 
 **Riferimenti:** §7.19–§7.21.
+
+### D08 — Cosa accade ai checkpoint vocali in coda quando l'utente disabilita la voce?
+
+**Domanda (sintesi):** Cosa accade ai checkpoint vocali in coda quando l'utente disabilita la voce?
+
+**Risposta confermata:** Scartare tutti gli annunci checkpoint pendenti, senza cancellare gli eventi registrati e senza recuperi retroattivi alla riattivazione. Annunci obiettivo e Sprint indipendenti.
+
+**Riferimenti:** §7.11, §7.18.
