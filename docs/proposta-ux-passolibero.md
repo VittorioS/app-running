@@ -2200,3 +2200,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Mostrare distintamente durata complessiva e tempo senza tracking; non attribuire periodi senza servizio a corsa, camminata o sosta. **Aggiornamento successivo D37:** il valore principale della durata sarà la somma dei periodi monitorati, mentre la durata cronologica totale resterà separata.
 
 **Riferimenti:** §9.
+
+### D35 — Quando persistere gli allenamenti in un'app completamente offline?
+
+**Domanda:** Quando persistere gli allenamenti in un'app completamente offline?
+
+**Risposta confermata:** Scrivere progressivamente nel database locale GPS, statistiche ed eventi; «Termina e salva» finalizza prevalentemente una sessione già persistita. Evitare meccanismi complessi da servizio online. In caso di terminazione imprevista, preservare i dati già scritti.
+
+**Riferimenti:** §6.5, §9.
