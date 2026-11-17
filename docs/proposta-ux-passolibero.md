@@ -2088,3 +2088,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Soltanto nel caso estremo di GPS assente e nessun dato personale attendibile di ritmo; gli 8 secondi sono tempo totale dello Sprint escluso il countdown preparatorio, non una soglia universale di sicurezza fisiologica.
 
 **Riferimenti:** §7.10.
+
+### D21 — Come descrivere l'arresto per limite estremo di 8 secondi?
+
+**Domanda (sintesi):** Come descrivere l'arresto per limite estremo di 8 secondi?
+
+**Risposta confermata:** Pronunciare «Sprint concluso per limite prudenziale», senza dire che il target è stato raggiunto; nel riepilogo distinguere misure osservate e stime parziali.
+
+**Riferimenti:** §7.10, §9.
