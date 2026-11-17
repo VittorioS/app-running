@@ -1968,3 +1968,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** No: durante la sessione usare accessi diretti ai tre editor; «Opzioni allenamento» rimane disponibile soltanto fuori allenamento (per esempio Home/Impostazioni). Questa scelta sostituisce la previsione in-sessione di §7.22.
 
 **Riferimenti:** §7.22.
+
+### D06 — Quanto dura la bozza dell'obiettivo scelta prima dell'avvio?
+
+**Domanda (sintesi):** Quanto dura la bozza dell'obiettivo scelta prima dell'avvio?
+
+**Risposta confermata:** L'obiettivo esplicito pre-avvio sopravvive a chiusura e riapertura app finché la sessione inizia oppure l'utente lo elimina esplicitamente. Dopo l'avvio vale per quella sessione; il prossimo nuovo allenamento riparte senza obiettivo.
+
+**Riferimenti:** §7.23.
