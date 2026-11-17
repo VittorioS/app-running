@@ -1923,3 +1923,16 @@ Le città e gli orari salvati resteranno disponibili.
 - Meteo: [`WeatherSettingsActivity.java`](https://github.com/VittorioS/app-running/blob/cd27fc6b7656bef80bb6479484425c754a676448/app/src/main/java/it/example/passolibero/WeatherSettingsActivity.java), [`WeatherRules.java`](https://github.com/VittorioS/app-running/blob/cd27fc6b7656bef80bb6479484425c754a676448/app/src/main/java/it/example/passolibero/WeatherRules.java), [`WeatherMonitor.java`](https://github.com/VittorioS/app-running/blob/cd27fc6b7656bef80bb6479484425c754a676448/app/src/main/java/it/example/passolibero/WeatherMonitor.java)
 - Mappa e camera GPS: [`TrackMap.java`](https://github.com/VittorioS/app-running/blob/cd27fc6b7656bef80bb6479484425c754a676448/app/src/main/java/it/example/passolibero/TrackMap.java)
 - Elenco e selezione tratti: [`RouteSectionList.java`](https://github.com/VittorioS/app-running/blob/cd27fc6b7656bef80bb6479484425c754a676448/app/src/main/java/it/example/passolibero/RouteSectionList.java), [`RouteSectionSelection.java`](https://github.com/VittorioS/app-running/blob/cd27fc6b7656bef80bb6479484425c754a676448/app/src/main/java/it/example/passolibero/RouteSectionSelection.java), [`RouteSections.java`](https://github.com/VittorioS/app-running/blob/cd27fc6b7656bef80bb6479484425c754a676448/app/src/main/java/it/example/passolibero/RouteSections.java)
+
+
+## 17. Registro delle decisioni confermate nella revisione
+
+> **Regola di lettura:** questo registro raccoglie le risposte esplicitamente confermate nella revisione successiva alla v2.20. In caso di divergenza con i capitoli precedenti, prevale la decisione più recente; le correzioni saranno integrate nei capitoli tematici prima della chiusura della specifica. Sono requisiti UX proposti, **non funzionalità già implementate**. La domanda 42 non è ancora stata decisa.
+
+### D01 — Storico: destinazione delle schede
+
+**Domanda:** Cosa deve succedere quando si tocca una sessione ancora attiva nello Storico?
+
+**Risposta confermata:** Una sessione attiva apre direttamente l'allenamento in corso; una sessione salvata apre il riepilogo definitivo. Non usare il riepilogo finale per sessioni non concluse.
+
+**Riferimenti:** §9, §10.4.
