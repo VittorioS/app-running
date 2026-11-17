@@ -2208,3 +2208,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Scrivere progressivamente nel database locale GPS, statistiche ed eventi; «Termina e salva» finalizza prevalentemente una sessione già persistita. Evitare meccanismi complessi da servizio online. In caso di terminazione imprevista, preservare i dati già scritti.
 
 **Riferimenti:** §6.5, §9.
+
+### D36 — Dopo il riavvio del telefono, cosa fare con una sessione non conclusa?
+
+**Domanda:** Dopo il riavvio del telefono, cosa fare con una sessione non conclusa?
+
+**Risposta confermata:** Recuperare la sessione persistita e mostrare «Allenamento interrotto» con «Riprendi tracciamento» o «Termina e salva»; conservare obiettivo/impostazioni e distinguere gli intervalli privi di tracking.
+
+**Riferimenti:** §6.5, §9–§10.
