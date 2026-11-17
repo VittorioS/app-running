@@ -2120,3 +2120,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Concedere 2 secondi prima del passaggio alla stima temporale; durante questa tolleranza non conteggiare distanze GPS inaffidabili.
 
 **Riferimenti:** §7.10.
+
+### D25 — Cosa fare quando arrivano campioni GPS affidabili riferiti a un intervallo già stimato?
+
+**Domanda (sintesi):** Cosa fare quando arrivano campioni GPS affidabili riferiti a un intervallo già stimato?
+
+**Risposta confermata:** Sostituire la porzione stimata sovrapposta con la misura GPS affidabile, senza conteggiare due volte la stessa progressione e senza perdere altre parti valide.
+
+**Riferimenti:** §7.10.
