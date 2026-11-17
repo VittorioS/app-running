@@ -8,6 +8,7 @@ import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
 import it.example.passolibero.domain.tracking.ReliableGaitPolicy;
 import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
 import it.example.passolibero.domain.tracking.StillEvidencePolicy;
+import it.example.passolibero.domain.tracking.TimeCreditBucketPolicy;
 import it.example.passolibero.domain.tracking.UncertaintyGracePolicy;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
 
@@ -156,10 +157,12 @@ public final class MotionTimeline {
     }
     private void credit(MovementClassifier.Kind kind, long dt) {
         if (dt <= 0) return;
-        if (kind == MovementClassifier.Kind.RUN) runMs += dt;
-        else if (kind == MovementClassifier.Kind.WALK) walkMs += dt;
-        else if (kind == MovementClassifier.Kind.STILL) stillMs += dt;
-        else if (kind == MovementClassifier.Kind.MOVING_UNKNOWN) movingUnknownMs += dt;
+        TimeCreditBucketPolicy.Bucket bucket =
+                TimeCreditBucketPolicy.bucketFor(kind == null ? null : kind.name());
+        if (bucket == TimeCreditBucketPolicy.Bucket.RUN) runMs += dt;
+        else if (bucket == TimeCreditBucketPolicy.Bucket.WALK) walkMs += dt;
+        else if (bucket == TimeCreditBucketPolicy.Bucket.STILL) stillMs += dt;
+        else if (bucket == TimeCreditBucketPolicy.Bucket.MOVING_UNKNOWN) movingUnknownMs += dt;
         else unknownMs += dt;
     }
     public MovementClassifier.Kind visible() { return displayed; }
