@@ -2080,3 +2080,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Come fallback estremo ipotizzare un ritmo base di corsa, ancora da definire e validare, con velocità maggiorata del 50%; dichiarare la scarsa confidenza della stima. Non è stato approvato alcun valore numerico di ritmo base.
 
 **Riferimenti:** §7.10.
+
+### D20 — Quando applicare il limite cautelativo di 8 secondi?
+
+**Domanda (sintesi):** Quando applicare il limite cautelativo di 8 secondi?
+
+**Risposta confermata:** Soltanto nel caso estremo di GPS assente e nessun dato personale attendibile di ritmo; gli 8 secondi sono tempo totale dello Sprint escluso il countdown preparatorio, non una soglia universale di sicurezza fisiologica.
+
+**Riferimenti:** §7.10.
