@@ -2008,3 +2008,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Recuperare l'annuncio al ritorno del TTS soltanto mentre lo stesso allenamento è ancora attivo, con dettagli originali, una sola volta e rispettando la priorità Sprint.
 
 **Riferimenti:** §7.19.
+
+### D11 — Se il TTS torna dopo un guasto e più checkpoint sono in attesa?
+
+**Domanda (sintesi):** Se il TTS torna dopo un guasto e più checkpoint sono in attesa?
+
+**Risposta confermata:** Annunciare solo l'ultimo checkpoint pendente, con distanza e tempo originari; conservare tutti gli eventi nel registro e dare priorità alla voce Sprint. Distinto dalla disattivazione volontaria.
+
+**Riferimenti:** §7.11–§7.15.
