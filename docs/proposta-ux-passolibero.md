@@ -2168,3 +2168,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Ricalcolare la velocità utilizzando tutti i segmenti Sprint misurati da GPS affidabile, escludendo progressi solo stimati; privilegiare misure reali dello Sprint corrente rispetto a precedenti storici.
 
 **Riferimenti:** §7.10.
+
+### D31 — Se si interrompe completamente il servizio di tracking durante Sprint?
+
+**Domanda (sintesi):** Se si interrompe completamente il servizio di tracking durante Sprint?
+
+**Risposta confermata:** Concludere lo Sprint con stato «Interrotto per problema tecnico»; non riprenderlo automaticamente alla riattivazione del servizio. L'allenamento generale può invece essere recuperato.
+
+**Riferimenti:** §6.5, §7.10.
