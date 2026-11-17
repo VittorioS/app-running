@@ -18,8 +18,6 @@ public final class ConfirmedMovingIntervalTransition {
     public static Effect evaluate(
             long unresolvedMs, long currentDeltaMs, String currentActivityName) {
         return new Effect(
-                unresolvedMs,
-                currentDeltaMs,
-                ReliableGaitPolicy.hasKnownGait(currentActivityName));
+                unresolvedMs, currentDeltaMs, ReliableGaitPolicy.hasKnownGait(currentActivityName));
     }
 }
