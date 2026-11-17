@@ -1944,3 +1944,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** «Termina e salva» soltanto dalla vista Statistiche, sempre visibile senza scroll e con conferma. Dalla Mappa live si torna a Statistiche con un tocco; il dock Sprint resta nella medesima posizione.
 
 **Riferimenti:** §6, §9.
+
+### D03 — Dove porta «Configura sprint» se il preset non esiste?
+
+**Domanda (sintesi):** Dove porta «Configura sprint» se il preset non esiste?
+
+**Risposta confermata:** Il comando nel dock Sprint apre direttamente l'editor di configurazione Sprint, senza pagina indice intermedia.
+
+**Riferimenti:** §7.10.
