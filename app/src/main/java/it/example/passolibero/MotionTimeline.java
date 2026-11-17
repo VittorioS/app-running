@@ -3,8 +3,8 @@ package it.example.passolibero;
 import it.example.passolibero.domain.tracking.ConfirmedMotionPolicy;
 import it.example.passolibero.domain.tracking.ConfirmedStillPolicy;
 import it.example.passolibero.domain.tracking.EffectiveStopThresholdPolicy;
-import it.example.passolibero.domain.tracking.MovementStartConfirmationPolicy;
 import it.example.passolibero.domain.tracking.MovingUncertaintyRecoveryTransition;
+import it.example.passolibero.domain.tracking.MovingStartTransition;
 import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
 import it.example.passolibero.domain.tracking.ReliableGaitPolicy;
 import it.example.passolibero.domain.tracking.StopConfirmationPolicy;
@@ -71,12 +71,20 @@ public final class MotionTimeline {
             }
             if (!ConfirmedMotionPolicy.isMoving(committed == null ? null : committed.name())) {
                 // Movement confirmation is independent of gait classification.
-                if (movingSince < 0) movingSince = nowMs - dt;
-                unresolvedMs += dt;
-                if (MovementStartConfirmationPolicy.isConfirmed(nowMs - movingSince)) {
-                    committed = ReliableGaitPolicy.hasKnownGait(
-                                    activity == null ? null : activity.name())
-                            ? activity : MovementClassifier.Kind.MOVING_UNKNOWN;
+                MovingStartTransition.Effect start =
+                        MovingStartTransition.evaluate(
+                                nowMs,
+                                dt,
+                                movingSince,
+                                unresolvedMs,
+                                activity == null ? null : activity.name());
+                movingSince = start.movingSinceMs();
+                unresolvedMs = start.pendingMs();
+                if (start.confirmed()) {
+                    committed =
+                            start.useCurrentGait()
+                                    ? activity
+                                    : MovementClassifier.Kind.MOVING_UNKNOWN;
                     displayed = committed;
                     credit(committed, unresolvedMs);
                     unresolvedMs = 0;
