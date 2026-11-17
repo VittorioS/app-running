@@ -37,8 +37,7 @@ public final class MovingUncertaintyRecoveryTransitionTest {
             MovingUncertaintyRecoveryTransition.Effect effect =
                     MovingUncertaintyRecoveryTransition.settle(stateName, 2_000L);
             assertEquals(
-                    MovingUncertaintyRecoveryTransition.Destination.UNKNOWN,
-                    effect.destination());
+                    MovingUncertaintyRecoveryTransition.Destination.UNKNOWN, effect.destination());
             assertEquals(2_000L, effect.creditMs());
         }
     }
@@ -56,8 +55,7 @@ public final class MovingUncertaintyRecoveryTransitionTest {
                 MovingUncertaintyRecoveryTransition.Destination.PREVIOUS_CONFIRMED_MOVEMENT,
                 first.destination());
         assertEquals(3_000L, first.creditMs());
-        assertEquals(
-                MovingUncertaintyRecoveryTransition.Destination.UNKNOWN, second.destination());
+        assertEquals(MovingUncertaintyRecoveryTransition.Destination.UNKNOWN, second.destination());
         assertEquals(1_000L, second.creditMs());
         assertEquals(
                 MovingUncertaintyRecoveryTransition.Destination.PREVIOUS_CONFIRMED_MOVEMENT,
