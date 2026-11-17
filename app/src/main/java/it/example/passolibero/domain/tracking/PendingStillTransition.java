@@ -34,8 +34,7 @@ public final class PendingStillTransition {
         long pendingStopMs = previousStopPendingMs + deltaMs;
         long requiredStopMs =
                 EffectiveStopThresholdPolicy.requiredStopMs(currentEvidenceName, minimumStopMs);
-        boolean confirmed =
-                StopConfirmationPolicy.isConfirmed(nowMs - stopSinceMs, requiredStopMs);
+        boolean confirmed = StopConfirmationPolicy.isConfirmed(nowMs - stopSinceMs, requiredStopMs);
         return new Effect(
                 stopSinceMs,
                 pendingStopMs,
