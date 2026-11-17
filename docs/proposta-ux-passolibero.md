@@ -2224,3 +2224,11 @@ Le città e gli orari salvati resteranno disponibili.
 **Risposta confermata:** Mostrare come durata allenamento soltanto la somma dei periodi monitorati; mostrare separatamente tempo senza tracking e durata cronologica dall'avvio alla fine. **Questa decisione aggiorna D34 e §9.4.**
 
 **Riferimenti:** §9.4.
+
+### D38 — Il tempo dell'allenamento avanza quando manca il GPS ma il servizio è attivo?
+
+**Domanda:** Il tempo dell'allenamento avanza quando manca il GPS ma il servizio è attivo?
+
+**Risposta confermata:** Sì: tutti i periodi con servizio operativo contribuiscono alla durata monitorata anche con GPS debole o assente. Solo l'interruzione del servizio interrompe questo conteggio; non inventare distanze GPS.
+
+**Riferimenti:** §6.5, §9.
