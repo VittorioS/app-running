@@ -3,8 +3,8 @@ package it.example.passolibero.domain.tracking;
 /**
  * Pure effects when fresh MOVING evidence interrupts an unconfirmed STOP.
  *
- * <p>Unconfirmed microstops are credited to the previous committed activity, never to the
- * current callback's gait. The legacy timeline owns the time ledger and resets.
+ * <p>Unconfirmed microstops are credited to the previous committed activity, never to the current
+ * callback's gait. The legacy timeline owns the time ledger and resets.
  */
 public final class MovingPendingStopRecoveryTransition {
     /** Immutable instructions; no counters or timestamps are mutated here. */
