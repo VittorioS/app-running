@@ -21,6 +21,7 @@ javac -d build-test app/src/main/java/it/example/passolibero/RunMath.java \
   app/src/main/java/it/example/passolibero/domain/tracking/PendingStillTransition.java \
   app/src/main/java/it/example/passolibero/domain/tracking/StillEvidencePolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/PendingStopRevocationPolicy.java \
+  app/src/main/java/it/example/passolibero/domain/tracking/DelayedStepStopRevocationTransition.java \
   app/src/main/java/it/example/passolibero/domain/tracking/ReliableGaitPolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/ConfirmedMotionPolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/MovingUncertaintyRecoveryTransition.java \
