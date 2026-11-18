@@ -30,8 +30,9 @@ public final class DelayedStepStopRevocationTransitionTest {
 
     @Test
     public void stepAtStartRevokesButOlderStepAndAlreadySettledStopDoNot() {
-        assertFalse(DelayedStepStopRevocationTransition.evaluate(2_000L, 1_999L, 100L)
-                .revokePendingStop());
+        assertFalse(
+                DelayedStepStopRevocationTransition.evaluate(2_000L, 1_999L, 100L)
+                        .revokePendingStop());
         DelayedStepStopRevocationTransition.Effect overlap =
                 DelayedStepStopRevocationTransition.evaluate(2_000L, 2_000L, 1_000L);
         assertTrue(overlap.revokePendingStop());
