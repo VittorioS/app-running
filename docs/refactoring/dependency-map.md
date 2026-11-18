@@ -1331,3 +1331,50 @@ a #25/P4b, senza sblocco #26+. Regressioni UNKNOWN/ledger, storico,
 sessioni duplicate, recovery o GPS/FGS fermano P4b e richiedono
 riesame #24. Rollback: revert isolato di questa PR (5 file),
 nessuna migrazione dati.
+
+## 37. Ventitreesimo seam P4b (#25): restore contatori e reset legacy
+
+```text
+TrackingService / RunState snapshot [invariati]
+ -> MotionTimeline.restore(run, walk, still, unknown[, movingUnknown]) [ledger]
+    -> TrackingRestoreCountersTransition.evaluate(...) [domain puro]
+       -> Effect(runMs, walkMs, stillMs, unknownMs, movingUnknownMs)
+    -> assegna i cinque contatori normalizzati nello stesso ordine
+    -> committed/displayed UNKNOWN; lastMs/stopSince/movingSince/
+       uncertainSince=-1; stopPendingMs/unresolvedMs=0 [ledger legacy]
+```
+
+**Contratto:** il legacy usa cinque `Math.max(0, value)` indipendenti,
+prima di invalidare conferma e stato visibile e azzerare clock e buffer.
+L'effetto domain propone soltanto i cinque valori normalizzati:
+non legge/scrive snapshot, non cambia le chiavi SharedPreferences,
+non accorpa i contatori ne' satura i positivi. L'overload a quattro
+argomenti continua a ripristinare `movingUnknown=0`. Il primo
+callback dopo `restore()` inizializza soltanto il clock; non accredita
+il tempo non osservato. `MotionTimeline` rimane proprietario di
+mutazioni, reset, callback, timestamp e stato visibile.
+
+**G1 test-first:** primo commit
+`TrackingRestoreCharacterizationTest` su ledger pre-estrazione:
+clamp dei negativi, candidato STOP pendente, overload 4-parametri,
+clock reinizializzato e nuova conferma MOVING dopo incertezza.
+Secondo commit: `TrackingRestoreCountersTransitionTest` verifica
+clamp indipendente, zero, limiti `long` e chiamate stateless;
+`MotionRegressionTest` gia' integra un replay restore.
+Prerequisito: [PR #126](https://github.com/VittorioS/app-running/pull/126)
+merged su `main` commit `58fd88c75aff28c98fbd8346ca6bb76500e9b380`,
+[CI post-merge #44407926483](https://github.com/VittorioS/app-running/actions/runs/44407926483)
+`completed/success` sullo stesso SHA, con `verify=success` e
+`android11=success`, verificati prima del nuovo codice.
+
+**Vincoli:** nessuna modifica a `TrackingService`, GPS/step,
+FGS/START/STOP/lifecycle, process recovery Android, SQLite/Prefs,
+UI/voce, permessi, signing, versioni, workflow o release. Domain
+resta Java puro senza import Android/legacy/application/data/platform.
+`moving=run+walk+movingUnknown` e
+`elapsed=moving+still+unknown` rimangono invarianti.
+#24 e #25 restano OPEN: G3 fisico raro ancora incompleto e rinviato
+al gate #38 dalla deroga condizionata limitata a P4b. Qualsiasi
+regressione UNKNOWN/ledger, storico, sessioni duplicate, recovery o
+GPS/FGS blocca P4b e richiede riesame #24. Rollback: revert isolato
+dei sei file della PR, nessuna migrazione dati.
