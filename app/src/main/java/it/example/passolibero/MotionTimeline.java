@@ -4,9 +4,9 @@ import it.example.passolibero.domain.tracking.ConfirmedMotionPolicy;
 import it.example.passolibero.domain.tracking.ConfirmedMovingIntervalTransition;
 import it.example.passolibero.domain.tracking.ConfirmedStillIntervalTransition;
 import it.example.passolibero.domain.tracking.ConfirmedStillPolicy;
+import it.example.passolibero.domain.tracking.DelayedStepStopRevocationTransition;
 import it.example.passolibero.domain.tracking.MovingUncertaintyRecoveryTransition;
 import it.example.passolibero.domain.tracking.MovingStartTransition;
-import it.example.passolibero.domain.tracking.PendingStopRevocationPolicy;
 import it.example.passolibero.domain.tracking.PendingStillTransition;
 import it.example.passolibero.domain.tracking.StillEvidencePolicy;
 import it.example.passolibero.domain.tracking.TimeCreditBucketPolicy;
@@ -167,8 +167,10 @@ public final class MotionTimeline {
      * leave that interval unknown rather than inventing continuous walking.
      */
     public void observeDelayedStep(long stepMs) {
-        if (PendingStopRevocationPolicy.shouldRevoke(stopSince, stepMs)) {
-            unknownMs += stopPendingMs;
+        DelayedStepStopRevocationTransition.Effect effect =
+                DelayedStepStopRevocationTransition.evaluate(stopSince, stepMs, stopPendingMs);
+        if (effect.revokePendingStop()) {
+            unknownMs += effect.unknownCreditMs();
             stopPendingMs = 0;
             stopSince = -1;
         }

@@ -1118,3 +1118,57 @@ emulatore non li sostituisce. Qualsiasi regressione su UNKNOWN,
 contatori, storico, sessioni duplicate, recovery o GPS/FGS impone
 stop P4b e riesame #24. Nessun sblocco automatico dei lotti #26+.
 Rollback: revert isolato di questa PR (cinque file), senza migrazione.
+
+## 33. Diciannovesimo seam P4b (#25): revoca STOP pendente da passo tardivo
+
+```text
+TrackingService step callback [legacy, invariato]
+  -> MotionTimeline.observeDelayedStep(stepMs) [ledger]
+     -> DelayedStepStopRevocationTransition.evaluate(
+          stopSince, stepMs, stopPendingMs) [domain puro]
+        -> PendingStopRevocationPolicy.shouldRevoke(stopSince, stepMs)
+        -> Effect(revokePendingStop, unknownCreditMs)
+     -> se revoke: unknownMs += unknownCreditMs;
+        stopPendingMs = 0; stopSince = -1 [ledger, stesso ordine]
+```
+
+**Contratto pre/post:** la revoca esistente richiede `stopSince >= 0`
+e `stepMs >= stopSince`, incluso il confine esatto. Solo allora il
+ledger accredita il tempo di STOP non confermato a UNKNOWN e azzera
+`stopPendingMs` e `stopSince`. La nuova regola pura riusa
+`PendingStopRevocationPolicy` e propone `Effect(revoke, credit)`:
+in assenza di revoca il credito proposto e' zero; in caso di
+sovrapposizione e' esattamente `stopPendingMs`, senza inferire
+timestamp di batch, aggiungere soglie, normalizzare o saturare
+`long`. `MotionTimeline` conserva ordine, mutazioni e idempotenza.
+
+**Baseline G1:** [PR #101](https://github.com/VittorioS/app-running/pull/101)
+gia' integrata caratterizza confini step prima/al timestamp
+iniziale, callback duplicati, nuovo STOP dopo revoca, STILL gia'
+confermato, blackout, contatore cumulativo e incertezza che
+ha gia' risolto il candidato. La predicazione pura della
+[PR #102](https://github.com/VittorioS/app-running/pull/102)
+e' gia' integrata. La [PR #122](https://github.com/VittorioS/app-running/pull/122)
+e' merged su `main` SHA `3e12387d373d7412e8b37f7b6a7eea0f84e5a5b2`
+e la [CI post-merge #44397702195](https://github.com/VittorioS/app-running/actions/runs/44397702195)
+sullo stesso SHA, evento `push`, e' `completed/success` con
+`verify=success` e `android11=success`, verificata prima
+del nuovo codice. Nuovi test diretti confrontano decisione e
+crediti per timestamp/durate di confine e valori `long` estremi,
+inclusa assenza di stato fra le invocazioni.
+
+**Confini:** non cambiano il gestore step/GPS, il Service,
+l'inferenza del sensore, `advance`, `finish/restore`,
+FGS/START/STOP/recovery, SQLite/Prefs, snapshot, UI/voce,
+permessi, firma, workflow o release. Il Domain resta Java puro
+senza import Android/legacy/application/data/platform.
+UNKNOWN e l'ordine dei contatori rimangono nel ledger,
+con `moving=run+walk+movingUnknown` e
+`elapsed=moving+still+unknown` invariati.
+
+**Deroga e rollback:** #24/#25 ancora OPEN, G3 fisici rari NON
+PASS da rivalutare in #38. La deroga #24 permette solo P4b e
+non sblocca i lotti #26+. Qualsiasi regressione ledger/UNKNOWN,
+storico, sessioni duplicate, recovery, GPS/FGS impone fermare P4b
+e riprendere #24. Rollback isolato di questa PR (5 file),
+nessuna migrazione dati.
