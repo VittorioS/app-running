@@ -5,6 +5,7 @@ import it.example.passolibero.domain.tracking.ConfirmedMovingIntervalTransition;
 import it.example.passolibero.domain.tracking.ConfirmedStillIntervalTransition;
 import it.example.passolibero.domain.tracking.ConfirmedStillPolicy;
 import it.example.passolibero.domain.tracking.DelayedStepStopRevocationTransition;
+import it.example.passolibero.domain.tracking.IncompleteIntervalFinishTransition;
 import it.example.passolibero.domain.tracking.MovingUncertaintyRecoveryTransition;
 import it.example.passolibero.domain.tracking.MovingStartTransition;
 import it.example.passolibero.domain.tracking.MovingPendingStopRecoveryTransition;
@@ -185,10 +186,12 @@ public final class MotionTimeline {
     /** Resolve incomplete intervals without pretending unknown periods were stops. */
     public void finish() {
         // A session ending during an unconfirmed stop has no evidence of resumption.
-        unknownMs += stopPendingMs;
+        IncompleteIntervalFinishTransition.Effect effect =
+                IncompleteIntervalFinishTransition.evaluate(stopPendingMs, unresolvedMs);
+        unknownMs += effect.pendingStopUnknownMs();
         stopPendingMs = 0;
         stopSince = -1;
-        unknownMs += unresolvedMs;
+        unknownMs += effect.unresolvedUnknownMs();
         unresolvedMs = 0;
     }
     private void credit(MovementClassifier.Kind kind, long dt) {
