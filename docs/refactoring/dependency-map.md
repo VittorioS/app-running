@@ -1287,3 +1287,47 @@ solo a P4b, senza sblocco automatico di #26+. Qualsiasi
 regressione UNKNOWN/ledger, storico, sessioni duplicate,
 recovery, GPS/FGS blocca P4b e impone riesame #24.
 Rollback: revert isolato di questa PR (5 file), senza migrazioni.
+
+## 36. Ventiduesimo seam P4b (#25): chiusura conservativa dei pending
+
+Chiamate: TrackingService (fine sessione / worker gap, invariato)
+-> MotionTimeline.finish() [ledger legacy]
+-> domain/tracking/IncompleteIntervalFinishTransition.evaluate(stopPendingMs, unresolvedMs)
+-> Effect(pendingStopUnknownMs, unresolvedUnknownMs) [domain puro]
+-> unknownMs += pendingStopUnknownMs; stopPendingMs=0; stopSince=-1
+-> unknownMs += unresolvedUnknownMs; unresolvedMs=0 [ledger, stesso ordine].
+
+**Contratto pre/post:** alla fine della sessione o davanti a un gap del
+worker, il pending STOP non confermato e l'incertezza non risolta
+diventano UNKNOWN, non STILL/MOVING. Il ledger accredita prima
+stopPendingMs, azzera il buffer e stopSince, poi accredita unresolvedMs
+e azzera il buffer. La nuova regola pura restituisce esattamente
+due crediti separati e invariati. Non li somma anticipatamente,
+non cambia l'aritmetica Java long e non mantiene stato. Il ledger
+conserva contatori, timestamp, tutti i reset e il punto di chiamata.
+
+**G1 integrata:** tests/MotionRegressionTest.java usa finish su
+tracce sintetiche di micro-STOP, UNKNOWN, sessioni recuperate e
+blackout, verificando la conservazione del tempo; i test
+TrackingGapCharacterizationTest, TrackingTimeCreditCharacterizationTest
+e TrackingStopConfirmationCharacterizationTest caratterizzano STOP
+pendente, timeout del worker, duplicati e accrediti finali.
+La [PR #125](https://github.com/VittorioS/app-running/pull/125)
+e' merged su main SHA 127263ea4be2089570c7628c36ed23cb414d73b4.
+La [CI post-merge #44405642882](https://github.com/VittorioS/app-running/actions/runs/44405642882)
+sullo stesso SHA e' completed/success, con job verify=success e
+android11=success, verificata prima del nuovo codice. I nuovi test
+puri confrontano separazione dei crediti, zero/long estremi e
+assenza di stato tra invocazioni.
+
+**Confini:** non cambiano TrackingService, callback GPS/step, clock,
+FGS/lifecycle/START/STOP/recovery, SQLite/Prefs, UI/voce, permessi,
+versioni, firma, workflow o release. Domain resta Java puro, senza
+Android/application/data/platform/legacy import. Restano invariati
+moving=run+walk+movingUnknown ed elapsed=moving+still+unknown.
+G3 fisici rari della #24 restano NON PASS e differiti a #38:
+l'emulatore Android11 non e' un collaudo fisico. Deroga limitata
+a #25/P4b, senza sblocco #26+. Regressioni UNKNOWN/ledger, storico,
+sessioni duplicate, recovery o GPS/FGS fermano P4b e richiedono
+riesame #24. Rollback: revert isolato di questa PR (5 file),
+nessuna migrazione dati.
