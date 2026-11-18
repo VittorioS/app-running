@@ -1172,3 +1172,60 @@ non sblocca i lotti #26+. Qualsiasi regressione ledger/UNKNOWN,
 storico, sessioni duplicate, recovery, GPS/FGS impone fermare P4b
 e riprendere #24. Rollback isolato di questa PR (5 file),
 nessuna migrazione dati.
+
+## 34. Ventesimo seam P4b (#25): interruzione STOP pending da UNCERTAIN
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+ -> MotionTimeline.advance(... UNCERTAIN/null...) [ledger]
+    -> guard timestamp/gap, MOVING, STILL [legacy, invariati]
+    -> UncertainStopInterruptionTransition.evaluate(
+         stopSince, stopPendingMs) [domain puro]
+       -> Effect(interruptPendingStop, unknownCreditMs)
+    -> se interrotto: unknownMs += unknownCreditMs;
+       stopPendingMs=0; stopSince=-1 [ledger, stesso ordine]
+    -> eventuale avvio uncertainSince e
+       UncertainEvidenceTransition.resolve(...) [gia' integrata]
+```
+
+**Contratto pre/post:** quando arriva una callback di evidenza
+UNCERTAIN (incluso null), il ramo legacy non avvia ne' conferma
+uno STOP. Se `stopSince >= 0`, attribuisce il tempo STOP
+pendente `stopPendingMs` a UNKNOWN e azzera entrambi i campi
+STOP prima di iniziare/continuare il grace UNCERTAIN.
+Se manca il candidato, non accredita nulla e non tocca lo
+stato STOP. Il domain puro ora propone
+`Effect(interruptPendingStop, unknownCreditMs)`, con credito
+identico a `stopPendingMs` solo per un candidato attivo,
+altrimenti zero. `MotionTimeline` conserva il guard
+del branch, la sequenza delle mutazioni, il clock e tutti i
+contatori, senza cambiare soglie o aritmetica `long`.
+
+**G1 integrata:** [PR #108](https://github.com/VittorioS/app-running/pull/108)
+caratterizza STOP pending interrotto da UNCERTAIN e ripartenza
+STILL, inclusi callback null. I test
+`TrackingUncertaintyGraceCharacterizationTest` e la
+[PR #95](https://github.com/VittorioS/app-running/pull/95)
+caratterizzano UNCERTAIN a 4.999/5.000 ms e ledger
+conservativo. Il prerequisito [PR #123](https://github.com/VittorioS/app-running/pull/123)
+e' merged su `main` SHA
+`7fa02adab74bb60b6f21076fc26f4d6d2f0400bc`.
+La [CI post-merge #44401439108](https://github.com/VittorioS/app-running/actions/runs/44401439108)
+sullo stesso SHA, evento push, e' `completed/success`
+con `verify=success` e `android11=success`, verificati
+prima della modifica produttiva.
+I test puri nuovi confrontano presenza/assenza del candidato,
+credito UNKNOWN, valori zero/estremi e chiamate stateless.
+
+**Confini e rischio:** non cambiano `TrackingService`,
+GPS/step, FGS/START/STOP/recovery, SQLite/Prefs, snapshot,
+callback, `finish/restore`, UI/voce, permessi, firma,
+workflow o release. Le dipendenze Domain restano Java puro;
+`moving=run+walk+movingUnknown` e
+`elapsed=moving+still+unknown` sono invarianti.
+#24/#25 rimangono OPEN e i rari G3 fisici differiti
+sono NON PASS fino al gate #38; la deroga #24 copre solo
+P4b, senza sblocco #26+. Regresioni UNKNOWN/ledger,
+storico, sessioni duplicate, recovery o GPS/FGS impongono
+stop P4b e riesame #24. Rollback: revert isolato della PR
+(5 file), nessuna migrazione dati.

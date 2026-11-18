@@ -11,6 +11,7 @@ import it.example.passolibero.domain.tracking.PendingStillTransition;
 import it.example.passolibero.domain.tracking.StillEvidencePolicy;
 import it.example.passolibero.domain.tracking.TimeCreditBucketPolicy;
 import it.example.passolibero.domain.tracking.UncertainEvidenceTransition;
+import it.example.passolibero.domain.tracking.UncertainStopInterruptionTransition;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
 
 /**
@@ -145,8 +146,10 @@ public final class MotionTimeline {
             return;
         }
         // Uncertain evidence never starts or confirms a stop.
-        if (stopSince >= 0) {
-            unknownMs += stopPendingMs;
+        UncertainStopInterruptionTransition.Effect interrupted =
+                UncertainStopInterruptionTransition.evaluate(stopSince, stopPendingMs);
+        if (interrupted.interruptPendingStop()) {
+            unknownMs += interrupted.unknownCreditMs();
             stopPendingMs = 0;
             stopSince = -1;
         }
