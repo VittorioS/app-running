@@ -1229,3 +1229,61 @@ P4b, senza sblocco #26+. Regresioni UNKNOWN/ledger,
 storico, sessioni duplicate, recovery o GPS/FGS impongono
 stop P4b e riesame #24. Rollback: revert isolato della PR
 (5 file), nessuna migrazione dati.
+
+## 35. Ventunesimo seam P4b (#25): recupero STOP pendente con MOVING
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance(... MOVING ...) [ledger]
+     -> gap/clock e recupero UNCERTAIN [ledger, invariati]
+     -> MovingPendingStopRecoveryTransition.evaluate(
+          stopSince, stopPendingMs) [domain puro]
+        -> Effect(recoverPendingStop, previousCreditMs)
+     -> se recupero: credit(committed PRECEDENTE, previousCreditMs);
+        stopPendingMs=0; stopSince=-1 [ledger, stesso ordine]
+     -> scelta conferma MOVING/gait corrente [gia' integrata, invariata]
+```
+
+**Contratto pre/post:** quando MOVING ritorna mentre `stopSince >= 0`,
+la vecchia logica accredita `stopPendingMs` con
+`credit(committed, stopPendingMs)` alla categoria **precedentemente
+confermata**, quindi azzera `stopPendingMs` e `stopSince`
+prima di qualsiasi nuovo gait; se non esiste candidato STOP,
+non accredita e non modifica questi campi. Il domain puro ora
+propone `Effect(recoverPendingStop, previousCreditMs)` con durata
+identica, oppure zero se non esiste STOP pending. Il ledger conserva
+il guard di applicazione, `committed` precedente, ordine di
+`credit`/reset e trattamento preesistente di valori non positivi
+nella funzione `credit`; non inventa RUN/WALK, non satura `long`
+e non modifica il comportamento degli altri rami.
+
+**Baseline G1:** `TrackingStopConfirmationCharacterizationTest`
+caratterizza micro-STOP da RUN riassorbito a RUN senza STILL;
+[PR #110](https://github.com/VittorioS/app-running/pull/110)
+caratterizza l'interruzione di micro-STOP dopo MOVING; e
+[PR #115](https://github.com/VittorioS/app-running/pull/115)
+caratterizza il ritorno MOVING, gait corrente, incertezza e
+conservazione dei contatori. Il prerequisito
+[PR #124](https://github.com/VittorioS/app-running/pull/124)
+e' merged su `main` SHA
+`c28c80541edac71a2a6c84afdb032dbf049d7780`, e la
+[CI post-merge #44403683312](https://github.com/VittorioS/app-running/actions/runs/44403683312)
+sullo stesso SHA (evento push) e' `completed/success`:
+`verify=success`, `android11=success`, verificati prima
+dell'intervento. I nuovi test puri confrontano guard, credito
+originale, confini/valori estremi e assenza di stato fra chiamate.
+
+**Confini:** nessuna modifica a TrackingService, callback GPS/step,
+FGS/START/STOP/recovery, soglie, grace UNCERTAIN, policy gait,
+SQLite/Prefs, snapshot, UI/voce, permessi, firma, workflow o
+release. Domain e' Java puro senza import Android/legacy/application/
+data/platform; `MotionTimeline` resta unico proprietario
+dei contatori e di `finish/restore`. Rimangono gli invarianti
+`moving=run+walk+movingUnknown` e `elapsed=moving+still+unknown`.
+
+**Deroga:** #24 e #25 OPEN; i casi G3 fisici rari della #24
+rimangono NON PASS e sono differiti a #38. La deroga si applica
+solo a P4b, senza sblocco automatico di #26+. Qualsiasi
+regressione UNKNOWN/ledger, storico, sessioni duplicate,
+recovery, GPS/FGS blocca P4b e impone riesame #24.
+Rollback: revert isolato di questa PR (5 file), senza migrazioni.
