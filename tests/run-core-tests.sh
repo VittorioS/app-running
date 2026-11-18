@@ -15,6 +15,7 @@ javac -d build-test app/src/main/java/it/example/passolibero/RunMath.java \
   app/src/main/java/it/example/passolibero/domain/tracking/UnobservedIntervalPolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/UncertaintyGracePolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/UncertainEvidenceTransition.java \
+  app/src/main/java/it/example/passolibero/domain/tracking/UncertainStopInterruptionTransition.java \
   app/src/main/java/it/example/passolibero/domain/tracking/MovementStartConfirmationPolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/StopConfirmationPolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/EffectiveStopThresholdPolicy.java \
