@@ -7,6 +7,7 @@ import it.example.passolibero.domain.tracking.ConfirmedStillPolicy;
 import it.example.passolibero.domain.tracking.DelayedStepStopRevocationTransition;
 import it.example.passolibero.domain.tracking.MovingUncertaintyRecoveryTransition;
 import it.example.passolibero.domain.tracking.MovingStartTransition;
+import it.example.passolibero.domain.tracking.MovingPendingStopRecoveryTransition;
 import it.example.passolibero.domain.tracking.PendingStillTransition;
 import it.example.passolibero.domain.tracking.StillEvidencePolicy;
 import it.example.passolibero.domain.tracking.TimeCreditBucketPolicy;
@@ -64,9 +65,11 @@ public final class MotionTimeline {
                 unresolvedMs = 0;
             }
             uncertainSince = -1;
-            if (stopSince >= 0) {
+            MovingPendingStopRecoveryTransition.Effect stopRecovery =
+                    MovingPendingStopRecoveryTransition.evaluate(stopSince, stopPendingMs);
+            if (stopRecovery.recoverPendingStop()) {
                 // Unconfirmed microstops belong to the preceding activity.
-                credit(committed, stopPendingMs);
+                credit(committed, stopRecovery.previousCreditMs());
                 stopPendingMs = 0;
                 stopSince = -1;
             }
