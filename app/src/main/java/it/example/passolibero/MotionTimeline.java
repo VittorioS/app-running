@@ -2,6 +2,7 @@ package it.example.passolibero;
 
 import it.example.passolibero.domain.tracking.ConfirmedMotionPolicy;
 import it.example.passolibero.domain.tracking.ConfirmedMovingIntervalTransition;
+import it.example.passolibero.domain.tracking.ConfirmedStillIntervalTransition;
 import it.example.passolibero.domain.tracking.ConfirmedStillPolicy;
 import it.example.passolibero.domain.tracking.MovingUncertaintyRecoveryTransition;
 import it.example.passolibero.domain.tracking.MovingStartTransition;
@@ -113,9 +114,11 @@ public final class MotionTimeline {
         if (StillEvidencePolicy.isStill(evidence == null ? null : evidence.name())) {
             uncertainSince = -1;
             if (ConfirmedStillPolicy.isConfirmed(committed == null ? null : committed.name())) {
-                stillMs += unresolvedMs;
+                ConfirmedStillIntervalTransition.Effect effect =
+                        ConfirmedStillIntervalTransition.evaluate(unresolvedMs, dt);
+                stillMs += effect.previousCreditMs();
                 unresolvedMs = 0;
-                stillMs += dt;
+                stillMs += effect.currentCreditMs();
                 displayed = MovementClassifier.Kind.STILL;
                 return;
             }

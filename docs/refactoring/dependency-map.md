@@ -1068,3 +1068,53 @@ API30 non li sostituisce. Regressioni UNKNOWN, ledger/storico,
 sessioni duplicate, recovery, GPS/FGS fermano P4b e impongono
 rivalutazione #24. Rollback: revert isolato di questa PR, senza
 migrazioni.
+
+## 32. Diciottesimo seam P4b (#25): intervalli STILL gia' confermati
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance(..., STILL_STRONG/MODERATE) [ledger legacy]
+     -> guard cronologici, blackout, ramo MOVING [invariati]
+     -> ConfirmedStillPolicy.isConfirmed(committed) [domain, gia' integrato]
+        -> true: ConfirmedStillIntervalTransition.evaluate(unresolvedMs, dt)
+           -> Effect(previousCreditMs, currentCreditMs) [domain puro]
+           -> stillMs += previousCreditMs; unresolvedMs = 0 [ledger]
+           -> stillMs += currentCreditMs; displayed = STILL [ledger]
+        -> false: PendingStillTransition [gia' integrato, invariato]
+```
+
+**Contratto osservabile:** quando STILL e' gia' confermato e la callback
+corrente contiene evidenza STILL, la vecchia logica accreditava prima
+`unresolvedMs` a STILL, azzerava il pending, poi accreditava `dt`
+a STILL e lasciava `displayed=STILL`. La nuova regola pura propone
+solo due crediti distinti, `Effect(unresolvedMs, dt)`, senza mutare
+lo stato e senza introdurre soglie, saturazioni o conversioni `long`.
+Il ledger mantiene le stesse quattro operazioni nello stesso ordine.
+Non si toccano i casi STOP pendente, MOVING, UNCERTAIN,
+`observeDelayedStep`, `finish`, `restore` o `credit()`.
+
+**G1 precedente:** la PR [#110](https://github.com/VittorioS/app-running/pull/110)
+gia' integrata caratterizza STILL confermato con evidenza alternata,
+incertezza breve, incertezza scaduta, ripresa MOVING, worker blackout e
+step tardivo. Il prerequisito [#121](https://github.com/VittorioS/app-running/pull/121)
+e' merged su `main` commit `ac4ac9b83da8171e9fea98dbd8b79aca77e76d55`;
+la [CI post-merge #44191179977](https://github.com/VittorioS/app-running/actions/runs/44191179977)
+ha evento `push`, `completed/success`, con job `verify=success`
+e `android11=success`, verificati prima di questo intervento.
+Nuovi test puri verificano separazione dei crediti, casi zero, estremi
+`long` e assenza di stato tra invocazioni. Non si attribuiscono
+esiti CI a questa nuova PR prima del relativo run.
+
+**Confini:** solo `domain/tracking` puro e adattamento del ledger legacy;
+nessuna dipendenza da Android, application, data o platform nel Domain.
+Invariati Service/GPS/step, lifecycle/FGS/START/STOP/recovery,
+SQLite/Prefs, timestamp, UI/voce, permessi, firma, versioni, workflow
+e release. `moving=run+walk+movingUnknown` e
+`elapsed=moving+still+unknown` restano contratti del ledger.
+
+**Deroga condizionata:** #24 e #25 restano OPEN. I rari G3 lifecycle fisici
+differiti restano NON PASS, da rivalutare in #38; CI Android 11 su
+emulatore non li sostituisce. Qualsiasi regressione su UNKNOWN,
+contatori, storico, sessioni duplicate, recovery o GPS/FGS impone
+stop P4b e riesame #24. Nessun sblocco automatico dei lotti #26+.
+Rollback: revert isolato di questa PR (cinque file), senza migrazione.
