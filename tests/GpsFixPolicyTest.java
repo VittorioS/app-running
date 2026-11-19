@@ -34,6 +34,14 @@ public final class GpsFixPolicyTest {
     }
 
     public static void main(String[] args) {
+        check(GpsFixPolicy.hasObservableTimestamp(1_999_999L, 2_000_000L),
+                "A prior fix is admissible");
+        check(GpsFixPolicy.hasObservableTimestamp(2_000_000L, 2_000_000L),
+                "A fix at receipt time is admissible");
+        check(!GpsFixPolicy.hasObservableTimestamp(2_000_001L, 2_000_000L),
+                "A future fix must be rejected even within the same millisecond");
+        check(!GpsFixPolicy.hasObservableTimestamp(-1L, 2_000_000L),
+                "A negative fix timestamp is invalid");
         for (long previous : new long[] {-1, 0, 1000, 20000})
             for (long fix : new long[] {0, 999, 1000, 1899, 1900, 20000, 20899, 20900})
                 for (boolean sprint : new boolean[] {false, true})

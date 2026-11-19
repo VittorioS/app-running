@@ -4,6 +4,11 @@ package it.example.passolibero.domain;
 public final class GpsFixPolicy {
     private GpsFixPolicy() {}
 
+    /** Both timestamps are measured on the elapsed realtime clock, in nanoseconds. */
+    public static boolean hasObservableTimestamp(long fixElapsedNanos, long receivedElapsedNanos) {
+        return fixElapsedNanos >= 0 && fixElapsedNanos <= receivedElapsedNanos;
+    }
+
     /** Preserve sprint-only throttling of normal path fixes without altering sprint sampling. */
     public static boolean skipNormalFix(boolean sprintBusy, long previousFixMs, long fixMs) {
         return sprintBusy

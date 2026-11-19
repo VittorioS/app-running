@@ -418,6 +418,10 @@ public final class TrackingService extends Service implements LocationListener, 
     @Override public void onLocationChanged(Location location) {
         // Callback richiesta sullo stesso Looper del worker.
         if (state == null || !location.hasAccuracy()) return;
+        long fixElapsedNanos = location.getElapsedRealtimeNanos();
+        if (!GpsFixPolicy.hasObservableTimestamp(fixElapsedNanos, SystemClock.elapsedRealtimeNanos()))
+            return;
+        long fixMs = fixElapsedNanos / 1_000_000L;
         // Solo il disegno della rotta usa la nuova etichetta "SPRINT".
         // Il classificatore/contatore della sessione continua a 1 Hz invariato.
         boolean sprintRouteWindow = false;
@@ -429,7 +433,7 @@ public final class TrackingService extends Service implements LocationListener, 
             if (sprintRouteWindow && location.hasSpeed()
                     && location.hasSpeedAccuracy()) {
                 boolean accepted = sprint.onFix(sprintNow,
-                        location.getElapsedRealtimeNanos() / 1_000_000L,
+                        fixMs,
                         location.getSpeed(), location.getSpeedAccuracyMetersPerSecond(),
                         location.getAccuracy());
                 if (accepted) {
@@ -462,11 +466,10 @@ public final class TrackingService extends Service implements LocationListener, 
         // I fix sprint ad alta frequenza sono gia' stati letti sopra.
         // Il tracciamento generale resta a circa 1 Hz, come prima dello sprint:
         // nessuna nuova pressione sulla classificazione RUN/WALK.
-        long normalFixMs = location.getElapsedRealtimeNanos() / 1_000_000L;
-        if (GpsFixPolicy.skipNormalFix(sprint.busy(), lastNormalGpsFixMs, normalFixMs)) return;
-        lastNormalGpsFixMs = normalFixMs;
+        if (GpsFixPolicy.skipNormalFix(sprint.busy(), lastNormalGpsFixMs, fixMs)) return;
+        lastNormalGpsFixMs = fixMs;
         long now = SystemClock.elapsedRealtime();
-        long ageMs = Math.abs(now - location.getElapsedRealtimeNanos() / 1_000_000);
+        long ageMs = now - fixMs;
         float acc = location.getAccuracy();
         if (!GpsQualityPolicy.isReliable(acc, ageMs)) {
             reportGpsQuality(false, now);
@@ -479,7 +482,7 @@ public final class TrackingService extends Service implements LocationListener, 
         double pointSpeed = Double.NaN;
         double dt = 0;
         if (lastAccepted != null) {
-            dt = (location.getElapsedRealtimeNanos() - lastAccepted.getElapsedRealtimeNanos()) / 1e9;
+            dt = (fixElapsedNanos - lastAccepted.getElapsedRealtimeNanos()) / 1e9;
             if (dt <= 0) return;
             if (dt <= 20) {
                 double meters = RunMath.distanceMeters(lastAccepted.getLatitude(), lastAccepted.getLongitude(),
@@ -517,7 +520,6 @@ public final class TrackingService extends Service implements LocationListener, 
         double nativeSpeed = location.hasSpeed() ? location.getSpeed() : Double.NaN;
         double speedUncertainty = location.hasSpeedAccuracy()
                 ? location.getSpeedAccuracyMetersPerSecond() : Double.NaN;
-        long fixMs = location.getElapsedRealtimeNanos() / 1_000_000L;
         boolean freshActivityFix = MovementClassifier.isFreshMeasurement(now, fixMs);
         motionEvidence.observeGps(fixMs, location.getLatitude(), location.getLongitude(),
                 acc, nativeSpeed, speedUncertainty);
