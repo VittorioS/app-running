@@ -38,8 +38,7 @@ public final class TimelineClockTransitionTest {
 
     @Test
     public void negativeStoredTimestampContinuesToBehaveAsUninitialized() {
-        TimelineClockTransition.Effect initial =
-                TimelineClockTransition.evaluate(-500L, -1_000L);
+        TimelineClockTransition.Effect initial = TimelineClockTransition.evaluate(-500L, -1_000L);
         assertEquals(TimelineClockTransition.Action.INITIALIZE, initial.action());
         assertEquals(-1_000L, initial.lastMsAfter());
         assertEquals(0L, initial.deltaMs());
