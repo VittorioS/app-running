@@ -268,19 +268,34 @@ public final class TrackMap {
         clearForSession(id);
         if (id <= 0) return 0;
         if (!oldSprintWindowsLoaded) {
-            oldSprintWindowsLoaded = true;
-            for (TrackerDb.SprintRecord record : db.sprints(id)) {
-                if (record.samples < 2) continue;
-                try {
-                    RouteSections.SprintWindow window = new RouteSections.SprintWindow(
-                            record.recordedAt, record.elapsedMs);
-                    if (!db.hasTaggedSprintPoints(id, window.fromWallMs(),
-                            window.untilWallMs()))
-                        oldSprintWindows.add(window);
-                } catch (IllegalArgumentException ignored) { }
-            }
+            setLegacySprintWindows(readLegacySprintWindows(db, id, db.sprints(id)));
         }
-        List<TrackerDb.TrackPoint> additional = db.pointsAfter(id, pointCursor, 500);
+        return appendPoints(db.pointsAfter(id, pointCursor, 500));
+    }
+
+    static List<RouteSections.SprintWindow> readLegacySprintWindows(
+            TrackerDb db, long id, List<TrackerDb.SprintRecord> records) {
+        List<RouteSections.SprintWindow> windows = new ArrayList<>();
+        for (TrackerDb.SprintRecord record : records) {
+            if (record.samples < 2) continue;
+            try {
+                RouteSections.SprintWindow window = new RouteSections.SprintWindow(
+                        record.recordedAt, record.elapsedMs);
+                if (!db.hasTaggedSprintPoints(id, window.fromWallMs(), window.untilWallMs())) {
+                    windows.add(window);
+                }
+            } catch (IllegalArgumentException ignored) { }
+        }
+        return windows;
+    }
+
+    void setLegacySprintWindows(List<RouteSections.SprintWindow> windows) {
+        oldSprintWindows.clear();
+        oldSprintWindows.addAll(windows);
+        oldSprintWindowsLoaded = true;
+    }
+
+    int appendPoints(List<TrackerDb.TrackPoint> additional) {
         for (TrackerDb.TrackPoint p : additional) {
             pointCursor = p.id;
             GeoPoint gp = new GeoPoint(p.lat, p.lon);

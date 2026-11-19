@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.Button;
@@ -11,17 +12,21 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * La stessa struttura della sessione corrente, ma alimentata esclusivamente
  * dai dati salvati e senza i comandi che modificano un allenamento in corso.
  */
 public final class SessionDetailActivity extends Activity {
+    private static final int ROUTE_PAGE_SIZE = 500;
     private TrackMap map;
     private RouteSectionList routeSectionList;
     private TrackerDb db;
@@ -33,6 +38,8 @@ public final class SessionDetailActivity extends Activity {
     private TextView tabTitle, distance, duration, paceAvg, averageSpeed,
             currentPace, currentSpeed, steps, cadence, maxRunSpeed, tabHint, unclassified;
     private List<TrackerDb.SprintRecord> sprintRecords;
+    private final ExecutorService routeWorker = Executors.newSingleThreadExecutor();
+    private TrackerDb routeDb;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -47,6 +54,8 @@ public final class SessionDetailActivity extends Activity {
         }
         sprintRecords = db.sprints(sessionId);
         buildUi();
+        routeDb = new TrackerDb(getApplicationContext());
+        readRoutePage(0);
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
@@ -189,11 +198,7 @@ public final class SessionDetailActivity extends Activity {
                 11, false, Ui.MUTED), 0);
         Ui.marginBottom(this, content, mapCard, 12);
         map.clearForSession(sessionId);
-        for (int batch = 0; batch < 100; batch++) {
-            if (map.update(db, sessionId) < 500) break;
-        }
         routeSectionList.sync();
-        map.view().post(() -> map.zoomToRoute());
 
         LinearLayout progressCard = Ui.card(this);
         Ui.marginBottom(this, progressCard, Ui.text(this, "CHECKPOINT E OBIETTIVO",
@@ -326,6 +331,51 @@ public final class SessionDetailActivity extends Activity {
         }
     }
 
+    private void readRoutePage(long afterId) {
+        routeWorker.execute(() -> {
+            try {
+                List<RouteSections.SprintWindow> windows = afterId == 0
+                        ? TrackMap.readLegacySprintWindows(routeDb, sessionId, sprintRecords) : null;
+                List<TrackerDb.TrackPoint> points = routeDb.pointsAfter(
+                        sessionId, afterId, ROUTE_PAGE_SIZE);
+                runOnUiThread(() -> showRoutePage(points, windows));
+            } catch (RuntimeException error) {
+                Log.w("PassoLiberoRoute", "Percorso storico non disponibile", error);
+                runOnUiThread(() -> {
+                    closeRouteReader();
+                    if (!isFinishing() && !isDestroyed()) {
+                        Toast.makeText(this, "Impossibile caricare tutto il percorso",
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void showRoutePage(List<TrackerDb.TrackPoint> points,
+                               List<RouteSections.SprintWindow> windows) {
+        if (isFinishing() || isDestroyed()) return;
+        if (windows != null) map.setLegacySprintWindows(windows);
+        map.appendPoints(points);
+        routeSectionList.sync();
+        // Keep at most one page in flight. The last rendered page drives the next query.
+        if (points.size() == ROUTE_PAGE_SIZE) {
+            readRoutePage(points.get(points.size() - 1).id);
+        } else {
+            closeRouteReader();
+            map.view().post(() -> {
+                if (!isFinishing() && !isDestroyed()) map.zoomToRoute();
+            });
+        }
+    }
+
+    private void closeRouteReader() {
+        if (routeWorker.isShutdown()) return;
+        // Close the reader on its owner thread, after any in-flight query.
+        if (routeDb != null) routeWorker.execute(routeDb::close);
+        routeWorker.shutdown();
+    }
+
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == SessionJsonExporter.REQUEST_CODE) {
@@ -344,6 +394,7 @@ public final class SessionDetailActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        closeRouteReader();
         if (map != null) map.onDestroy();
         if (db != null) db.close();
         super.onDestroy();
