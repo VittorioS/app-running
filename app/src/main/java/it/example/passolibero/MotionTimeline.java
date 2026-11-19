@@ -12,6 +12,7 @@ import it.example.passolibero.domain.tracking.MovingPendingStopRecoveryTransitio
 import it.example.passolibero.domain.tracking.PendingStillTransition;
 import it.example.passolibero.domain.tracking.StillEvidencePolicy;
 import it.example.passolibero.domain.tracking.TimeCreditBucketPolicy;
+import it.example.passolibero.domain.tracking.TrackingRestoreCountersTransition;
 import it.example.passolibero.domain.tracking.UncertainEvidenceTransition;
 import it.example.passolibero.domain.tracking.UncertainStopInterruptionTransition;
 import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
@@ -216,9 +217,11 @@ public final class MotionTimeline {
         restore(run, walk, still, unknown, 0);
     }
     public void restore(long run, long walk, long still, long unknown, long movingUnknown) {
-        runMs = Math.max(0, run); walkMs = Math.max(0, walk);
-        stillMs = Math.max(0, still); unknownMs = Math.max(0, unknown);
-        movingUnknownMs = Math.max(0, movingUnknown);
+        TrackingRestoreCountersTransition.Effect counters =
+                TrackingRestoreCountersTransition.evaluate(run, walk, still, unknown, movingUnknown);
+        runMs = counters.runMs(); walkMs = counters.walkMs();
+        stillMs = counters.stillMs(); unknownMs = counters.unknownMs();
+        movingUnknownMs = counters.movingUnknownMs();
         committed = MovementClassifier.Kind.UNKNOWN;
         displayed = MovementClassifier.Kind.UNKNOWN;
         lastMs = -1; stopSince = -1; movingSince = -1; uncertainSince = -1;
