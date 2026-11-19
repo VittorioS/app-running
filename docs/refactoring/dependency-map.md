@@ -1435,3 +1435,64 @@ sblocca #26+. Ogni regressione UNKNOWN/ledger, storico,
 sessioni duplicate, recovery o GPS/FGS ferma P4b e riapre
 la valutazione di #24. Rollback: revert isolato della PR
 (6 file), senza migrazioni dati.
+
+## 39. Venticinquesimo seam P4b (#25): accredito del worker gap non osservato
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+ -> MotionTimeline.advance(...) [ledger]
+    -> TimelineClockTransition.evaluate(lastMs, nowMs) [domain, gia' integrato]
+    -> UnobservedWorkerGapTransition.evaluate(dt) [domain puro]
+       -> UnobservedIntervalPolicy.isUnobservedGap(dt) [policy esistente]
+       -> Effect(unobserved, unknownCreditMs)
+    -> se unobserved:
+       finish() [ledger: accredita STOP e incertezza pending a UNKNOWN]
+       unknownMs += unknownCreditMs [ledger: accredita il gap completo]
+       committed/displayed=UNKNOWN; movingSince/uncertainSince=-1
+       return [ledger: stessa sequenza legacy]
+    -> altrimenti MOVING/STILL/UNCERTAIN [invariati]
+```
+
+**Contratto osservabile:** la soglia esistente e' strettamente
+`dt > 5000`. Con intervallo di esattamente 5000 ms, la callback
+continua il ramo ordinario; a 5001 ms il worker non ha osservato
+movimento o immobilita' per il gap e il ledger applica `finish()`
+(prima il pending STOP, poi l'incertezza a UNKNOWN), accredita
+`dt` a UNKNOWN, invalida stato confermato/visibile, azzera i
+candidati MOVING/UNCERTAIN e ritorna senza leggere la nuova
+evidenza per classificare retroattivamente il gap.
+La regola domain pura riusa `UnobservedIntervalPolicy` e
+propone soltanto `Effect(unobserved, unknownCreditMs)`;
+quando il gap non supera soglia il credito proposto e' zero,
+altrimenti e' esattamente `dt`. Tutte le mutazioni e i reset
+restano nel ledger, identici e nello stesso ordine.
+
+**G1 test-first:** il primo commit aggiunge
+`TrackingWorkerGapFinalizationCharacterizationTest` sui
+confini 5000/5001 ms, STOP pending, incertezza irrisolta,
+conservazione del tempo, assenza di STILL/RUN retroattivo,
+reset e `finish()` idempotente dopo gap. La baseline esistente
+`TrackingGapCharacterizationTest`, `TrackingTimeCreditCharacterizationTest`
+e `tests/MotionRegressionTest.java` copre clock, stale, gap
+e replay sintetico. Il test puro
+`UnobservedWorkerGapTransitionTest` aggiunge confini, estremi
+`long` e assenza di stato condiviso.
+Prerequisito: [PR #128](https://github.com/VittorioS/app-running/pull/128)
+merged su `main` SHA `a4ac5f80a74cde971347124aaa74f9ec63b68bcc`,
+[CI post-merge #44588947792](https://github.com/VittorioS/app-running/actions/runs/44588947792)
+evento push sul medesimo SHA, `completed/success`,
+`verify=success` e `android11=success`, verificati
+prima del nuovo codice produttivo.
+
+**Confini e rollback:** nessuna modifica a TrackingService,
+GPS/step/FGS/lifecycle/START/STOP/recovery, persistenza
+SQLite/Prefs, UI/voce, permessi, versioni, firma, workflow
+o release. Domain resta Java puro senza import Android/legacy/
+application/data/platform. `moving=run+walk+movingUnknown`
+ed `elapsed=moving+still+unknown` restano invarianti.
+#24/#25 OPEN; i casi G3 fisici rari della #24 ancora NON PASS,
+differiti al gate #38: CI emulator API 30 non li sostituisce.
+La deroga #24 vale solo P4b, senza sblocco automatico di #26+.
+Regressioni UNKNOWN/ledger, storico, sessioni duplicate,
+recovery o GPS/FGS fermano P4b e richiedono riesame #24.
+Rollback: revert isolato della PR (6 file), senza migrazioni.
