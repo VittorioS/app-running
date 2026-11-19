@@ -16,7 +16,7 @@ import it.example.passolibero.domain.tracking.TimelineClockTransition;
 import it.example.passolibero.domain.tracking.TrackingRestoreCountersTransition;
 import it.example.passolibero.domain.tracking.UncertainEvidenceTransition;
 import it.example.passolibero.domain.tracking.UncertainStopInterruptionTransition;
-import it.example.passolibero.domain.tracking.UnobservedIntervalPolicy;
+import it.example.passolibero.domain.tracking.UnobservedWorkerGapTransition;
 
 /**
  * Monotonic-time interval ledger. Pending stop intervals are attributed to the
@@ -45,11 +45,12 @@ public final class MotionTimeline {
         if (clock.action() == TimelineClockTransition.Action.IGNORE) return;
         long dt = clock.deltaMs();
         lastMs = clock.lastMsAfter();
-        if (UnobservedIntervalPolicy.isUnobservedGap(dt)) {
+        UnobservedWorkerGapTransition.Effect gap = UnobservedWorkerGapTransition.evaluate(dt);
+        if (gap.unobserved()) {
             // A suspended worker is unobserved time, even when its first new
             // callback contains evidence of movement or stillness right now.
             finish();
-            unknownMs += dt;
+            unknownMs += gap.unknownCreditMs();
             committed = MovementClassifier.Kind.UNKNOWN;
             displayed = MovementClassifier.Kind.UNKNOWN;
             movingSince = -1;
