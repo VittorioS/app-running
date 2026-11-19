@@ -1378,3 +1378,60 @@ al gate #38 dalla deroga condizionata limitata a P4b. Qualsiasi
 regressione UNKNOWN/ledger, storico, sessioni duplicate, recovery o
 GPS/FGS blocca P4b e richiede riesame #24. Rollback: revert isolato
 dei sei file della PR, nessuna migrazione dati.
+
+## 38. Ventiquattresimo seam P4b (#25): admission del clock monotono
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+ -> MotionTimeline.advance(nowMs, evidence, activity, minimumStopMs) [ledger]
+    -> TimelineClockTransition.evaluate(lastMs, nowMs) [domain puro]
+       -> Effect(action=INITIALIZE|IGNORE|ADVANCE, lastMsAfter, deltaMs)
+    -> INITIALIZE: lastMs=lastMsAfter; return [ledger]
+    -> IGNORE: return [ledger; nessun campo mutato]
+    -> ADVANCE: dt=deltaMs; lastMs=lastMsAfter [ledger]
+    -> UnobservedIntervalPolicy.isUnobservedGap(dt) [gia' integrato]
+    -> rami MOVING/STILL/UNCERTAIN [invariati]
+```
+
+**Contratto pre/post:** al primo callback, se `lastMs < 0`,
+`MotionTimeline` salva `nowMs` e ritorna senza accreditare
+tempo. I callback con `nowMs <= lastMs` sono ignorati, senza
+spostare il timestamp di riferimento. Solo per `nowMs > lastMs`
+la durata resta `nowMs - lastMs` e il clock avanza prima di
+valutare il blackout di worker. La decisione pura conserva
+esattamente i tre casi, incluso il valore negativo di sentinella
+del legacy; non normalizza orari, non inventa movimento e non
+cambia la soglia del gap 5.000/5.001 ms. `MotionTimeline`
+resta proprietario di `lastMs`, `finish`, UNKNOWN e contatori,
+con lo stesso ordine di effetti.
+
+**Baseline G1:** `TrackingGapCharacterizationTest`,
+`TrackingTimeCreditCharacterizationTest` e
+`tests/MotionRegressionTest.java` gia' integrati coprono
+callback stale/duplicate, confini temporali e conservazione
+dei contatori. Il primo commit del seam aggiunge
+`TrackingTimestampGateCharacterizationTest` sul legacy,
+con primo callback, sequenze stale e timestamp negativi.
+I test puri `TimelineClockTransitionTest` coprono
+INITIALIZE/IGNORE/ADVANCE, durata zero, 5.000/5.001 ms,
+`Long.MAX_VALUE` e sentinella negativa.
+La [PR #127](https://github.com/VittorioS/app-running/pull/127)
+e' merged sul commit
+`8cfd215344b257bf3b3ec353fbceeca69e27538d`.
+[CI post-merge #44585386634](https://github.com/VittorioS/app-running/actions/runs/44585386634)
+evento push sullo stesso SHA, `completed/success`,
+`verify=success` e `android11=success`, verificati prima
+del codice del presente seam.
+
+**Confini:** nessuna modifica a `TrackingService`, sensori/GPS,
+FGS/START/STOP/recovery, SQLite/Prefs, snapshot, UI/voce,
+permessi, signing, versioni, workflow o release. Domain
+puro non importa Android, application, data, platform o legacy.
+Invarianti `moving=run+walk+movingUnknown` ed
+`elapsed=moving+still+unknown` preservati.
+#24/#25 restano OPEN; G3 lifecycle fisico raro ancora non PASS
+e differito al gate #38; la deroga consente solo P4b, non
+sblocca #26+. Ogni regressione UNKNOWN/ledger, storico,
+sessioni duplicate, recovery o GPS/FGS ferma P4b e riapre
+la valutazione di #24. Rollback: revert isolato della PR
+(6 file), senza migrazioni dati.

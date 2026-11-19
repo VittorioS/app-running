@@ -12,6 +12,7 @@ import it.example.passolibero.domain.tracking.MovingPendingStopRecoveryTransitio
 import it.example.passolibero.domain.tracking.PendingStillTransition;
 import it.example.passolibero.domain.tracking.StillEvidencePolicy;
 import it.example.passolibero.domain.tracking.TimeCreditBucketPolicy;
+import it.example.passolibero.domain.tracking.TimelineClockTransition;
 import it.example.passolibero.domain.tracking.TrackingRestoreCountersTransition;
 import it.example.passolibero.domain.tracking.UncertainEvidenceTransition;
 import it.example.passolibero.domain.tracking.UncertainStopInterruptionTransition;
@@ -36,10 +37,14 @@ public final class MotionTimeline {
 
     public void advance(long nowMs, MotionEvidencePolicy.Evidence evidence,
                         MovementClassifier.Kind activity, long minimumStopMs) {
-        if (lastMs < 0) { lastMs = nowMs; return; }
-        if (nowMs <= lastMs) return;
-        long dt = nowMs - lastMs;
-        lastMs = nowMs;
+        TimelineClockTransition.Effect clock = TimelineClockTransition.evaluate(lastMs, nowMs);
+        if (clock.action() == TimelineClockTransition.Action.INITIALIZE) {
+            lastMs = clock.lastMsAfter();
+            return;
+        }
+        if (clock.action() == TimelineClockTransition.Action.IGNORE) return;
+        long dt = clock.deltaMs();
+        lastMs = clock.lastMsAfter();
         if (UnobservedIntervalPolicy.isUnobservedGap(dt)) {
             // A suspended worker is unobserved time, even when its first new
             // callback contains evidence of movement or stillness right now.
