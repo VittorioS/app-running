@@ -11,6 +11,7 @@ javac -d build-test app/src/main/java/it/example/passolibero/RunMath.java \
   app/src/main/java/it/example/passolibero/MovementClassifier.java \
   app/src/main/java/it/example/passolibero/ActivityEvidence.java \
   app/src/main/java/it/example/passolibero/StepCounterEvidence.java \
+  app/src/main/java/it/example/passolibero/domain/tracking/StepDetectorPolicy.java \
   app/src/main/java/it/example/passolibero/MotionEvidencePolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/UnobservedIntervalPolicy.java \
   app/src/main/java/it/example/passolibero/domain/tracking/UnobservedWorkerGapTransition.java \

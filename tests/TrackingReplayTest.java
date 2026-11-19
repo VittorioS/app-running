@@ -4,6 +4,7 @@ import it.example.passolibero.MotionEvidencePolicy;
 import it.example.passolibero.MotionTimeline;
 import it.example.passolibero.MovementClassifier;
 import it.example.passolibero.StepCounterEvidence;
+import it.example.passolibero.domain.tracking.StepDetectorPolicy;
 
 /**
  * Fixed, timestamped synthetic GNSS/step traces. No Android sensor, clock,
@@ -134,10 +135,37 @@ public final class TrackingReplayTest {
     }
 
     public static void main(String[] args) {
+        stepDetectorIgnoresUntrustedCallbacks();
         noStepSensorWithGpsDropout();
         outOfOrderGaitAndRestart();
         delayedCounterDoesNotInventHistoricalGait();
         jitterAndFixGapDoNotFabricateDistance();
         System.out.println("PASS: " + checks + " deterministic GNSS/step replay assertions.");
+    }
+
+    private static void stepDetectorIgnoresUntrustedCallbacks() {
+        long sessionStartedMs = 1_000;
+        long eventNanos = 6_000_000_000L;
+        long receivedNanos = 7_000_000_000L;
+        check(StepDetectorPolicy.accepts(1, eventNanos, -1, receivedNanos, sessionStartedMs),
+                "The first valid detector event is admitted");
+        check(!StepDetectorPolicy.accepts(1, eventNanos, eventNanos, receivedNanos, sessionStartedMs),
+                "Duplicate detector callback must not count as a new step");
+        check(!StepDetectorPolicy.accepts(1, eventNanos - 1, eventNanos, receivedNanos, sessionStartedMs),
+                "Out-of-order callback cannot replace the latest step");
+        check(StepDetectorPolicy.accepts(1, eventNanos + 1, eventNanos, receivedNanos, sessionStartedMs),
+                "Later events in the same millisecond remain distinct");
+        check(!StepDetectorPolicy.accepts(1, receivedNanos + 1, eventNanos, receivedNanos, sessionStartedMs),
+                "Future callback is rejected at nanosecond precision");
+        check(!StepDetectorPolicy.accepts(1, eventNanos, -1, eventNanos + 5_000_000_001L, sessionStartedMs),
+                "Stale detector evidence cannot count steps");
+        check(StepDetectorPolicy.accepts(1, eventNanos, -1, eventNanos + 5_000_000_000L, sessionStartedMs),
+                "A step on the configured freshness boundary is admitted");
+        check(!StepDetectorPolicy.accepts(1, eventNanos, -1, receivedNanos, 6_001L),
+                "An event preceding the session is ignored");
+        for (float invalid : new float[] {0, 2, Float.NaN, Float.POSITIVE_INFINITY}) {
+            check(!StepDetectorPolicy.accepts(invalid, eventNanos, -1, receivedNanos, sessionStartedMs),
+                    "Invalid sensor payload cannot fabricate steps: " + invalid);
+        }
     }
 }

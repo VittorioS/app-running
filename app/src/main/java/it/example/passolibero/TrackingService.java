@@ -35,6 +35,7 @@ import it.example.passolibero.application.tracking.TrackingStartupCoordinator;
 import it.example.passolibero.domain.SessionRecoveryPolicy;
 import it.example.passolibero.domain.ForegroundStartPolicy;
 import it.example.passolibero.domain.GpsFixPolicy;
+import it.example.passolibero.domain.tracking.StepDetectorPolicy;
 
 /** Foreground Service: solo start esplicito, nessun monitoraggio fuori sessione. */
 public final class TrackingService extends Service implements LocationListener, SensorEventListener {
@@ -73,6 +74,7 @@ public final class TrackingService extends Service implements LocationListener, 
     private final MotionTimeline motionTimeline = new MotionTimeline();
     private final SessionMotionVoiceEvents sessionVoice = new SessionMotionVoiceEvents();
     private boolean detectorSeen;
+    private long lastDetectorEventNanos = -1;
     private final StepCounterEvidence counterEvidence = new StepCounterEvidence();
     private boolean stepSensorAvailable;
     private long lastSavedDbElapsed, lastNotificationMs, lastPointWall;
@@ -326,6 +328,7 @@ public final class TrackingService extends Service implements LocationListener, 
                 MotionEvidencePolicy.Evidence.UNCERTAIN, MovementClassifier.Kind.UNKNOWN);
         inertialGait.reset();
         detectorSeen = false;
+        lastDetectorEventNanos = -1;
         counterEvidence.reset();
         recentStepTimes.clear();
         stepSensorAvailable = false;
@@ -857,7 +860,8 @@ public final class TrackingService extends Service implements LocationListener, 
     @Override public void onSensorChanged(SensorEvent event) {
         if (state == null) return;
         long stamp = event.timestamp / 1_000_000;
-        long receivedMs = SystemClock.elapsedRealtime();
+        long receivedNanos = SystemClock.elapsedRealtimeNanos();
+        long receivedMs = receivedNanos / 1_000_000L;
         if (stamp < 0 || stamp > receivedMs) return;
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             inertialGait.observe(stamp, event.values[0], event.values[1], event.values[2]);
@@ -865,9 +869,12 @@ public final class TrackingService extends Service implements LocationListener, 
         }
         int newSteps = 0;
         if (event.sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
-            newSteps = Math.max(1, Math.round(event.values[0]));
+            if (!StepDetectorPolicy.accepts(event.values[0], event.timestamp,
+                    lastDetectorEventNanos, receivedNanos, state.startedElapsedMs)) return;
+            lastDetectorEventNanos = event.timestamp;
+            newSteps = 1;
             detectorSeen = true;
-            for (int i = 0; i < newSteps; i++) recentStepTimes.addLast(stamp);
+            recentStepTimes.addLast(stamp);
         } else if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
             newSteps = counterEvidence.observe(stamp, event.values[0], receivedMs);
             if (newSteps > 0 && counterEvidence.canAmendPendingStop(receivedMs))
