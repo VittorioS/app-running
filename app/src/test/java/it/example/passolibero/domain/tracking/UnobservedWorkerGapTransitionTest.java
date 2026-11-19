@@ -10,8 +10,7 @@ import org.junit.Test;
 public final class UnobservedWorkerGapTransitionTest {
     @Test
     public void exactlyFiveSecondsAndShorterIntervalsDoNotSettleAsUnknown() {
-        for (long intervalMs :
-                new long[] {Long.MIN_VALUE, -1L, 0L, 1L, 4_999L, 5_000L}) {
+        for (long intervalMs : new long[] {Long.MIN_VALUE, -1L, 0L, 1L, 4_999L, 5_000L}) {
             UnobservedWorkerGapTransition.Effect effect =
                     UnobservedWorkerGapTransition.evaluate(intervalMs);
             assertFalse(effect.unobserved());
@@ -31,10 +30,8 @@ public final class UnobservedWorkerGapTransitionTest {
 
     @Test
     public void independentCallbacksDoNotRetainAPreviousGap() {
-        UnobservedWorkerGapTransition.Effect gap =
-                UnobservedWorkerGapTransition.evaluate(5_001L);
-        UnobservedWorkerGapTransition.Effect fresh =
-                UnobservedWorkerGapTransition.evaluate(1_000L);
+        UnobservedWorkerGapTransition.Effect gap = UnobservedWorkerGapTransition.evaluate(5_001L);
+        UnobservedWorkerGapTransition.Effect fresh = UnobservedWorkerGapTransition.evaluate(1_000L);
         UnobservedWorkerGapTransition.Effect another =
                 UnobservedWorkerGapTransition.evaluate(8_000L);
 
