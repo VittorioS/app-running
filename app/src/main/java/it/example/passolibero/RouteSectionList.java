@@ -50,8 +50,8 @@ public final class RouteSectionList {
 
     /**
      * I Section restano gli stessi oggetti mentre arrivano nuovi fix.
-     * Vengono create soltanto nuove righe; l'ultima e la penultima
-     * vengono aggiornate per mantenerne le statistiche correnti.
+     * Vengono create soltanto nuove righe. L'ultima riga già visibile può
+     * aver ricevuto nuovi fix, anche se il batch ha aperto molte altre sezioni.
      */
     public void sync() {
         List<RouteSections.Section> sections = map.sections();
@@ -60,6 +60,7 @@ public final class RouteSectionList {
             rows.removeAllViews();
             rendered.clear();
         }
+        if (!rendered.isEmpty()) rendered.get(rendered.size() - 1).render();
         for (int i = rendered.size(); i < sections.size(); i++) {
             SectionRow row = new SectionRow(sections.get(i));
             rendered.add(row);
@@ -67,12 +68,6 @@ public final class RouteSectionList {
         }
         empty.setVisibility(sections.isEmpty() ? View.VISIBLE : View.GONE);
         showAll.setEnabled(map.selectedSectionNumber() != 0);
-        // Refresh incrementale: la penultima può aver ricevuto gli ultimi fix
-        // nello stesso batch in cui è stata aperta la nuova sezione.
-        if (!rendered.isEmpty()) {
-            rendered.get(rendered.size() - 1).render();
-            if (rendered.size() > 1) rendered.get(rendered.size() - 2).render();
-        }
     }
 
     private void refreshSelection() {
