@@ -16,7 +16,9 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 
 import it.example.passolibero.application.weather.ScheduleNextWeatherCheck;
+import it.example.passolibero.application.weather.WeatherCheckCancellation;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.time.Clock;
 import java.time.format.DateTimeFormatter;
@@ -109,7 +111,9 @@ public final class WeatherMonitor {
     }
 
     /** Un controllo per ogni localita', con cooldown e notifiche indipendenti. */
-    static void checkAndNotify(Context context) throws java.io.IOException {
+    static void checkAndNotify(Context context, WeatherCheckCancellation cancellation,
+                               ForecastLookup forecasts) throws IOException {
+        if (cancellation.isCancelled()) return;
         SharedPreferences prefs = AppPrefs.get(context);
         if (!isActive(prefs)) return;
         WeatherRules rules;
@@ -121,22 +125,24 @@ public final class WeatherMonitor {
 
         List<WeatherLocations.City> target = cities(prefs);
         int successful = 0;
-        java.io.IOException firstFailure = null;
+        IOException firstFailure = null;
         for (WeatherLocations.City city : target) {
             // La lista potrebbe essere stata modificata mentre era in corso il job.
-            if (!isActive(prefs)) return;
+            if (cancellation.isCancelled() || !isActive(prefs)) return;
             if (!WeatherLocations.contains(cities(prefs), city)) continue;
 
             WeatherApi.Forecast forecast;
             try {
-                forecast = WeatherApi.forecast(city.latitude, city.longitude);
+                forecast = forecasts.forecast(city.latitude, city.longitude);
                 successful++;
-            } catch (java.io.IOException error) {
+            } catch (IOException error) {
+                if (cancellation.isCancelled()) return;
                 android.util.Log.w("PassoLiberoWeather", "Meteo non disponibile per "
                         + city.title, error);
                 if (firstFailure == null) firstFailure = error;
                 continue; // Un errore di rete per una citta' non blocca le altre.
             }
+            if (cancellation.isCancelled()) return;
             if (!WeatherLocations.contains(cities(prefs), city) || !isActive(prefs)) continue;
             long now = System.currentTimeMillis() / 1000L;
             String key = WeatherLocations.key(city);
@@ -149,14 +155,20 @@ public final class WeatherMonitor {
             for (WeatherApi.Hour hour : forecast.hours) {
                 if (rules.matches(hour.temperatureC, hour.windKmh)
                         && WeatherRules.shouldNotify(now, hour.epochSec, last, lastSlot)) {
-                    notifyFavorable(context, city, forecast, hour);
-                    prefs.edit().putLong("weather_notified_at_" + key, now)
-                            .putLong("weather_notified_slot_" + key, hour.epochSec).apply();
+                    cancellation.runIfActive(() -> {
+                        notifyFavorable(context, city, forecast, hour);
+                        prefs.edit().putLong("weather_notified_at_" + key, now)
+                                .putLong("weather_notified_slot_" + key, hour.epochSec).apply();
+                    });
                     break;
                 }
             }
         }
         if (successful == 0 && firstFailure != null) throw firstFailure;
+    }
+
+    interface ForecastLookup {
+        WeatherApi.Forecast forecast(double latitude, double longitude) throws IOException;
     }
 
     private static void notifyFavorable(Context context, WeatherLocations.City city,
