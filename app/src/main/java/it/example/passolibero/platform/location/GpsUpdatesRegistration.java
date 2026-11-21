@@ -27,7 +27,9 @@ public final class GpsUpdatesRegistration {
 
     /** Use the original listener and worker thread; retrieve its looper after removal. */
     public static void replace(
-            LocationManager manager, LocationListener listener, HandlerThread workerThread,
+            LocationManager manager,
+            LocationListener listener,
+            HandlerThread workerThread,
             boolean fast) {
         replace(
                 new Calls() {
@@ -40,7 +42,11 @@ public final class GpsUpdatesRegistration {
                     public void requestLocationUpdates(
                             String provider, long minTimeMs, float minDistanceM) {
                         manager.requestLocationUpdates(
-                                provider, minTimeMs, minDistanceM, listener, workerThread.getLooper());
+                                provider,
+                                minTimeMs,
+                                minDistanceM,
+                                listener,
+                                workerThread.getLooper());
                     }
                 },
                 fast);
