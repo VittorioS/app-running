@@ -1549,3 +1549,64 @@ G3 fisici rari #24 ancora non PASS e rinviati al gate #38, nessuno
 sblocco automatico di #26+. Rollback: revert isolato di questa PR
 (quattro file), nessuna migrazione dati. Review/merge umano e CI
 post-merge restano necessari.
+
+## 41. Ventisettesimo seam P4b (#25): recupero della finestra UNCERTAIN su MOVING
+
+```text
+TrackingService.advanceTimeline() [invariato]
+  -> MotionTimeline.advance(... MOVING ...) [ledger]
+     -> MovingUncertaintyRecoveryTransition.resolveWindow(
+          uncertainSince, committed, unresolvedMs) [domain puro]
+        -> se uncertainSince < 0: WindowEffect(false, UNKNOWN, 0)
+        -> altrimenti settle(committed, unresolvedMs) [gia' integrata]
+        -> WindowEffect(true, previous destination, previous credit)
+     -> se recoverPendingWindow:
+        credit(committed, creditMs) se precedente movimento confermato,
+        altrimenti unknownMs += creditMs; unresolvedMs = 0 [ledger]
+     -> uncertainSince = -1 [ledger, come prima]
+     -> recupero STOP pendente e scelta gait [invariati]
+```
+
+**Contratto pre/post:** la guardia legacy `uncertainSince>=0`
+determina se il ritorno di MOVING debba prima consolidare una
+finestra UNCERTAIN. Il nuovo `WindowEffect` puro contiene
+quell'informazione esplicita e riusa `settle` per scegliere
+la destinazione originale del credito: precedente RUN/WALK/
+MOVING_UNKNOWN confermato oppure UNKNOWN. In assenza di
+finestra non consuma l'eventuale pending MOVING e non accredita
+nulla. Il ledger applica gli stessi effetti nello stesso ordine,
+con `unresolvedMs=0` solo quando c'era una finestra, poi
+`uncertainSince=-1` senza condizioni, quindi prosegue con
+STOP pending e gait corrente. Nessuna soglia o saturazione
+e nessun nuovo stato persistente; anche le durate `long`
+non positive conservano la semantica del ramo precedente.
+
+**G1 test-first:** `TrackingMovingRecoveryEffectsCharacterizationTest`
+ampliato prima del refactoring con due scenari: incertezza
+scaduta non recuperata retroattivamente come RUN precedente,
+e cambio gait senza finestra UNCERTAIN. Baseline preesistente
+`TrackingUncertaintyGraceCharacterizationTest` e
+`MovingUncertaintyRecoveryTransitionTest` protegge recupero
+breve, categoria precedente, stop interrotto, duplicati e
+crediti conservativi. I nuovi test domain coprono sentinel
+negativa, zero, estremi `long`, tutte le categorie e stateless.
+
+**Gate precedente:** [PR #138](https://github.com/VittorioS/app-running/pull/138)
+merged su `main` SHA `7302fbb7b5b82ffee75beb1d2fd9d5cdc9a767c4`.
+[CI post-merge #44909529999](https://github.com/VittorioS/app-running/actions/runs/44909529999)
+sullo stesso SHA e' `completed/success`, con
+`verify=success` e `android11=success`, verificata prima
+del nuovo codice.
+
+**Confini / rollback:** soltanto `MotionTimeline`, regola
+domain esistente, caratterizzazione, test domain e mappa
+delle dipendenze (cinque file). Nessuna modifica a Service,
+GPS/step/sensori, lifecycle/FGS/recovery, SQLite/Prefs,
+UI/voce, permessi, signing, versioni, workflow o release.
+Domain Java puro senza import Android/legacy/application/data/
+platform; ledger resta owner di timestamp e contatori.
+Invarianti `moving=run+walk+movingUnknown` ed
+`elapsed=moving+still+unknown` invariati. #24/#25 OPEN,
+deroga limitata a P4b; G3 fisici rari differiti a #38
+ancora non PASS; #26+ non si sblocca automaticamente.
+Rollback isolato della PR, senza migrazioni.

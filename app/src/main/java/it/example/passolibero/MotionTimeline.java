@@ -59,10 +59,12 @@ public final class MotionTimeline {
         }
         if (evidence == MotionEvidencePolicy.Evidence.MOVING) {
             // Unobserved startup/downtime must not become RUN retrospectively.
-            if (uncertainSince >= 0) {
-                MovingUncertaintyRecoveryTransition.Effect recovery =
-                        MovingUncertaintyRecoveryTransition.settle(
-                                committed == null ? null : committed.name(), unresolvedMs);
+            MovingUncertaintyRecoveryTransition.WindowEffect recovery =
+                    MovingUncertaintyRecoveryTransition.resolveWindow(
+                            uncertainSince,
+                            committed == null ? null : committed.name(),
+                            unresolvedMs);
+            if (recovery.recoverPendingWindow()) {
                 if (recovery.destination()
                         == MovingUncertaintyRecoveryTransition.Destination
                                 .PREVIOUS_CONFIRMED_MOVEMENT) {
