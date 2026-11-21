@@ -1496,3 +1496,56 @@ La deroga #24 vale solo P4b, senza sblocco automatico di #26+.
 Regressioni UNKNOWN/ledger, storico, sessioni duplicate,
 recovery o GPS/FGS fermano P4b e richiedono riesame #24.
 Rollback: revert isolato della PR (6 file), senza migrazioni.
+
+## 40. Ventiseiesimo seam P4b (#25): ancora temporale dell'incertezza
+
+```text
+TrackingService.advanceTimeline() [legacy, invariato]
+  -> MotionTimeline.advance(... UNCERTAIN o null ...) [ledger]
+     -> UncertainStopInterruptionTransition [gia' integrata]
+     -> UncertainEvidenceTransition.resolveWindow(nowMs, dt, uncertainSince, unresolvedMs)
+        -> ancora: uncertainSince < 0 ? nowMs - dt : uncertainSince
+        -> resolve(nowMs - ancora, unresolvedMs, dt) [grace policy esistente]
+        -> WindowEffect(anchor, unresolvedAfter, unknownCredit, invalidateConfirmed)
+     -> ledger: uncertainSince = anchor; unresolvedMs = unresolvedAfter;
+        unknownMs += unknownCredit; eventuale committed/displayed = UNKNOWN
+```
+
+**Contratto e confronto:** l'ancora del primo intervallo UNCERTAIN
+rimane il timestamp della callback precedente (`nowMs-dt`). Le
+callback successive non la riavviano. Alla scadenza esatta di
+5.000 ms, la precedente `UncertaintyGracePolicy` attribuisce
+l'intera incertezza a UNKNOWN; oltre la scadenza attribuisce soltanto
+l'intervallo corrente. MOVING e STILL continuano a cancellare
+`uncertainSince` negli stessi rami. `resolveWindow` riusa la
+`resolve` a tre parametri senza cambiarne API, soglia o semantica.
+Il ledger mantiene lo stesso ordine finale di accrediti/reset e
+l'ownership del display. Resta invariata anche la sentinella
+negativa legacy e l'aritmetica Java `long`.
+
+**G1 test-first:** `TrackingUncertaintyWindowStartCharacterizationTest`
+nel primo commit copre evidenza null, avvio da callback precedente,
+confine 4.999/5.000 ms, recupero MOVING e nuova finestra indipendente,
+callback stale/duplicate, idempotenza di `finish()` e conservazione
+delle durate. Le suite precedenti `TrackingUncertaintyGraceCharacterizationTest`,
+`TrackingStateTransitionCharacterizationTest` e
+`UncertainEvidenceTransitionTest` restano baseline; nuovi test puri
+aggiungono l'ancora, scadenza e sentinella negativa. Nessun dispositivo
+fisico e' provato dai test sintetici.
+
+**Gate e scope:** [PR #129](https://github.com/VittorioS/app-running/pull/129)
+merged su `main` SHA `d78df9b213a3515f83c6b507e774076e41a01957`.
+[CI post-merge #44626807585](https://github.com/VittorioS/app-running/actions/runs/44626807585)
+`completed/success` con `verify` e `android11` success sullo stesso
+SHA, verificati prima della modifica. Scope solo #25/P4b; non cambiano
+`TrackingService`, callback GPS/sensori, SQLite/Prefs, lifecycle/FGS,
+START/STOP/recovery, UI, permessi, versione, firma, workflow o release.
+Domain Java puro senza import Android/legacy/application/data/platform.
+Rimangono `moving=run+walk+movingUnknown` ed
+`elapsed=moving+still+unknown`, con UNKNOWN conservativo.
+
+**Governance:** #24 e #25 OPEN, deroga condizionata limitata a P4b;
+G3 fisici rari #24 ancora non PASS e rinviati al gate #38, nessuno
+sblocco automatico di #26+. Rollback: revert isolato di questa PR
+(quattro file), nessuna migrazione dati. Review/merge umano e CI
+post-merge restano necessari.
