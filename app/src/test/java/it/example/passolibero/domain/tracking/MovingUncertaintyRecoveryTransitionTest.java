@@ -62,4 +62,58 @@ public final class MovingUncertaintyRecoveryTransitionTest {
                 third.destination());
         assertEquals(500L, third.creditMs());
     }
+
+    @Test
+    public void absentWindowCannotConsumeOrReclassifyStaleUnresolvedTime() {
+        for (long uncertainSinceMs : new long[] {Long.MIN_VALUE, -2L, -1L}) {
+            for (long pendingMs : new long[] {0L, 1L, 4_999L, Long.MAX_VALUE}) {
+                MovingUncertaintyRecoveryTransition.WindowEffect effect =
+                        MovingUncertaintyRecoveryTransition.resolveWindow(
+                                uncertainSinceMs, "RUN", pendingMs);
+                assertEquals(false, effect.recoverPendingWindow());
+                assertEquals(0L, effect.creditMs());
+                assertEquals(
+                        MovingUncertaintyRecoveryTransition.Destination.UNKNOWN,
+                        effect.destination());
+            }
+        }
+    }
+
+    @Test
+    public void activeWindowPreservesDestinationAndUnclampedDuration() {
+        for (long sinceMs : new long[] {0L, 1L, Long.MAX_VALUE}) {
+            for (String state :
+                    new String[] {null, "RUN", "WALK", "MOVING_UNKNOWN", "STILL", "UNKNOWN"}) {
+                for (long pendingMs :
+                        new long[] {Long.MIN_VALUE, 0L, 999L, Long.MAX_VALUE}) {
+                    MovingUncertaintyRecoveryTransition.Effect legacy =
+                            MovingUncertaintyRecoveryTransition.settle(state, pendingMs);
+                    MovingUncertaintyRecoveryTransition.WindowEffect effect =
+                            MovingUncertaintyRecoveryTransition.resolveWindow(
+                                    sinceMs, state, pendingMs);
+                    assertEquals(true, effect.recoverPendingWindow());
+                    assertEquals(legacy.destination(), effect.destination());
+                    assertEquals(pendingMs, effect.creditMs());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void consecutiveWindowDecisionsNeverRememberOlderActivity() {
+        MovingUncertaintyRecoveryTransition.WindowEffect before =
+                MovingUncertaintyRecoveryTransition.resolveWindow(10L, "RUN", 1_000L);
+        MovingUncertaintyRecoveryTransition.WindowEffect absent =
+                MovingUncertaintyRecoveryTransition.resolveWindow(-1L, "RUN", 999L);
+        MovingUncertaintyRecoveryTransition.WindowEffect after =
+                MovingUncertaintyRecoveryTransition.resolveWindow(20L, "STILL", 250L);
+
+        assertEquals(1_000L, before.creditMs());
+        assertEquals(0L, absent.creditMs());
+        assertEquals(false, absent.recoverPendingWindow());
+        assertEquals(250L, after.creditMs());
+        assertEquals(
+                MovingUncertaintyRecoveryTransition.Destination.UNKNOWN,
+                after.destination());
+    }
 }
