@@ -146,4 +146,45 @@ public final class TrackingMovingRecoveryEffectsCharacterizationTest {
         assertEquals(0, ledger.unknownMs());
         assertConserved(ledger, 4000);
     }
+
+    @Test
+    public void expiredUncertaintyIsNotRecreditedToTheOldRunWhenMovingReturns() {
+        MotionTimeline ledger = newLedger();
+        moving(ledger, 1_000L, MovementClassifier.Kind.RUN);
+        moving(ledger, 2_000L, MovementClassifier.Kind.RUN);
+        for (long atMs = 3_000L; atMs <= 7_000L; atMs += 1_000L) {
+            uncertain(ledger, atMs);
+        }
+        assertEquals(MovementClassifier.Kind.UNKNOWN, ledger.visible());
+        assertEquals(2_000L, ledger.runMs());
+        assertEquals(5_000L, ledger.unknownMs());
+        assertEquals(0L, ledger.unresolvedMs());
+
+        moving(ledger, 8_000L, MovementClassifier.Kind.WALK);
+        assertEquals(MovementClassifier.Kind.UNKNOWN, ledger.visible());
+        assertEquals(5_000L, ledger.unknownMs());
+        assertEquals(1_000L, ledger.unresolvedMs());
+
+        moving(ledger, 9_000L, MovementClassifier.Kind.WALK);
+        assertEquals(MovementClassifier.Kind.WALK, ledger.visible());
+        assertEquals(2_000L, ledger.runMs());
+        assertEquals(2_000L, ledger.walkMs());
+        assertEquals(5_000L, ledger.unknownMs());
+        assertConserved(ledger, 9_000L);
+    }
+
+    @Test
+    public void uninterruptedMovingGaitChangeNeverSettlesANonexistentWindow() {
+        MotionTimeline ledger = newLedger();
+        moving(ledger, 1_000L, MovementClassifier.Kind.RUN);
+        moving(ledger, 2_000L, MovementClassifier.Kind.RUN);
+        moving(ledger, 3_000L, MovementClassifier.Kind.WALK);
+
+        assertEquals(MovementClassifier.Kind.WALK, ledger.visible());
+        assertEquals(2_000L, ledger.runMs());
+        assertEquals(1_000L, ledger.walkMs());
+        assertEquals(0L, ledger.unknownMs());
+        assertEquals(0L, ledger.unresolvedMs());
+        assertConserved(ledger, 3_000L);
+    }
 }
