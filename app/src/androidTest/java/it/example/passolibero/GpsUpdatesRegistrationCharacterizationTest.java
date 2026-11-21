@@ -5,6 +5,8 @@ import static org.junit.Assert.fail;
 
 import android.location.LocationManager;
 
+import it.example.passolibero.platform.location.GpsUpdatesRegistration;
+
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import org.junit.Test;
@@ -41,7 +43,7 @@ public final class GpsUpdatesRegistrationCharacterizationTest {
         }
     }
 
-    private static final class Recorder implements LegacyCalls {
+    private static final class Recorder implements LegacyCalls, GpsUpdatesRegistration.Calls {
         final List<String> events = new ArrayList<>();
         boolean failOnRemove;
         boolean failFastRequest;
@@ -115,5 +117,55 @@ public final class GpsUpdatesRegistrationCharacterizationTest {
         assertEquals(
                 List.of("remove", "request:gps:1000:0.0"),
                 recorder.events);
+    }
+
+    @Test
+    public void extractedAdapterUsesTheSameRemoveRequestOrderAndParameters() {
+        for (boolean fast : new boolean[] {false, true}) {
+            Recorder original = new Recorder();
+            originalRegistration(original, fast);
+            Recorder extracted = new Recorder();
+            GpsUpdatesRegistration.replace(extracted, fast);
+            assertEquals(original.events, extracted.events);
+        }
+    }
+
+    @Test
+    public void extractedAdapterPreservesRemovalAndRequestExceptions() {
+        Recorder removeFailure = new Recorder();
+        removeFailure.failOnRemove = true;
+        try {
+            GpsUpdatesRegistration.replace(removeFailure, true);
+            fail("Unregister failures must not be hidden");
+        } catch (SecurityException expected) {
+            assertEquals(List.of("remove"), removeFailure.events);
+        }
+
+        Recorder requestFailure = new Recorder();
+        requestFailure.failFastRequest = true;
+        try {
+            GpsUpdatesRegistration.replace(requestFailure, true);
+            fail("Request failures must propagate for the Service's normal-rate retry");
+        } catch (IllegalArgumentException expected) {
+            assertEquals(
+                    List.of("remove", "request:gps:200:0.0"),
+                    requestFailure.events);
+        }
+    }
+
+    @Test
+    public void fastRegistrationFailureCanStillRetryTheNormalRateInTheCaller() {
+        Recorder recorder = new Recorder();
+        recorder.failFastRequest = true;
+        try {
+            GpsUpdatesRegistration.replace(recorder, true);
+            fail("Synthetic fast request should fail");
+        } catch (IllegalArgumentException expected) {
+            GpsUpdatesRegistration.replace(recorder, false);
+        }
+        Recorder original = new Recorder();
+        original.failFastRequest = true;
+        originalFallback(original, true);
+        assertEquals(original.events, recorder.events);
     }
 }

@@ -36,6 +36,7 @@ import it.example.passolibero.domain.SessionRecoveryPolicy;
 import it.example.passolibero.domain.ForegroundStartPolicy;
 import it.example.passolibero.domain.GpsFixPolicy;
 import it.example.passolibero.platform.location.LocationFixTimestampMapper;
+import it.example.passolibero.platform.location.GpsUpdatesRegistration;
 
 /** Foreground Service: solo start esplicito, nessun monitoraggio fuori sessione. */
 public final class TrackingService extends Service implements LocationListener, SensorEventListener {
@@ -661,9 +662,7 @@ public final class TrackingService extends Service implements LocationListener, 
     private void requestSprintGps(boolean fast) {
         if (locationManager == null || workerThread == null) return;
         try {
-            locationManager.removeUpdates(this);
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
-                    fast ? 200L : 1_000L, 0f, this, workerThread.getLooper());
+            GpsUpdatesRegistration.replace(locationManager, this, workerThread, fast);
         } catch (SecurityException | IllegalArgumentException ex) {
             Log.w(TAG, "Frequenza GPS richiesta non disponibile", ex);
             if (fast) {
