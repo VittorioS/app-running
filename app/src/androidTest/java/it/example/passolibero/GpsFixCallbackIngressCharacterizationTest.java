@@ -7,6 +7,8 @@ import static org.junit.Assert.fail;
 import android.location.Location;
 import android.location.LocationManager;
 
+import it.example.passolibero.platform.location.GpsFixCallbackIngress;
+
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import org.junit.Test;
@@ -89,6 +91,57 @@ public final class GpsFixCallbackIngressCharacterizationTest {
             fail("Original callback propagates its handler failure");
         } catch (IllegalStateException expected) {
             assertSame(problem, expected);
+        }
+    }
+
+    @Test
+    public void extractedIngressMatchesLegacyForInactiveMissingAccuracyAndAcceptedFixes() {
+        for (boolean active : new boolean[] {false, true}) {
+            for (boolean hasAccuracy : new boolean[] {false, true}) {
+                Location location = fix(hasAccuracy, 7_000_000_000L);
+                List<Location> legacy = new ArrayList<>();
+                List<Location> extracted = new ArrayList<>();
+                originalDispatch(active, location, legacy::add);
+                GpsFixCallbackIngress.dispatch(active, location, extracted::add);
+                assertEquals(legacy.size(), extracted.size());
+                if (!legacy.isEmpty()) {
+                    assertSame(legacy.get(0), extracted.get(0));
+                }
+            }
+        }
+    }
+
+    @Test
+    public void extractedIngressStillPreservesStaleFutureOrderAndListenerErrors() {
+        List<Location> observed = new ArrayList<>();
+        Location future = fix(true, 50_000_000_000L);
+        Location stale = fix(true, 10_000_000_000L);
+        GpsFixCallbackIngress.dispatch(true, future, observed::add);
+        GpsFixCallbackIngress.dispatch(true, stale, observed::add);
+        assertEquals(2, observed.size());
+        assertSame(future, observed.get(0));
+        assertSame(stale, observed.get(1));
+
+        IllegalStateException problem = new IllegalStateException("callback");
+        try {
+            GpsFixCallbackIngress.dispatch(
+                    true, fix(true, 1_000_000L), ignored -> { throw problem; });
+            fail("The Android callback must not swallow processing failures");
+        } catch (IllegalStateException expected) {
+            assertSame(problem, expected);
+        }
+    }
+
+    @Test
+    public void extractedIngressRetainsNullGuardShortCircuitAndActiveNullFailure() {
+        GpsFixCallbackIngress.dispatch(false, null, ignored -> {
+            fail("Inactive callbacks must not be forwarded");
+        });
+        try {
+            GpsFixCallbackIngress.dispatch(true, null, ignored -> {});
+            fail("Active null fix must still fail at the legacy accuracy access");
+        } catch (NullPointerException expected) {
+            // The Service did not treat a null fix as missing GPS evidence.
         }
     }
 }
