@@ -55,4 +55,50 @@ public final class UncertainEvidenceTransitionTest {
         assertEquals(1_000L, fresh.unresolvedMsAfter());
         assertEquals(false, fresh.invalidateConfirmedState());
     }
+
+    @Test
+    public void firstUncertaintyAnchorsAtPreviousAcceptedCallback() {
+        UncertainEvidenceTransition.WindowEffect effect =
+                UncertainEvidenceTransition.resolveWindow(1_000L, 1_000L, -1L, 0L);
+        assertEquals(0L, effect.uncertainSinceMsAfter());
+        assertEquals(1_000L, effect.unresolvedMsAfter());
+        assertEquals(0L, effect.unknownCreditMs());
+        assertEquals(false, effect.invalidateConfirmedState());
+    }
+
+    @Test
+    public void existingAnchorPersistsThroughExactGraceExpiry() {
+        UncertainEvidenceTransition.WindowEffect before =
+                UncertainEvidenceTransition.resolveWindow(4_999L, 999L, 0L, 4_000L);
+        assertEquals(0L, before.uncertainSinceMsAfter());
+        assertEquals(4_999L, before.unresolvedMsAfter());
+        assertEquals(0L, before.unknownCreditMs());
+
+        UncertainEvidenceTransition.WindowEffect expired =
+                UncertainEvidenceTransition.resolveWindow(5_000L, 1L, 0L, 4_999L);
+        assertEquals(0L, expired.uncertainSinceMsAfter());
+        assertEquals(0L, expired.unresolvedMsAfter());
+        assertEquals(5_000L, expired.unknownCreditMs());
+        assertEquals(true, expired.invalidateConfirmedState());
+
+        UncertainEvidenceTransition.WindowEffect later =
+                UncertainEvidenceTransition.resolveWindow(6_000L, 1_000L, 0L, 0L);
+        assertEquals(0L, later.uncertainSinceMsAfter());
+        assertEquals(1_000L, later.unknownCreditMs());
+    }
+
+    @Test
+    public void newWindowAfterRecoveryAndNegativeSentinelKeepLegacyArithmetic() {
+        UncertainEvidenceTransition.WindowEffect fresh =
+                UncertainEvidenceTransition.resolveWindow(9_000L, 1_000L, -1L, 0L);
+        assertEquals(8_000L, fresh.uncertainSinceMsAfter());
+        assertEquals(1_000L, fresh.unresolvedMsAfter());
+        assertEquals(false, fresh.invalidateConfirmedState());
+
+        UncertainEvidenceTransition.WindowEffect negative =
+                UncertainEvidenceTransition.resolveWindow(-1L, 10L, -3L, 5L);
+        assertEquals(-11L, negative.uncertainSinceMsAfter());
+        assertEquals(15L, negative.unresolvedMsAfter());
+        assertEquals(0L, negative.unknownCreditMs());
+    }
 }

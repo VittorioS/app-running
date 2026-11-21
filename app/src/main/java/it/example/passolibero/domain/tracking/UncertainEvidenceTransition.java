@@ -7,7 +7,31 @@ package it.example.passolibero.domain.tracking;
  * the actual committed/visible state. This value describes only the effects to apply.
  */
 public final class UncertainEvidenceTransition {
+    /** The window anchor and existing grace-expiry effects, without ledger mutations. */
+    public record WindowEffect(
+            long uncertainSinceMsAfter,
+            long unresolvedMsAfter,
+            long unknownCreditMs,
+            boolean invalidateConfirmedState) {}
+
     private UncertainEvidenceTransition() {}
+
+    /**
+     * Preserve the first UNCERTAIN callback's previous-interval anchor and subsequent expiry.
+     *
+     * <p>The old sentinel is negative; the first accepted interval starts at nowMs - deltaMs.
+     * Existing windows retain their original anchor, including after grace expiry.
+     */
+    public static WindowEffect resolveWindow(
+            long nowMs, long deltaMs, long uncertainSinceMs, long unresolvedMs) {
+        long anchorMs = uncertainSinceMs < 0 ? nowMs - deltaMs : uncertainSinceMs;
+        Effect grace = resolve(nowMs - anchorMs, unresolvedMs, deltaMs);
+        return new WindowEffect(
+                anchorMs,
+                grace.unresolvedMsAfter(),
+                grace.unknownCreditMs(),
+                grace.invalidateConfirmedState());
+    }
 
     /** Immutable credit and state-invalidation instructions; no side effects are performed here. */
     public record Effect(

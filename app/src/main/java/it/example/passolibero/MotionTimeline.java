@@ -164,9 +164,9 @@ public final class MotionTimeline {
             stopPendingMs = 0;
             stopSince = -1;
         }
-        if (uncertainSince < 0) uncertainSince = nowMs - dt;
-        UncertainEvidenceTransition.Effect effect =
-                UncertainEvidenceTransition.resolve(nowMs - uncertainSince, unresolvedMs, dt);
+        UncertainEvidenceTransition.WindowEffect effect =
+                UncertainEvidenceTransition.resolveWindow(nowMs, dt, uncertainSince, unresolvedMs);
+        uncertainSince = effect.uncertainSinceMsAfter();
         unresolvedMs = effect.unresolvedMsAfter();
         unknownMs += effect.unknownCreditMs();
         if (effect.invalidateConfirmedState()) {
