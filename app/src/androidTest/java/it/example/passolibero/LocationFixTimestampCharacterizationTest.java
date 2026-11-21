@@ -84,4 +84,37 @@ public final class LocationFixTimestampCharacterizationTest {
         assertEquals(legacyFixMs, location.getElapsedRealtimeNanos() / 1_000_000L);
         assertEquals(wallMs + 86_400_000L, location.getTime());
     }
+
+    @Test
+    public void adapterRetainsLegacyMillisAndAgeAtGpsClockBoundaries() {
+        for (long elapsedNanos :
+                new long[] {0L, 999_999L, 1_000_000L, 1_900_999_999L, 6_001_000_000L}) {
+            Location location = fix(elapsedNanos);
+            assertEquals(
+                    elapsedNanos / 1_000_000L,
+                    it.example.passolibero.platform.location.LocationFixTimestampMapper.elapsedMs(
+                            location));
+            for (long nowMs : new long[] {0L, 1_900L, 5_000L, 6_002L}) {
+                assertEquals(
+                        Math.abs(nowMs - elapsedNanos / 1_000_000),
+                        it.example.passolibero.platform.location.LocationFixTimestampMapper
+                                .absoluteAgeMs(nowMs, location));
+            }
+        }
+    }
+
+    @Test
+    public void adapterKeepsNanosecondDeltaBeforeDividingEvenForStaleFixes() {
+        Location previous = fix(9_876_543_210L);
+        for (long elapsedNanos : new long[] {9_000_000_000L, 9_876_543_210L, 10_987_654_321L}) {
+            Location current = fix(elapsedNanos);
+            double expected =
+                    (current.getElapsedRealtimeNanos() - previous.getElapsedRealtimeNanos()) / 1e9;
+            assertEquals(
+                    expected,
+                    it.example.passolibero.platform.location.LocationFixTimestampMapper.deltaSeconds(
+                            current, previous),
+                    0);
+        }
+    }
 }

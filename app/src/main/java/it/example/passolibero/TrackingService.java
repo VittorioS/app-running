@@ -35,6 +35,7 @@ import it.example.passolibero.application.tracking.TrackingStartupCoordinator;
 import it.example.passolibero.domain.SessionRecoveryPolicy;
 import it.example.passolibero.domain.ForegroundStartPolicy;
 import it.example.passolibero.domain.GpsFixPolicy;
+import it.example.passolibero.platform.location.LocationFixTimestampMapper;
 
 /** Foreground Service: solo start esplicito, nessun monitoraggio fuori sessione. */
 public final class TrackingService extends Service implements LocationListener, SensorEventListener {
@@ -462,11 +463,11 @@ public final class TrackingService extends Service implements LocationListener, 
         // I fix sprint ad alta frequenza sono gia' stati letti sopra.
         // Il tracciamento generale resta a circa 1 Hz, come prima dello sprint:
         // nessuna nuova pressione sulla classificazione RUN/WALK.
-        long normalFixMs = location.getElapsedRealtimeNanos() / 1_000_000L;
+        long normalFixMs = LocationFixTimestampMapper.elapsedMs(location);
         if (GpsFixPolicy.skipNormalFix(sprint.busy(), lastNormalGpsFixMs, normalFixMs)) return;
         lastNormalGpsFixMs = normalFixMs;
         long now = SystemClock.elapsedRealtime();
-        long ageMs = Math.abs(now - location.getElapsedRealtimeNanos() / 1_000_000);
+        long ageMs = LocationFixTimestampMapper.absoluteAgeMs(now, location);
         float acc = location.getAccuracy();
         if (!GpsQualityPolicy.isReliable(acc, ageMs)) {
             reportGpsQuality(false, now);
@@ -479,7 +480,7 @@ public final class TrackingService extends Service implements LocationListener, 
         double pointSpeed = Double.NaN;
         double dt = 0;
         if (lastAccepted != null) {
-            dt = (location.getElapsedRealtimeNanos() - lastAccepted.getElapsedRealtimeNanos()) / 1e9;
+            dt = LocationFixTimestampMapper.deltaSeconds(location, lastAccepted);
             if (dt <= 0) return;
             if (dt <= 20) {
                 double meters = RunMath.distanceMeters(lastAccepted.getLatitude(), lastAccepted.getLongitude(),
@@ -517,7 +518,7 @@ public final class TrackingService extends Service implements LocationListener, 
         double nativeSpeed = location.hasSpeed() ? location.getSpeed() : Double.NaN;
         double speedUncertainty = location.hasSpeedAccuracy()
                 ? location.getSpeedAccuracyMetersPerSecond() : Double.NaN;
-        long fixMs = location.getElapsedRealtimeNanos() / 1_000_000L;
+        long fixMs = LocationFixTimestampMapper.elapsedMs(location);
         boolean freshActivityFix = MovementClassifier.isFreshMeasurement(now, fixMs);
         motionEvidence.observeGps(fixMs, location.getLatitude(), location.getLongitude(),
                 acc, nativeSpeed, speedUncertainty);

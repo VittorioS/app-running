@@ -1610,3 +1610,64 @@ Invarianti `moving=run+walk+movingUnknown` ed
 deroga limitata a P4b; G3 fisici rari differiti a #38
 ancora non PASS; #26+ non si sblocca automaticamente.
 Rollback isolato della PR, senza migrazioni.
+
+## 42. Primo seam P5a (#26): adapter Android per il clock dei fix GPS
+
+```text
+LocationManager GPS callback [legacy TrackingService, registrazione invariata]
+ -> TrackingService.onLocationChanged(Location) [worker Looper originale]
+    -> platform/location/LocationFixTimestampMapper.elapsedMs(location)
+       [nanos / 1_000_000L, troncamento legacy, valori primitive]
+    -> GpsFixPolicy.skipNormalFix(...) [throttle preesistente]
+    -> SystemClock.elapsedRealtime() [punto di lettura invariato]
+    -> LocationFixTimestampMapper.absoluteAgeMs(now, location)
+       [Math.abs(now - nanos / 1_000_000), formula identica]
+    -> GpsQualityPolicy.isReliable(acc, ageMs) [policy invariata]
+    -> LocationFixTimestampMapper.deltaSeconds(location, lastAccepted)
+       [(currentNanos - previousNanos) / 1e9, stessa aritmetica]
+    -> MovementClassifier.isFreshMeasurement(now, fixMs)
+       [evidenza e decisioni in legacy, invariati]
+```
+
+**Contratto osservabile:** estratta solo la conversione Android
+`Location.getElapsedRealtimeNanos()` in millisecondi, età
+assoluta e differenza in secondi del normale percorso GPS.
+Invariate la posizione del clock `SystemClock.elapsedRealtime()`,
+le chiamate di throttling a circa 1 Hz, sprint a 200 ms,
+la registrazione `LocationManager`, i timestamp wall `getTime()`,
+gli effetti di early return, la validazione dell'accuracy,
+freschezza stale/future/out-of-order, l'uso di `lastAccepted`,
+il filtro distanza e la persistenza. Il mapper non cambia
+soglie, non valida né rifiuta fix e non memorizza stato.
+Il Service resta owner dei callback Android e delle decisioni
+sull'evidenza. `platform/location` importa `android.location.Location`
+e non entra nel domain Java puro.
+
+**G1 test-first:** il primo commit aggiunge
+`LocationFixTimestampCharacterizationTest` in `androidTest`,
+con `Location` sintetiche API30 e le espressioni legacy
+esatte per troncamento nanos→ms, cutoff di throttle 900 ms,
+età assoluta di fix futuri/passati, delta positivo/duplicato/
+stale e indipendenza da orologio wall. Il secondo commit
+aggiunge l'adapter Android e due prove di equivalenza
+rispetto alle espressioni originali: zero, sotto-millisecondo,
+confini, età, timestamp out-of-order e delta. Non sono
+prove GPS hardware o test screen-off.
+
+**Gate precedente:** [PR #139](https://github.com/VittorioS/app-running/pull/139)
+merged su `main` SHA `6a12a5a53117fd398e8d73cc2d8ae696578cc6ad`,
+[CI post-merge #44910425463](https://github.com/VittorioS/app-running/actions/runs/44910425463)
+`completed/success`, `verify=success` e `android11=success`.
+La [decisione del maintainer su #16](https://github.com/VittorioS/app-running/issues/16#issuecomment-7064332253)
+rinvia i G3 fisici precedenti alla #38 senza promuoverli a PASS
+e autorizza il passaggio puntuale a #26; [#25](https://github.com/VittorioS/app-running/issues/25)
+è chiusa sul piano implementativo, mentre #24 resta aperta.
+
+**Rischi e rollback:** il P5a ha ancora bisogno di
+verifica fisica GPS pertinente e sign-off prima della release;
+non dichiarare G3 superato dall'emulatore. Restano invariati
+Android 11, offline, tracking/UNKNOWN, distanze, GPS, FGS,
+START/STOP/recovery, SQLite/Prefs, UI/voce, permessi, firma,
+versione, workflow e release. Nessuna attività fuori dalla
+epic e nessuno sblocco automatico di #27+. Rollback: revert
+di quattro file della PR senza schema/migrazioni.
