@@ -22,8 +22,8 @@ public final class MovingUncertaintyRecoveryTransition {
     private MovingUncertaintyRecoveryTransition() {}
 
     /**
-     * Preserve the original active-window guard: only a nonnegative uncertainty anchor may
-     * settle a pending interval. An absent window must not consume any stale unresolved time.
+     * Preserve the original active-window guard: only a nonnegative uncertainty anchor may settle a
+     * pending interval. An absent window must not consume any stale unresolved time.
      */
     public static WindowEffect resolveWindow(
             long uncertainSinceMs, String previousCommittedState, long unresolvedMs) {

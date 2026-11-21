@@ -84,8 +84,7 @@ public final class MovingUncertaintyRecoveryTransitionTest {
         for (long sinceMs : new long[] {0L, 1L, Long.MAX_VALUE}) {
             for (String state :
                     new String[] {null, "RUN", "WALK", "MOVING_UNKNOWN", "STILL", "UNKNOWN"}) {
-                for (long pendingMs :
-                        new long[] {Long.MIN_VALUE, 0L, 999L, Long.MAX_VALUE}) {
+                for (long pendingMs : new long[] {Long.MIN_VALUE, 0L, 999L, Long.MAX_VALUE}) {
                     MovingUncertaintyRecoveryTransition.Effect legacy =
                             MovingUncertaintyRecoveryTransition.settle(state, pendingMs);
                     MovingUncertaintyRecoveryTransition.WindowEffect effect =
@@ -112,8 +111,6 @@ public final class MovingUncertaintyRecoveryTransitionTest {
         assertEquals(0L, absent.creditMs());
         assertEquals(false, absent.recoverPendingWindow());
         assertEquals(250L, after.creditMs());
-        assertEquals(
-                MovingUncertaintyRecoveryTransition.Destination.UNKNOWN,
-                after.destination());
+        assertEquals(MovingUncertaintyRecoveryTransition.Destination.UNKNOWN, after.destination());
     }
 }
