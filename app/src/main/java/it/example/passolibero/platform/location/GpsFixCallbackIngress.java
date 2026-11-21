@@ -1,12 +1,9 @@
 package it.example.passolibero.platform.location;
 
 import android.location.Location;
-
 import java.util.function.Consumer;
 
-/**
- * Android ingress for session GPS callbacks. No scheduling or fix-quality policy is owned here.
- */
+/** Android ingress for session GPS callbacks. No scheduling or fix-quality policy is owned here. */
 public final class GpsFixCallbackIngress {
     private GpsFixCallbackIngress() {}
 
