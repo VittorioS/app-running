@@ -1671,3 +1671,59 @@ START/STOP/recovery, SQLite/Prefs, UI/voce, permessi, firma,
 versione, workflow e release. Nessuna attività fuori dalla
 epic e nessuno sblocco automatico di #27+. Rollback: revert
 di quattro file della PR senza schema/migrazioni.
+
+## 43. Secondo seam P5a (#26): registrazione LocationManager sul worker
+
+```text
+TrackingService.requestSprintGps(fast) [legacy; owns null guards and catch]
+ -> platform/location/GpsUpdatesRegistration.replace(manager, this, workerThread, fast)
+    -> Calls.removeUpdates()                 [LocationManager.removeUpdates(this)]
+    -> Calls.requestLocationUpdates(...)     [LocationManager.GPS_PROVIDER,
+                                              fast ? 200L : 1_000L,
+                                              minDistance = 0f,
+                                              listener = this,
+                                              workerThread.getLooper()]
+ -> SecurityException|IllegalArgumentException [catch invariato nel Service]
+    -> se fast, requestSprintGps(false)      [retry legacy invariato]
+    -> altrimenti GPS status / Prefs         [legacy, invariato]
+```
+
+**Contratto:** si sposta soltanto il confine Android di
+`removeUpdates` seguito da `requestLocationUpdates`, senza
+cambiare frequenza, provider, listener, looper, distanza minima,
+ordine o gestione delle eccezioni. La richiesta al looper del worker
+avviene ancora dopo `removeUpdates`. La `Calls` interna
+rende verificabile il protocollo con fake: non introduce nuove
+dipendenze nel domain. Il Service conserva le guardie `manager`
+e `workerThread` non null, il catch originale e la seconda
+richiesta 1.000 ms se quella veloce 200 ms fallisce. Lo STOP
+`stopSensors()`, il GPS normale, lo sprint, callback/dati
+e gli aggiornamenti SQLite restano invariati.
+
+**G1 test-first:** il primo commit aggiunge
+`GpsUpdatesRegistrationCharacterizationTest` in `androidTest`.
+Il test di riferimento ripete la sequenza legacy contro fake,
+coprendo 200/1.000 ms, provider GPS, distanza 0, remove prima
+di request, propagazione di eccezioni e retry fast->normal.
+Il secondo commit sposta la registrazione in
+`platform/location/GpsUpdatesRegistration`, connette
+solo `requestSprintGps`, e confronta la sequenza estratta con
+il riferimento indipendente su fake. Nessuna registrazione
+GPS reale o permesso viene esercitato dai test sintetici.
+
+**Prerequisito:** [PR #140](https://github.com/VittorioS/app-running/pull/140)
+merged su `main` SHA `e50fe3d3279e494b8d1f933d81a8f708c7ab4edd`,
+[CI post-merge #44916888777](https://github.com/VittorioS/app-running/actions/runs/44916888777)
+`completed/success`, `verify=success`, `android11=success`,
+verificati prima del nuovo codice. La [deroga G3 della epic](https://github.com/VittorioS/app-running/issues/16#issuecomment-7064332253)
+rimanda le prove fisiche incomplete alla #38 senza promuoverle a PASS.
+
+**Confini:** nessuna modifica a percorsi callback, timestamp,
+quality gating, GPS stale/future/out-of-order, 1 Hz e sprint
+200 ms, FGS, batteria, screen-off, recovery, SQL/Prefs,
+UI/voce, permessi, signing, versioni, workflow e release.
+Il Service conserva il ciclo di vita e lo stop dei sensori.
+Rimangono necessari review e merge umano, `verify/android11`
+pre/post merge e verifica hardware GPS reale quando richiesta
+al gate finale. Rollback: revert isolato dei quattro file,
+nessuna migrazione dati.
