@@ -37,6 +37,7 @@ import it.example.passolibero.domain.ForegroundStartPolicy;
 import it.example.passolibero.domain.GpsFixPolicy;
 import it.example.passolibero.platform.location.LocationFixTimestampMapper;
 import it.example.passolibero.platform.location.GpsUpdatesRegistration;
+import it.example.passolibero.platform.location.GpsFixCallbackIngress;
 
 /** Foreground Service: solo start esplicito, nessun monitoraggio fuori sessione. */
 public final class TrackingService extends Service implements LocationListener, SensorEventListener {
@@ -418,8 +419,11 @@ public final class TrackingService extends Service implements LocationListener, 
     }
 
     @Override public void onLocationChanged(Location location) {
-        // Callback richiesta sullo stesso Looper del worker.
-        if (state == null || !location.hasAccuracy()) return;
+        // Callback richiesta sullo stesso Looper del worker; il listener resta questo Service.
+        GpsFixCallbackIngress.dispatch(state != null, location, this::processLocationFix);
+    }
+
+    private void processLocationFix(Location location) {
         // Solo il disegno della rotta usa la nuova etichetta "SPRINT".
         // Il classificatore/contatore della sessione continua a 1 Hz invariato.
         boolean sprintRouteWindow = false;

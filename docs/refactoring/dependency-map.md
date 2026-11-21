@@ -1727,3 +1727,62 @@ Rimangono necessari review e merge umano, `verify/android11`
 pre/post merge e verifica hardware GPS reale quando richiesta
 al gate finale. Rollback: revert isolato dei quattro file,
 nessuna migrazione dati.
+
+## 44. Terzo seam P5a (#26): ingresso dei callback Location
+
+```text
+LocationManager [provider e listener originali, Looper worker invariato]
+ -> TrackingService.onLocationChanged(Location) [Android listener originale]
+    -> platform/location/GpsFixCallbackIngress.dispatch(
+         state != null, location, this::processLocationFix)
+       -> if inactive || !location.hasAccuracy(): return [callback scartata]
+       -> onAccepted.accept(location) [sincrono, stessa Location]
+    -> TrackingService.processLocationFix(location) [orchestrazione legacy invariata]
+       -> sprint (200 ms richiesti), normal throttle, quality gate, evidence,
+          distance accumulator, timeline, UI state e SQLite [nessuna modifica]
+```
+
+**Contratto osservabile:** `TrackingService` resta il **medesimo
+`LocationListener`** registrato in `GpsUpdatesRegistration`, sullo
+stesso Looper del worker. La guardia originale
+`if (state == null || !location.hasAccuracy()) return` viene
+espressa in `platform/location/GpsFixCallbackIngress` come
+`if (!sessionActive || !location.hasAccuracy()) return`, con
+il medesimo short-circuit. Nessun callback e' schedulato,
+duplicato o riordinato: la stessa istanza `Location` viene
+passata immediatamente al metodo privato `processLocationFix`
+del Service, che conserva *tutto* il corpo preesistente e
+l'ordine di sprint, filtri, GPS, UNKNOWN, distanza, snapshot e
+UI. Errori dal ricevente continuano a propagarsi; persino
+un `Location` null con sessione attiva conserva il comportamento
+legacy. L'ingresso non controlla timestamp stale/future o
+velocita': le policy originali restano nei rami successivi.
+
+**G1 test-first:** `GpsFixCallbackIngressCharacterizationTest`
+in `androidTest` riproduce il guard prima dell'estrazione
+con `Location` sintetiche API30. Copre sessione inattiva
+con fix null, mancanza di accuratezza, fix ammesso per
+identita', timestamp future/stale mantenuti nell'ordine,
+NPE legacy e propagazione eccezioni handler. Dopo l'estrazione,
+tre test di parita' confrontano riferimento/adapter e
+non sostituiscono test hardware su dispositivo reale.
+
+**Gate precedente:** [PR #141](https://github.com/VittorioS/app-running/pull/141)
+merged su `main` SHA `39f80f8ee15304f5458d78bb2ded72bb32fdca6b`,
+[CI post-merge #44920453733](https://github.com/VittorioS/app-running/actions/runs/44920453733)
+`completed/success` con `verify=success` e `android11=success`
+verificati prima del nuovo codice. La [decisione G3 della epic](https://github.com/VittorioS/app-running/issues/16#issuecomment-7064332253)
+ha rinviato i test fisici incompleti al gate #38 senza
+promuoverli a PASS o autorizzare release.
+
+**Confini e rollback:** un solo metodo callback delega
+all'ingresso e un nuovo metodo privato contiene il corpo
+originale, senza alterare Android 11/API30, GPS 1 Hz/sprint
+200 ms, sensori, GPS/FGS, lifecycle/START/STOP/recovery,
+freschezza, stato, distanza, storico SQLite/Prefs, UI/voce,
+permessi, versioni, firma, workflow o release.
+Il domain/application resta Android-free; il platform
+usa `android.location.Location` e `java.util.function.Consumer`.
+Il rischio fisico GPS/screen-off resta da validare nel gate
+pertinente. Rollback: revert isolato dei quattro file di
+questa PR; nessuna migrazione dati o cambio persistente.
